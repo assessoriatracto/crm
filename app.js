@@ -3,10 +3,15 @@ import {
   S, $, $$, esc, ICON, FAT, COLORS, initials, isHot, stageOf, profileOf, labelOf, isInactive, isDue, fatShort, brl, pct, num,
   fmtPhone, fullDate, longDate, addedAt, ago, sourceLabel, formName, waLink, toast, fail, popover, closePop, menu, multiSelect,
   modal, confirmBox, downloadCSV
-} from './util.js?v=eba7a90';
-import { renderDashboard } from './dashboard.js?v=eba7a90';
-import { renderForms, renderSettings } from './admin.js?v=eba7a90';
-import { renderIntegrations, renderPixel, leadMetaEvents, statusPill } from './integrations.js?v=eba7a90';
+} from './util.js?v=5e3e4be';
+import { renderDashboard } from './dashboard.js?v=5e3e4be';
+import { renderForms, renderSettings } from './admin.js?v=5e3e4be';
+import { renderIntegrations, renderPixel, leadMetaEvents, statusPill } from './integrations.js?v=5e3e4be';
+import { renderRecovery, loadPartials } from './recovery.js?v=5e3e4be';
+import { showSignIn, showSignUp, showForgot, showReset, showMfa, showPending, watchIdle, AUTH_ROUTES } from './auth.js?v=5e3e4be';
+import { openProfile } from './profile.js?v=5e3e4be';
+import { renderBuilder } from './builder.js?v=5e3e4be';
+import { renderFinance } from './finance.js?v=5e3e4be';
 
 // ============================================================
 // preferências locais (por navegador)
@@ -49,42 +54,74 @@ document.addEventListener('click', (e) => {
 // ============================================================
 // boot / auth / router
 // ============================================================
+const hashRoute = () => (location.hash.replace('#/', '') || 'leads').split('?')[0];
+let started = false;
+
 async function boot() {
-  if (!CONFIGURED) return showLogin('O CRM ainda não está conectado ao banco. Preencha a URL e a chave do Supabase em assets/js/tracto-config.js.');
+  const r = hashRoute();
+  const enter = () => { location.hash = '#/leads'; boot(); };
+  if (!CONFIGURED) return showSignIn(enter, 'O CRM ainda não está conectado ao banco. Preencha a URL e a chave do Supabase em assets/js/tracto-config.js.');
+  // no modo demo as telas de acesso podem ser abertas pelo endereço, pra conferir o visual
+  if (!LIVE && ['entrar', 'cadastro', 'esqueci', 'redefinir'].includes(r)) {
+    return ({ entrar: () => showSignIn(enter), cadastro: showSignUp, esqueci: showForgot, redefinir: () => showReset(enter) })[r]();
+  }
+  if (r === 'cadastro') return showSignUp();
+  if (r === 'esqueci') return showForgot();
   let session = null;
   try { session = await DB.session(); } catch (e) {}
-  if (!session) return showLogin();
+  if (r === 'redefinir' && session) return showReset(enter);
+  if (!session) return showSignIn(enter, r === 'confirmado' ? 'E-mail confirmado! Entre com sua senha.' : '');
+  let aal = null;
+  try { aal = await DB.mfaAal(); } catch (e) {}
+  if (aal && aal.nextLevel === 'aal2' && aal.currentLevel !== 'aal2') return showMfa(enter);
   try { S.me = await DB.me(); } catch (e) { S.me = null; }
-  if (!S.me?.ativo) return showLogin(S.me ? 'Seu acesso ainda não foi liberado. Peça pra alguém da equipe ativar seu usuário em Ajustes > Equipe.' : '');
+  if (!S.me?.ativo) return showPending(S.me);
+  if (AUTH_ROUTES.includes(r)) history.replaceState(null, '', location.pathname + '#/leads');
+  if (started) return route();
+  started = true;
   $('#login').hidden = true;
   $('#app').hidden = false;
   $('#demoBar').hidden = LIVE;
   $('#logoutBtn').hidden = !LIVE;
+  applyRole();
   await loadAll();
-  DB.subscribe((type, row) => {
-    if (type === 'INSERT' && row) toast('Novo lead: ' + row.nome);
-    clearTimeout(boot._t); boot._t = setTimeout(async () => { await loadAll(false); route(); }, 400);
+  DB.subscribe((type, row, table) => {
+    if (table === 'leads' && type === 'INSERT' && row) toast('Novo lead: ' + row.nome);
+    clearTimeout(boot._t);
+    boot._t = setTimeout(async () => {
+      if (table === 'partial_leads') { await refreshPartialsBadge(); if (location.hash.startsWith('#/recuperacao')) route(); return; }
+      await loadAll(false); route();
+    }, 400);
   });
-  window.addEventListener('hashchange', route);
+  window.addEventListener('tracto:reload-leads', async () => { await loadAll(false); });
+  window.addEventListener('tracto:open-lead', (e) => { if (S.leads.some((l) => l.id === e.detail)) openDrawer(e.detail); });
+  refreshPartialsBadge();
   route();
+  watchIdle();
   const due = S.leads.filter(isDue).length;
   if (due) toast(`Você tem ${due} lembrete${due > 1 ? 's' : ''} vencido${due > 1 ? 's' : ''}`);
 }
+window.addEventListener('hashchange', () => { if (!started || AUTH_ROUTES.includes(hashRoute())) boot(); else route(); });
+if (LIVE) DB.onAuth((event) => { if (event === 'PASSWORD_RECOVERY') { location.hash = '#/redefinir'; } if (event === 'SIGNED_OUT' && started) location.reload(); });
 
-function showLogin(msg = '') {
-  $('#app').hidden = true;
-  $('#login').hidden = false;
-  $('#lErr').textContent = msg;
+// o menu mostra só o que o papel permite (o banco também bloqueia)
+const ROLE_ROUTES = { admin: null, gestor: ['leads', 'recuperacao', 'dashboard', 'financeiro', 'formularios', 'ajustes'], sdr: ['leads', 'recuperacao', 'dashboard', 'ajustes'] };
+export const can = (routeName) => !ROLE_ROUTES[S.me?.role || 'sdr'] || ROLE_ROUTES[S.me?.role || 'sdr'].includes(routeName);
+function applyRole() {
+  $$('.side a[data-route]').forEach((a) => { a.hidden = !can(a.dataset.route); });
+  const av = $('#meBtn');
+  if (av) { av.textContent = (S.me?.nome || '?').split(/\s+/).slice(0, 2).map((w) => w[0]).join('').toUpperCase(); av.title = `${S.me?.nome} · ${({ admin: 'Admin', gestor: 'Gestor', sdr: 'SDR' })[S.me?.role] || ''}`; }
 }
-$('#loginForm').addEventListener('submit', async (e) => {
-  e.preventDefault();
-  $('#lBtn').disabled = true;
-  $('#lErr').textContent = '';
-  try { await DB.signIn($('#lEmail').value.trim(), $('#lPass').value); await boot(); }
-  catch (err) { $('#lErr').textContent = 'E-mail ou senha inválidos.'; }
-  $('#lBtn').disabled = false;
-});
-$('#logoutBtn').addEventListener('click', async (e) => { e.preventDefault(); await DB.signOut(); location.reload(); });
+$('#logoutBtn').addEventListener('click', async (e) => { e.preventDefault(); await DB.signOut(); location.hash = '#/entrar'; location.reload(); });
+$('#meBtn')?.addEventListener('click', (e) => { e.preventDefault(); openProfile(); });
+
+async function refreshPartialsBadge() {
+  try {
+    const list = await loadPartials();
+    const n = list.filter((p) => p.status === 'abandonado' && (p.whatsapp || p.email) && !p.contacted_at).length;
+    const b = $('#recBadge'); b.textContent = n; b.hidden = !n;
+  } catch (e) { /* aba funciona mesmo sem o contador */ }
+}
 
 export async function loadAll(showSpinner = true) {
   if (showSpinner) $('#view').innerHTML = '<div class="loading">Carregando…</div>';
@@ -97,14 +134,17 @@ export async function loadAll(showSpinner = true) {
 
 function route() {
   closePop();
-  const r = (location.hash.replace('#/', '') || 'leads').split('?')[0];
+  let r = hashRoute();
+  if (!can(r)) { r = 'leads'; history.replaceState(null, '', location.pathname + '#/leads'); }
   $$('.side a[data-route]').forEach((a) => a.classList.toggle('on', a.dataset.route === r));
   const view = $('#view');
   if (r === 'dashboard') renderDashboard(view);
-  else if (r === 'formularios') renderForms(view);
+  else if (r === 'formularios') renderBuilder(view);
+  else if (r === 'financeiro') renderFinance(view);
   else if (r === 'ajustes') renderSettings(view, async () => { await loadAll(false); });
   else if (r === 'integracoes') renderIntegrations(view);
   else if (r === 'pixel') renderPixel(view);
+  else if (r === 'recuperacao') renderRecovery(view).then(refreshPartialsBadge);
   else renderLeads();
 }
 export const rerender = route;
@@ -231,7 +271,7 @@ function chipsHtml(l) {
   if (l.source === 'pago') out.push('<span class="chip paid">Pago</span>');
   else if (l.source === 'organico') out.push('<span class="chip">Orgânico</span>');
   if (isInactive(l)) out.push('<span class="chip inactive" title="Sem atividade há 7+ dias">Inativo</span>');
-  out.push(l.form_id === 'manual' ? '<span class="chip">Cadastro manual</span>' : '<span class="chip form">Formulário preenchido</span>');
+  out.push(l.recovered_from ? '<span class="chip rem">Recuperado</span>' : l.form_id === 'manual' ? '<span class="chip">Cadastro manual</span>' : l.form_id === 'api' ? '<span class="chip">Via API</span>' : '<span class="chip form">Formulário preenchido</span>');
   if (isHot(l)) out.push(`<span class="chip hot">${fatShort(l.faturamento)}</span>`);
   if (l.reminder_at) out.push(`<span class="chip ${isDue(l) ? 'due' : 'rem'}">${ICON.bell}${isDue(l) ? 'Vencido' : new Date(l.reminder_at).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' })}</span>`);
   (l.label_ids || []).map(labelOf).filter(Boolean).forEach((x) => out.push(`<span class="chip tag" style="--c:${x.color}">${esc(x.name)}</span>`));
@@ -369,6 +409,7 @@ function exportCSV(list) {
     (l.label_ids || []).map(labelOf).filter(Boolean).map((x) => x.name).join(', '), l.valor, formName(l), sourceLabel(l.source), l.utm_source, l.utm_medium, l.utm_campaign, l.utm_content,
     ...qs.map((q) => (l.answers || []).find((a) => a.label === q)?.value)]);
   downloadCSV(`leads-tracto-${new Date().toISOString().slice(0, 10)}.csv`, [head, ...rows]);
+  DB.auditEvent('export', 'leads', { quantidade: list.length });
 }
 
 // ---------- eventos da página de leads ----------
@@ -618,9 +659,9 @@ function renderDrawer() {
       <div class="sec" id="answersSec">
         <h4>Respostas do formulário</h4>
         <div class="form-meta">${esc(formName(l))}<br>Identificação do lead ${esc(l.id.slice(0, 8).toUpperCase())}<br>Enviado em ${esc(longDate(l.created_at))}.</div>
-        ${(l.answers || []).length ? `<div class="answers">${l.answers.map((a) => `<div><div class="q">${esc(a.label)}</div><div class="a">${esc(a.value)}</div></div>`).join('')}</div>` : '<p class="muted">Lead cadastrado manualmente, sem respostas de formulário.</p>'}
+        ${(l.answers || []).length ? `<div class="answers">${l.answers.map((a) => `<div><div class="q">${esc(a.label)}</div><div class="a">${a.type === 'file' || /^respostas\//.test(a.value) ? `<button class="b b-sm" data-d="file" data-path="${esc(a.value)}">📎 ${esc(a.file_name || a.value.split('/').pop().replace(/^[\w-]{36}-/, ''))}</button>` : esc(a.value)}</div></div>`).join('')}</div>` : '<p class="muted">Lead cadastrado manualmente, sem respostas de formulário.</p>'}
       </div>
-      <div class="sec" id="metaSec" hidden><h4>Eventos enviados à Meta</h4><div class="meta-evs"></div></div>
+      <div class="sec" id="metaSec" hidden><h4>Eventos enviados (Meta e Google)</h4><div class="meta-evs"></div></div>
       ${tracking.length ? `<div class="sec"><h4>Rastreamento</h4><dl class="kv" style="margin:10px 0 0">${tracking.map(([k, n]) => `<dt>${n}</dt><dd>${esc(l[k])}</dd>`).join('')}<dt>Fonte</dt><dd>${sourceLabel(l.source)}</dd></dl></div>` : ''}
       <div class="dr-foot"><button class="b b-danger" data-d="delete"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18M8 6V4h8v2M19 6l-1 14H6L5 6"/></svg>Excluir lead</button></div>
     </div>`;
@@ -635,12 +676,13 @@ async function loadMetaEvents() {
   const sec = $('#metaSec'); if (!sec) return;
   // um evento por linha (o mesmo evento vai pra cada pixel)
   const byId = new Map();
-  evs.filter((e) => !e.test).forEach((e) => { if (!byId.has(e.event_id)) byId.set(e.event_id, { ...e, pixels: 0, ok: 0 }); const r = byId.get(e.event_id); r.pixels++; if (e.status_code >= 200 && e.status_code < 300) r.ok++; });
+  evs.filter((e) => !e.test).forEach((e) => { const k = e.platform + e.event_id; if (!byId.has(k)) byId.set(k, { ...e, pixels: 0, ok: 0 }); const r = byId.get(k); r.pixels++; if (e.status_code >= 200 && e.status_code < 300) r.ok++; });
   const rows = [...byId.values()];
   sec.hidden = !rows.length;
   sec.querySelector('.meta-evs').innerHTML = rows.map((e) => {
     const v = e.payload?.data?.[0]?.custom_data?.value;
-    return `<div class="meta-ev"><code>${esc(e.event_name)}</code><span class="muted">${fullDate(e.created_at)}${v != null ? ' · ' + brl(v) : ''}</span>${e.ok === e.pixels ? `<span class="pill good">${e.pixels} pixel${e.pixels > 1 ? 's' : ''}</span>` : statusPill(e.status_code, e.response)}</div>`;
+    const v2 = v ?? e.payload?.events?.[0]?.params?.value;
+    return `<div class="meta-ev"><code>${esc(e.event_name)}</code><span class="muted">${e.platform === 'ga4' ? 'GA4 · ' : ''}${fullDate(e.created_at)}${v2 != null ? ' · ' + brl(v2) : ''}</span>${e.ok === e.pixels ? `<span class="pill good">${e.pixels} pixel${e.pixels > 1 ? 's' : ''}</span>` : statusPill(e.status_code, e.response)}</div>`;
   }).join('');
 }
 
@@ -688,6 +730,9 @@ drawer.addEventListener('click', async (e) => {
   const act = b.dataset.d;
   if (act === 'close') closeDrawer();
   if (act === 'answers') $('#answersSec').scrollIntoView({ behavior: 'smooth', block: 'start' });
+  if (act === 'file') {
+    try { const url = await DB.fileUrl(b.dataset.path); if (url) window.open(url, '_blank', 'noopener'); else toast('No modo demo os arquivos não são guardados'); } catch (err) { fail(err); }
+  }
   if (act === 'delete') deleteLead(id);
   if (act === 'edit') editContact(l);
   if (act === 'unlabel') {

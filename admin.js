@@ -1,8 +1,9 @@
 // Páginas "Formulários" e "Ajustes"
 import { DB, LIVE } from '@shared/db.js';
 import { formPath } from '@shared/forms.js';
-import { S, $, $$, esc, COLORS, num, pct, toast, fail, confirmBox } from './util.js?v=eba7a90';
-import { stageModal, moveStage, deleteStageFlow } from './app.js?v=eba7a90';
+import { S, $, $$, esc, COLORS, num, pct, ago, toast, fail, confirmBox } from './util.js?v=5e3e4be';
+import { openProfile } from './profile.js?v=5e3e4be';
+import { stageModal, moveStage, deleteStageFlow } from './app.js?v=5e3e4be';
 
 const QTYPES = ['short_text', 'long_text', 'email', 'phone', 'number', 'url', 'date', 'choice', 'multi', 'dropdown', 'yes_no', 'rating', 'scale', 'consent'];
 const SITE = /^(localhost|127\.0\.0\.1)$/.test(location.hostname) ? location.origin : (window.TRACTO_CONFIG?.siteUrl || location.origin);
@@ -64,11 +65,21 @@ export async function renderForms(el) {
 // ============================================================
 // AJUSTES
 // ============================================================
-export function renderSettings(el, reload) {
+export async function renderSettings(el, reload) {
+  const role = S.me?.role || 'sdr';
+  const isAdmin = role === 'admin';
+  const isManager = role === 'admin' || role === 'gestor';
+  let teams = [], audit = [];
+  try { [teams, audit] = await Promise.all([DB.listTeams(), isAdmin ? DB.listAudit(60) : Promise.resolve([])]); } catch (e) { fail(e); }
+  if (!el.isConnected) return;
+  const ROLE = { admin: 'Admin', gestor: 'Gestor', sdr: 'SDR' };
+  const AUDIT = { insert: 'criou', update: 'alterou', delete: 'excluiu', export: 'exportou', view_token: 'viu token', login: 'entrou' };
+  const ENT = { profiles: 'usuário', tracking_pixels: 'pixel', ad_accounts: 'conta de anúncio', api_keys: 'chave de API', webhooks: 'webhook', forms: 'formulário', leads: 'lead' };
+
   el.innerHTML = `
-    <div class="topline"><h1>Ajustes</h1></div>
+    <div class="topline"><h1>Ajustes</h1><div class="grow"></div><button class="b" data-profile>Meu perfil</button></div>
     <div class="settings">
-      <section class="panel">
+      ${isManager ? `<section class="panel">
         <h3>Estágios do pipeline</h3>
         <p class="help">Estágios "Ganho" contam como convertidos no dashboard.</p>
         <div data-stages>${S.stages.map((s, i) => `
@@ -94,61 +105,110 @@ export function renderSettings(el, reload) {
             <button class="b b-sm b-danger" data-ldel aria-label="Excluir">×</button>
           </div>`).join('') || '<p class="muted">Nenhum rótulo ainda.</p>'}</div>
         <div class="srow"><input class="inp grow" data-new-label placeholder="Novo rótulo" maxlength="30"><button class="b b-primary b-sm" data-add-label>Criar</button></div>
+      </section>` : ''}
+
+      <section class="panel span2">
+        <h3>Equipe e permissões</h3>
+        <p class="help">Novos usuários se cadastram em <b style="color:var(--c-text);font-weight:400">${esc(location.origin + location.pathname)}#/cadastro</b>, confirmam o e-mail e aparecem aqui inativos.
+          <b style="color:var(--c-text);font-weight:400">Admin</b> vê e configura tudo · <b style="color:var(--c-text);font-weight:400">Gestor</b> vê todos os leads, formulários e financeiro · <b style="color:var(--c-text);font-weight:400">SDR</b> vê só os leads dele e os sem dono.</p>
+        <div class="table-wrap"><table class="int-table team-table"><thead><tr><th>Pessoa</th><th>Papel</th><th>Time</th><th>Pushcut</th><th>Acesso</th></tr></thead><tbody>
+        ${S.profiles.map((p) => `
+          <tr data-id="${p.id}">
+            <td><div class="td-lead"><span class="av">${esc((p.nome || '?').split(/\s+/).slice(0, 2).map((w) => w[0]).join('').toUpperCase())}</span><div><b>${esc(p.nome)}${p.id === S.me?.id ? ' <span class="muted" style="font-weight:400">(você)</span>' : ''}</b><small>${esc(p.email)}</small></div></div></td>
+            <td>${isAdmin ? `<select class="inp" data-role style="width:auto">${Object.entries(ROLE).map(([k, n]) => `<option value="${k}" ${p.role === k ? 'selected' : ''}>${n}</option>`).join('')}</select>` : ROLE[p.role] || ''}</td>
+            <td>${isAdmin ? `<select class="inp" data-team style="width:auto"><option value="">Sem time</option>${teams.map((t) => `<option value="${t.id}" ${p.team_id === t.id ? 'selected' : ''}>${esc(t.name)}</option>`).join('')}</select>` : esc(teams.find((t) => t.id === p.team_id)?.name || '—')}</td>
+            <td>${p.pushcut_url ? '<span class="pill good">Ativo</span>' : '<span class="muted">—</span>'}</td>
+            <td>${isAdmin ? `<button class="switch ${p.ativo ? 'on' : ''}" data-toggle ${p.id === S.me?.id ? 'disabled' : ''} aria-label="Acesso ativo"></button>` : p.ativo ? 'Ativo' : 'Inativo'}</td>
+          </tr>`).join('')}
+        </tbody></table></div>
+      </section>
+
+      ${isAdmin ? `<section class="panel">
+        <h3>Times e distribuição</h3>
+        <p class="help">Com o rodízio ligado, cada lead novo vai automaticamente pro SDR do time que recebeu lead há mais tempo, e ele é avisado no Pushcut.</p>
+        <div data-teams>${teams.map((t) => `<div class="srow" data-id="${t.id}"><input class="inp grow" value="${esc(t.name)}" maxlength="40" data-tn>
+          <label class="nowrap muted" style="display:flex;align-items:center;gap:8px">Rodízio <button class="switch ${t.auto_assign ? 'on' : ''}" data-auto></button></label>
+          <span class="muted nowrap">${S.profiles.filter((p) => p.team_id === t.id).length} pessoas</span><button class="b b-sm b-danger" data-tdel aria-label="Excluir">×</button></div>`).join('') || '<p class="muted">Nenhum time ainda.</p>'}</div>
+        <div class="srow"><input class="inp grow" data-new-team placeholder="Novo time (ex: Comercial)" maxlength="40"><button class="b b-primary b-sm" data-add-team>Criar</button></div>
       </section>
 
       <section class="panel">
-        <h3>Equipe</h3>
-        <p class="help">${LIVE ? 'Pra adicionar alguém: Supabase > Authentication > Users > Add user. A pessoa aparece aqui inativa e você libera o acesso.' : 'No modo demo a equipe é fictícia.'}</p>
-        ${S.profiles.map((p) => `
-          <div class="srow" data-id="${p.id}">
-            <span class="av sm" style="width:30px;height:30px;font-size:11px">${esc(p.nome.slice(0, 2).toUpperCase())}</span>
-            <div class="grow"><div>${esc(p.nome)}${p.id === S.me?.id ? ' <span class="muted">(você)</span>' : ''}</div><div class="muted" style="font-size:12px">${esc(p.email)}</div></div>
-            <button class="switch ${p.ativo ? 'on' : ''}" data-toggle ${p.id === S.me?.id ? 'disabled' : ''} aria-label="Acesso ativo"></button>
-          </div>`).join('')}
-      </section>
+        <h3>Auditoria</h3>
+        <p class="help">Quem fez o quê com usuários, credenciais e dados (LGPD). Tokens nunca aparecem aqui.</p>
+        <div class="audit">${audit.length ? audit.map((a) => `<div class="audit-row"><span class="muted nowrap">${ago(a.created_at)}</span><span><b>${esc(a.actor_name || 'Sistema')}</b> ${AUDIT[a.action] || esc(a.action)} ${ENT[a.entity] || esc(a.entity)}${a.details?.nome ? ` <i>${esc(a.details.nome)}</i>` : a.details?.email ? ` <i>${esc(a.details.email)}</i>` : ''}${a.details?.token_alterado ? ' (token trocado)' : ''}</span></div>`).join('') : '<p class="muted">Nada registrado ainda.</p>'}</div>
+      </section>` : ''}
     </div>`;
 
   const refresh = async () => { await reload(); renderSettings(el, reload); };
+  el.querySelector('[data-profile]').addEventListener('click', () => openProfile());
 
-  // estágios
-  el.querySelector('[data-stages]').addEventListener('change', async (e) => {
-    const row = e.target.closest('.srow'); const s = S.stages.find((x) => x.id === row.dataset.id);
-    const k = e.target.dataset.sf; if (!k) return;
-    const v = e.target.value.trim(); if (k === 'name' && !v) return toast('O estágio precisa de nome', true);
-    try { Object.assign(s, await DB.saveStage({ id: s.id, name: s.name, color: s.color, kind: s.kind, position: s.position, [k]: v })); toast('Estágio salvo'); } catch (err) { fail(err); }
-  });
-  el.querySelector('[data-stages]').addEventListener('click', async (e) => {
-    const row = e.target.closest('.srow'); if (!row) return;
-    const i = S.stages.findIndex((x) => x.id === row.dataset.id);
-    if (e.target.closest('[data-mv]')) { await moveStage(i, +e.target.closest('[data-mv]').dataset.mv); }
-    if (e.target.closest('[data-del]')) deleteStageFlow(S.stages[i]);
-  });
-  el.querySelector('[data-add-stage]').addEventListener('click', () => stageModal());
+  if (isManager) {
+    el.querySelector('[data-stages]').addEventListener('change', async (e) => {
+      const row = e.target.closest('.srow'); const s = S.stages.find((x) => x.id === row.dataset.id);
+      const k = e.target.dataset.sf; if (!k) return;
+      const v = e.target.value.trim(); if (k === 'name' && !v) return toast('O estágio precisa de nome', true);
+      try { Object.assign(s, await DB.saveStage({ id: s.id, name: s.name, color: s.color, kind: s.kind, position: s.position, [k]: v })); toast('Estágio salvo'); } catch (err) { fail(err); }
+    });
+    el.querySelector('[data-stages]').addEventListener('click', async (e) => {
+      const row = e.target.closest('.srow'); if (!row) return;
+      const i = S.stages.findIndex((x) => x.id === row.dataset.id);
+      if (e.target.closest('[data-mv]')) { await moveStage(i, +e.target.closest('[data-mv]').dataset.mv); }
+      if (e.target.closest('[data-del]')) deleteStageFlow(S.stages[i]);
+    });
+    el.querySelector('[data-add-stage]').addEventListener('click', () => stageModal());
+    el.querySelector('[data-labels]').addEventListener('change', async (e) => {
+      const row = e.target.closest('.srow'); const x = S.labels.find((y) => y.id === row?.dataset.id);
+      const k = e.target.dataset.lf; if (!k || !x) return;
+      const v = e.target.value.trim(); if (!v) return;
+      try { Object.assign(x, await DB.saveLabel({ id: x.id, name: x.name, color: x.color, [k]: v })); toast('Rótulo salvo'); } catch (err) { fail(err); }
+    });
+    el.querySelector('[data-labels]').addEventListener('click', async (e) => {
+      if (!e.target.closest('[data-ldel]')) return;
+      const x = S.labels.find((y) => y.id === e.target.closest('.srow').dataset.id);
+      if (!(await confirmBox(`Excluir o rótulo "${x.name}"? Ele sai de todos os leads.`, 'Excluir'))) return;
+      try { await DB.deleteLabel(x.id); await refresh(); toast('Rótulo excluído'); } catch (err) { fail(err); }
+    });
+    const addLabel = async () => {
+      const i = el.querySelector('[data-new-label]'); const name = i.value.trim(); if (!name) return;
+      if (S.labels.some((x) => x.name.toLowerCase() === name.toLowerCase())) return toast('Esse rótulo já existe', true);
+      try { await DB.saveLabel({ name, color: COLORS[S.labels.length % COLORS.length] }); await refresh(); toast('Rótulo criado'); } catch (err) { fail(err); }
+    };
+    el.querySelector('[data-add-label]').addEventListener('click', addLabel);
+    el.querySelector('[data-new-label]').addEventListener('keydown', (e) => { if (e.key === 'Enter') addLabel(); });
+  }
 
-  // rótulos
-  el.querySelector('[data-labels]').addEventListener('change', async (e) => {
-    const row = e.target.closest('.srow'); const x = S.labels.find((y) => y.id === row?.dataset.id);
-    const k = e.target.dataset.lf; if (!k || !x) return;
-    const v = e.target.value.trim(); if (!v) return;
-    try { Object.assign(x, await DB.saveLabel({ id: x.id, name: x.name, color: x.color, [k]: v })); toast('Rótulo salvo'); } catch (err) { fail(err); }
+  if (!isAdmin) return;
+  // equipe: acesso, papel e time
+  el.querySelectorAll('.team-table tr[data-id]').forEach((row) => {
+    const p = S.profiles.find((x) => x.id === row.dataset.id);
+    const save = async (patch, msg) => {
+      try { await DB.updateProfile(p.id, patch); Object.assign(p, patch); toast(msg); }
+      catch (err) { fail(err); refresh(); }
+    };
+    row.querySelector('[data-toggle]')?.addEventListener('click', (e) => { const on = !p.ativo; e.currentTarget.classList.toggle('on', on); save({ ativo: on }, on ? 'Acesso liberado' : 'Acesso removido'); });
+    row.querySelector('[data-role]').addEventListener('change', (e) => save({ role: e.target.value }, 'Papel alterado'));
+    row.querySelector('[data-team]').addEventListener('change', (e) => save({ team_id: e.target.value || null }, 'Time alterado'));
   });
-  el.querySelector('[data-labels]').addEventListener('click', async (e) => {
-    if (!e.target.closest('[data-ldel]')) return;
-    const x = S.labels.find((y) => y.id === e.target.closest('.srow').dataset.id);
-    if (!(await confirmBox(`Excluir o rótulo "${x.name}"? Ele sai de todos os leads.`, 'Excluir'))) return;
-    try { await DB.deleteLabel(x.id); await refresh(); toast('Rótulo excluído'); } catch (err) { fail(err); }
+  // times
+  el.querySelectorAll('[data-teams] .srow').forEach((row) => {
+    const t = teams.find((x) => x.id === row.dataset.id);
+    row.querySelector('[data-tn]').addEventListener('change', async (e) => { try { await DB.saveTeam({ id: t.id, name: e.target.value.trim() }); toast('Time salvo'); } catch (err) { fail(err); } });
+    row.querySelector('[data-auto]').addEventListener('click', async (e) => {
+      const btn = e.currentTarget;
+      const on = !t.auto_assign;
+      if (on && teams.some((x) => x.auto_assign && x.id !== t.id)) return toast('Só um time pode ter rodízio ligado', true);
+      try { await DB.saveTeam({ id: t.id, auto_assign: on }); t.auto_assign = on; btn.classList.toggle('on', on); toast(on ? 'Rodízio ligado' : 'Rodízio desligado'); } catch (err) { fail(err); }
+    });
+    row.querySelector('[data-tdel]').addEventListener('click', async () => {
+      if (!(await confirmBox(`Excluir o time "${t.name}"?`, 'Excluir'))) return;
+      try { await DB.deleteTeam(t.id); refresh(); } catch (err) { fail(err); }
+    });
   });
-  const addLabel = async () => {
-    const i = el.querySelector('[data-new-label]'); const name = i.value.trim(); if (!name) return;
-    if (S.labels.some((x) => x.name.toLowerCase() === name.toLowerCase())) return toast('Esse rótulo já existe', true);
-    try { await DB.saveLabel({ name, color: COLORS[S.labels.length % COLORS.length] }); await refresh(); toast('Rótulo criado'); } catch (err) { fail(err); }
+  const addTeam = async () => {
+    const i = el.querySelector('[data-new-team]'); const name = i.value.trim(); if (!name) return;
+    if (teams.some((t) => t.name.toLowerCase() === name.toLowerCase())) return toast('Já existe um time com esse nome', true);
+    try { await DB.saveTeam({ name }); refresh(); toast('Time criado'); } catch (err) { fail(err); }
   };
-  el.querySelector('[data-add-label]').addEventListener('click', addLabel);
-  el.querySelector('[data-new-label]').addEventListener('keydown', (e) => { if (e.key === 'Enter') addLabel(); });
-
-  // equipe
-  el.querySelectorAll('[data-toggle]').forEach((b) => b.addEventListener('click', async () => {
-    const p = S.profiles.find((x) => x.id === b.closest('.srow').dataset.id);
-    try { await DB.updateProfile(p.id, { ativo: !p.ativo }); p.ativo = !p.ativo; b.classList.toggle('on', p.ativo); toast(p.ativo ? 'Acesso liberado' : 'Acesso removido'); } catch (err) { fail(err); }
-  }));
+  el.querySelector('[data-add-team]').addEventListener('click', addTeam);
+  el.querySelector('[data-new-team]').addEventListener('keydown', (e) => { if (e.key === 'Enter') addTeam(); });
 }

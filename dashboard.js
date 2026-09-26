@@ -1,6 +1,6 @@
 // Dashboard de leads e do formulário
 import { DB } from '@shared/db.js';
-import { S, $, $$, esc, FAT, stageOf, profileOf, isHot, isInactive, isDue, brl, pct, num, formName, sourceLabel, fail } from './util.js?v=eba7a90';
+import { S, $, $$, esc, FAT, stageOf, profileOf, isHot, isInactive, isDue, brl, pct, num, formName, sourceLabel, fail } from './util.js?v=5e3e4be';
 
 const D = { period: '30', form: '' };
 const PERIODS = [['7', '7 dias'], ['30', '30 dias'], ['90', '90 dias'], ['all', 'Tudo']];
