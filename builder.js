@@ -1,7 +1,7 @@
 // Construtor de formulários (estilo Typeform): lista, editor de etapas, lógica, tema e prévia ao vivo
 import { DB } from '@shared/db.js';
 import { FORMS, formPath } from '@shared/forms.js';
-import { S, $, $$, esc, ICON, num, pct, toast, fail, modal, confirmBox, menu, popover, closePop } from './util.js?v=5e3e4be';
+import { S, $, $$, esc, ICON, num, pct, toast, fail, modal, confirmBox, menu, popover, closePop } from './util.js?v=9217f9f';
 
 const SITE = /^(localhost|127\.0\.0\.1)$/.test(location.hostname) ? location.origin : (window.TRACTO_CONFIG?.siteUrl || location.origin);
 const B = { forms: [], editing: null, sel: null, tab: 'conteudo', device: 'desktop', dirty: false, saveT: null, frameReady: false };
@@ -29,6 +29,7 @@ export function sanitizeRich(html) {
     if (n.nodeType === 3) return n.textContent.replace(/[&<>]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c]));
     if (n.nodeType !== 1) return '';
     const tag = n.tagName.toLowerCase();
+    if (tag === 'span' && n.dataset.tok) return `{{${n.dataset.tok.replace(/[^\w:]/g, '')}}}`;
     const inner = walk(n);
     if (tag === 'b' || tag === 'strong') return inner ? `<strong>${inner}</strong>` : '';
     if (tag === 'i' || tag === 'em') return inner ? `<em>${inner}</em>` : '';
@@ -38,6 +39,14 @@ export function sanitizeRich(html) {
   }).join('');
   return walk(doc.body.firstChild).replace(/^(<br>)+/, '').replace(/(<br>)+$/, '').replace(/(<br>){3,}/g, '<br><br>');
 }
+// {{campo}} vira etiqueta visual no editor (ninguém precisa ver a sintaxe)
+function tokLabel(tok, fields) {
+  const [id, mod] = tok.split(':');
+  if (id === 'nome' || fields.find((y) => y.id === id)?.map === 'nome') return mod === 'first' ? 'Primeiro nome' : 'Nome';
+  const f = fields.find((y) => y.id === id);
+  return f ? strip(f.title).slice(0, 28) : id;
+}
+const withTokens = (html, fields) => String(html || '').replace(/\{\{(\w+(?::first)?)\}\}/g, (_, t) => `<span class="tok" contenteditable="false" data-tok="${t}">${esc(tokLabel(t, fields))}</span>`);
 const newId = (type) => `${type.replace(/_/g, '')}_${Math.random().toString(36).slice(2, 6)}`;
 const formUrl = (f) => new URL(f.slug ? `/aplicar/${f.slug}/` : '/aplicar/', SITE).toString();
 
@@ -80,29 +89,39 @@ export async function renderBuilder(el) {
   if (!el.isConnected) return;
   if (id) { const f = B.forms.find((x) => x.id === id); if (f) return openEditor(el, structuredClone(f)); }
   B.editing = null;
+  const since = Date.now() - 30 * 86400000;
+  const LP = { trafego: 'Landing de tráfego', marketplace: 'Landing de marketplace', home: 'Página inicial' };
   el.innerHTML = `
     <div class="topline"><h1>Formulários</h1><div class="grow"></div><button class="b b-primary" data-new>+ Novo formulário</button></div>
-    <div class="forms-grid">${B.forms.map((f) => {
-      const qs = (f.fields || []).filter((x) => QUESTION.includes(x.type));
-      return `<section class="panel form-card" data-id="${f.id}">
-        <div class="fc-top"><div><h3>${esc(f.name)}</h3><p class="muted" style="margin:4px 0 0">${qs.length} perguntas · ${(f.fields || []).filter((x) => x.logic?.length || x.showIf).length} regras de fluxo</p></div>
-          <button class="switch ${f.published ? 'on' : ''}" data-pub title="${f.published ? 'Publicado' : 'Rascunho'}" aria-label="Publicado"></button></div>
-        <div class="url">${esc(formUrl(f))}</div>
-        <div class="form-stats"><div><b data-s="views">…</b><span>Visitas</span></div><div><b data-s="starts">…</b><span>Começaram</span></div><div><b data-s="leads">…</b><span>Leads</span></div><div><b data-s="rate">…</b><span>Conversão</span></div></div>
-        <div class="fc-actions"><button class="b b-primary" data-edit>Editar</button><button class="b" data-copy-link>Copiar link</button><a class="b" href="${esc(formUrl(f))}" target="_blank" rel="noopener">Abrir</a><button class="card-menu" data-more data-pop-anchor aria-label="Mais">${ICON.dotsH}</button></div>
-      </section>`;
+    <div class="forms-list">${B.forms.map((f) => {
+      const leads = S.leads.filter((l) => l.form_id === f.id && new Date(l.created_at) >= since).length;
+      return `<article class="panel form-row" data-id="${f.id}">
+        <div class="fr-main">
+          <h3>${esc(f.name)}</h3>
+          <div class="chips">
+            ${f.published ? '<span class="chip form">Publicado</span>' : '<span class="chip">Rascunho</span>'}
+            ${LP[f.id] ? `<span class="chip paid">${LP[f.id]}</span>` : ''}
+            <span class="chip">${num(leads)} lead${leads === 1 ? '' : 's'} em 30 dias</span>
+          </div>
+        </div>
+        <div class="fr-actions">
+          <button class="b" data-copy-link>${ICON.link}Copiar link</button>
+          <button class="b b-primary" data-edit>${ICON.edit}Editar</button>
+          <button class="icon-btn" data-more data-pop-anchor aria-label="Mais opções">${ICON.dotsH}</button>
+        </div>
+      </article>`;
     }).join('')}</div>`;
 
   el.querySelector('[data-new]').addEventListener('click', () => newFormModal(el));
-  el.querySelectorAll('.form-card').forEach((card) => {
+  el.querySelectorAll('.form-row').forEach((card) => {
     const f = B.forms.find((x) => x.id === card.dataset.id);
     card.querySelector('[data-edit]').addEventListener('click', () => { location.hash = '#/formularios?id=' + f.id; });
     card.querySelector('[data-copy-link]').addEventListener('click', async () => { try { await navigator.clipboard.writeText(formUrl(f)); toast('Link copiado'); } catch (e) { toast('Não consegui copiar', true); } });
-    card.querySelector('[data-pub]').addEventListener('click', async (e) => {
-      const btn = e.currentTarget;
-      try { f.published = !f.published; await DB.saveForm({ id: f.id, published: f.published, slug: f.slug, name: f.name }); btn.classList.toggle('on', f.published); toast(f.published ? 'Formulário publicado' : 'Formulário despublicado (volta a versão fixa, se houver)'); } catch (err) { fail(err); }
-    });
     card.querySelector('[data-more]').addEventListener('click', (e) => menu(e.currentTarget, [
+      { label: 'Abrir formulário', action: () => window.open(formUrl(f), '_blank', 'noopener') },
+      { label: f.published ? 'Despublicar' : 'Publicar', action: async () => {
+        try { f.published = !f.published; await DB.saveForm({ id: f.id, published: f.published, slug: f.slug, name: f.name }); toast(f.published ? 'Formulário publicado' : 'Formulário despublicado'); renderBuilder(el); } catch (err) { fail(err); }
+      } },
       { label: 'Duplicar', action: async () => {
         const base = slugify(f.slug || f.id) + '-copia'; let slug = base; let n = 2;
         while (B.forms.some((x) => x.slug === slug || x.id === slug)) slug = base + '-' + n++;
@@ -115,21 +134,6 @@ export async function renderBuilder(el) {
       } }
     ]));
   });
-  // resultados dos últimos 30 dias
-  try {
-    const from = new Date(Date.now() - 30 * 86400000);
-    const ev = await DB.listEvents(from.toISOString());
-    el.querySelectorAll('.form-card').forEach((card) => {
-      const fid = card.dataset.id;
-      const sess = (t) => new Set(ev.filter((e) => e.form_id === fid && e.event === t).map((e) => e.session_id)).size;
-      const views = sess('view'); const starts = sess('start');
-      const leads = S.leads.filter((l) => l.form_id === fid && new Date(l.created_at) >= from).length;
-      card.querySelector('[data-s="views"]').textContent = num(views);
-      card.querySelector('[data-s="starts"]').textContent = num(starts);
-      card.querySelector('[data-s="leads"]').textContent = num(leads);
-      card.querySelector('[data-s="rate"]').textContent = views ? pct(leads, views) : '—';
-    });
-  } catch (e) { /* estatísticas são opcionais */ }
 }
 
 function newFormModal(el) {
@@ -227,7 +231,7 @@ async function save(explicit = false) {
   try {
     await DB.saveForm({ id: f.id, slug: f.slug, name: f.name.trim() || 'Sem nome', fields: f.fields, settings: f.settings, published: f.published });
     B.dirty = false;
-    const s = $('[data-saved]'); if (s) { s.textContent = 'Salvo ✓'; s.classList.add('ok'); }
+    const s = $('[data-saved]'); if (s) { s.textContent = 'Salvo ✓'; s.classList.remove('ok'); void s.offsetWidth; s.classList.add('ok'); }
     if (explicit) toast(f.published ? 'Formulário publicado' : 'Salvo');
   } catch (e) { const s = $('[data-saved]'); if (s) s.textContent = 'Erro ao salvar'; fail(e); }
 }
@@ -306,15 +310,15 @@ function renderProps() {
   const others = f.fields.filter((y) => y.id !== x.id);
   const qBefore = f.fields.slice(0, f.fields.indexOf(x)).filter((y) => QUESTION.includes(y.type));
   const inp = (k, label, v, extra = '') => `<div class="row"><label class="lbl">${label}</label><input class="inp" data-k="${k}" value="${esc(v ?? '')}" ${extra}></div>`;
-  const area = (k, label, v, rows = 2, help = '') => `<div class="row"><div class="rte-head"><label class="lbl">${label}</label><div class="rte-bar"><button type="button" data-cmd="bold" title="Negrito"><b>N</b></button><button type="button" data-cmd="italic" title="Itálico (destaque dourado)"><i>I</i></button></div></div>
-    <div class="inp rte" contenteditable="true" role="textbox" aria-multiline="true" data-rk="${k}" style="min-height:${rows * 22 + 18}px">${sanitizeRich(String(v ?? '').replace(/\n/g, '<br>'))}</div>${help ? `<p class="help">${help}</p>` : ''}</div>`;
+  const area = (k, label, v, rows = 2, help = '') => `<div class="row"><div class="rte-head"><label class="lbl">${label}</label><div class="rte-bar"><button type="button" data-cmd="bold" title="Negrito"><b>N</b></button><button type="button" data-cmd="italic" title="Itálico (destaque dourado)"><i>I</i></button><button type="button" class="rte-ins" data-ins data-pop-anchor title="Inserir resposta">+ Resposta</button></div></div>
+    <div class="inp rte" contenteditable="true" role="textbox" aria-multiline="true" data-rk="${k}" style="min-height:${rows * 22 + 18}px">${withTokens(sanitizeRich(String(v ?? '').replace(/\n/g, '<br>')), f.fields)}</div>${help ? `<p class="help">${help}</p>` : ''}</div>`;
   const tog = (k, label, v) => `<label class="bld-tog"><span>${label}</span><button type="button" class="switch ${v ? 'on' : ''}" data-tog="${k}"></button></label>`;
   let html = '';
   if (B.tab === 'conteudo') {
     html += x.type === 'testimonial'
       ? inp('title', 'Chamada (opcional)', x.title) + area('quote', 'Depoimento', x.quote, 3) + inp('author', 'Nome', x.author) + inp('role', 'Cargo, empresa ou cidade', x.role) + imageRow('photo', 'Foto', x.photo) +
         `<div class="row"><label class="lbl">Estrelas</label><select class="inp" data-k="rating">${[0, 1, 2, 3, 4, 5].map((n) => `<option value="${n}" ${+x.rating === n ? 'selected' : ''}>${n ? '★'.repeat(n) : 'Sem estrelas'}</option>`).join('')}</select></div>`
-      : area('title', 'Título', x.title, 2, 'Use {{nome:first}} pra inserir o primeiro nome de quem responde (ou {{id}} de outra resposta).') + area('desc', 'Descrição', x.desc, 2);
+      : area('title', 'Título', x.title, 2, 'Use "+ Resposta" pra chamar a pessoa pelo nome ou repetir uma resposta anterior.') + area('desc', 'Descrição', x.desc, 2);
     if (x.type !== 'thankyou') html += imageRow('image', 'Imagem (opcional)', x.image);
     if (x.type === 'welcome' || x.type === 'statement' || x.type === 'testimonial') html += inp('button', 'Texto do botão', x.button);
     if (isQ) html += tog('required', 'Obrigatória', x.required);
@@ -334,7 +338,6 @@ function renderProps() {
         <h4 class="px-h" style="margin-top:14px">Redirecionar ao final</h4>${inp('redir_url', 'Link', x.redirect?.url, 'placeholder="https://… (deixe vazio pra não redirecionar)"')}${inp('redir_delay', 'Depois de quantos segundos', x.redirect?.delay ?? 5, 'type="number" min="0" max="60"')}`;
     }
     if (isQ && x.type !== 'file' && x.type !== 'calendly') html += `<div class="row"><label class="lbl">Salvar no CRM como</label><select class="inp" data-k="map">${MAPS.map(([k, n]) => `<option value="${k}" ${(x.map || '') === k ? 'selected' : ''}>${n}</option>`).join('')}</select><p class="help">Nome, WhatsApp e e-mail alimentam o lead e a correspondência dos pixels.</p></div>`;
-    html += `<p class="help bld-id">ID da resposta: <code>${esc(x.id)}</code></p>`;
   } else {
     html += `<h4 class="px-h">Mostrar esta etapa</h4>
       <div class="row"><select class="inp" data-showmode><option value="always" ${!x.showIf ? 'selected' : ''}>Sempre</option><option value="if" ${x.showIf ? 'selected' : ''}>Só se…</option></select></div>
@@ -346,6 +349,8 @@ function renderProps() {
       <button class="b b-sm" data-add-rule>+ Adicionar regra</button>
       <div class="row" style="margin-top:14px"><label class="lbl">Se nenhuma regra valer, ir para</label><select class="inp" data-next><option value="">Próxima etapa da lista</option>${others.map((o) => `<option value="${o.id}" ${x.next === o.id ? 'selected' : ''}>${esc((TYPES[o.type] || [''])[0] + ': ' + strip(o.title || o.quote).slice(0, 40))}</option>`).join('')}</select></div>`;
   }
+  const pk = B.sel + '|' + B.tab;
+  if (renderProps._k !== pk) { renderProps._k = pk; box.classList.remove('swap-in'); void box.offsetWidth; box.classList.add('swap-in'); }
   box.innerHTML = `
     <div class="bp-h"><span class="bs-ic">${t[2] || '?'}</span><b>${esc(t[0])}</b><div class="grow"></div>
       <button class="card-menu" data-step-more data-pop-anchor aria-label="Ações da etapa">${ICON.dotsH}</button></div>
@@ -450,6 +455,20 @@ function bindProps(box, x) {
     });
     ed.addEventListener('paste', (e) => { e.preventDefault(); document.execCommand('insertText', false, e.clipboardData.getData('text/plain')); });
   });
+  box.querySelectorAll('[data-ins]').forEach((b) => b.addEventListener('mousedown', (e) => {
+    e.preventDefault();
+    const ed = b.closest('.row').querySelector('[data-rk]');
+    const sel = window.getSelection(); const range = sel.rangeCount && ed.contains(sel.anchorNode) ? sel.getRangeAt(0).cloneRange() : null;
+    const prev = f.fields.slice(0, f.fields.indexOf(x)).filter((y) => QUESTION.includes(y.type) && y.type !== 'file');
+    const opts = [...(prev.some((y) => y.map === 'nome') ? [['nome:first', 'Primeiro nome'], ['nome', 'Nome completo']] : []), ...prev.filter((y) => y.map !== 'nome').map((y) => [y.id, strip(y.title).slice(0, 40)])];
+    if (!opts.length) return toast('Não há respostas antes desta etapa pra inserir', true);
+    menu(b, opts.map(([tok, label]) => ({ label, action: () => {
+      const chip = document.createElement('span'); chip.className = 'tok'; chip.contentEditable = 'false'; chip.dataset.tok = tok; chip.textContent = tokLabel(tok, f.fields);
+      if (range) { range.deleteContents(); range.insertNode(chip); range.setStartAfter(chip); } else ed.appendChild(chip);
+      ed.appendChild(document.createTextNode(' '));
+      ed.dispatchEvent(new Event('input'));
+    } })));
+  }));
   box.querySelectorAll('[data-cmd]').forEach((b) => b.addEventListener('mousedown', (e) => {
     e.preventDefault();
     const ed = b.closest('.row').querySelector('[data-rk]'); ed.focus();

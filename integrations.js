@@ -1,7 +1,7 @@
 // Abas "Integrações" (API + webhooks) e "Pixel" (Meta Pixel + Conversions API)
 import { DB, LIVE } from '@shared/db.js';
-import { S, $, $$, esc, FAT, ICON, num, pct, brl, fullDate, ago, toast, fail, modal, confirmBox, menu } from './util.js?v=5e3e4be';
-import { hbars } from './dashboard.js?v=5e3e4be';
+import { S, $, $$, esc, FAT, ICON, num, pct, brl, fullDate, ago, toast, fail, modal, confirmBox, menu } from './util.js?v=9217f9f';
+import { hbars } from './dashboard.js?v=9217f9f';
 import { PIXEL_EVENTS_RECOMMENDED } from '@shared/db.js';
 
 const EVENTS = [
@@ -44,8 +44,8 @@ const demoNote = () => (LIVE ? '' : '<div class="demo-inline">Modo demo: nada é
 // ============================================================
 // INTEGRAÇÕES
 // ============================================================
-export async function renderIntegrations(el) {
-  el.innerHTML = '<div class="loading">Carregando…</div>';
+export async function renderIntegrations(el, { quiet = false } = {}) {
+  if (!quiet) el.innerHTML = '<div class="loading">Carregando…</div>';
   let keys = [], hooks = [], dels = [];
   try {
     await DB.refreshIntegrations();
@@ -72,8 +72,7 @@ app.post('/tracto', express.raw({ type: 'application/json' }), (req, res) => {
 });`;
 
   el.innerHTML = `
-    <div class="topline"><h1>Integrações</h1><div class="grow"></div><button class="b" data-refresh>Atualizar status</button></div>
-    ${demoNote()}
+    <div class="topline"><h1>Integrações</h1><div class="grow"></div><button class="b b-refresh" data-refresh>${ICON.refresh}Atualizar status</button></div>
     <div class="int-grid">
       <section class="panel int-card">
         <div class="int-h"><div><h3>API de leads</h3><p class="help">Crie, liste e atualize leads a partir de outros sistemas (Zapier, Make, n8n, planilhas, outra landing page).</p></div>
@@ -82,20 +81,11 @@ app.post('/tracto', express.raw({ type: 'application/json' }), (req, res) => {
           ${keys.map((k) => `<tr data-id="${k.id}" class="${k.revoked ? 'revoked' : ''}"><td>${esc(k.name)}</td><td><code>${esc(k.prefix)}…</code></td><td>${new Date(k.created_at).toLocaleDateString('pt-BR')}</td><td>${k.last_used_at ? ago(k.last_used_at) : '<span class="muted">nunca</span>'}</td>
             <td style="text-align:right">${k.revoked ? '<span class="pill">Revogada</span>' : '<button class="b b-sm b-danger" data-revoke>Revogar</button>'}</td></tr>`).join('')}
         </tbody></table></div>` : '<p class="muted">Nenhuma chave criada ainda.</p>'}
-        <details class="docs"><summary>Como usar a API</summary>
-          <p class="help">Toda chamada é um <b>POST</b> para o endpoint abaixo com os headers <code>apikey</code> (chave pública do projeto) e <code>Content-Type: application/json</code>. A sua chave <code>trk_…</code> vai no corpo e identifica quem está chamando.</p>
-          <dl class="kv" style="margin:0 0 14px"><dt>Endpoint</dt><dd><code>${esc(apiBase())}/rest/v1/rpc/&lt;função&gt;</code></dd><dt>apikey</dt><dd><code class="wrap">${esc(anonKey())}</code></dd></dl>
-          <h5>Criar lead · <code>api_create_lead</code></h5>
-          <p class="help">Obrigatórios: <code>nome</code> e <code>whatsapp</code>. Opcionais: e-mail, instagram, faturamento, estado, cidade, estagio (nome do estágio), valor, utm_*, fbclid, respostas. O lead dispara webhooks e o evento Lead na Meta como os do formulário.</p>
-          ${codeBlock(curl('api_create_lead', createEx), 'cURL')}
-          ${codeBlock('{ "ok": true, "id": "3f2c9a1e-…" }', 'Resposta')}
-          <h5>Listar leads · <code>api_list_leads</code></h5>
-          ${codeBlock(curl('api_list_leads', listEx), 'cURL')}
-          <h5>Atualizar lead · <code>api_update_lead</code></h5>
-          <p class="help">Campos aceitos em <code>dados</code>: estagio, valor, nota, responsavel_email. Mudar o estágio dispara os eventos do funil configurados na aba Pixel.</p>
-          ${codeBlock(curl('api_update_lead', updEx), 'cURL')}
-          <p class="help">Erros voltam com status 4xx e uma mensagem, por exemplo <code>chave de API inválida</code> ou <code>estágio "X" não existe</code>.</p>
-        </details>
+        <div class="conn">
+          <div class="conn-row"><span>Endereço da API</span><code>${esc(apiBase())}/rest/v1/rpc/api_create_lead</code><button class="b b-sm" data-copy="${esc(apiBase())}/rest/v1/rpc/api_create_lead">Copiar</button></div>
+          <div class="conn-row"><span>Chave pública (header apikey)</span><code>${esc(anonKey().slice(0, 18))}…</code><button class="b b-sm" data-copy="${esc(anonKey())}">Copiar</button></div>
+          <p class="help" style="margin:8px 0 0">Passe esses dados e uma chave criada aqui pra quem for configurar a integração (Zapier, Make, n8n). O guia completo está no repositório, em docs/api.md.</p>
+        </div>
       </section>
 
       <section class="panel int-card">
@@ -106,7 +96,7 @@ app.post('/tracto', express.raw({ type: 'application/json' }), (req, res) => {
             <div class="hook-main">
               <div class="hook-title"><b>${esc(w.name)}</b>${w.format === 'pushcut' ? ' <span class="pill wait">Pushcut</span>' : ''}${w.active ? '' : ' <span class="pill">Pausado</span>'}</div>
               <div class="hook-url">${esc(w.url)}</div>
-              <div class="chips">${w.events.map((ev) => `<span class="chip">${esc(ev)}</span>`).join('')}</div>
+              <div class="chips">${w.events.map((ev) => `<span class="chip">${esc(EVENTS.find(([k]) => k === ev)?.[1] || ev)}</span>`).join('')}</div>
             </div>
             <div class="hook-actions">
               <button class="switch ${w.active ? 'on' : ''}" data-toggle aria-label="Ativo"></button>
@@ -116,25 +106,20 @@ app.post('/tracto', express.raw({ type: 'application/json' }), (req, res) => {
               <button class="b b-sm b-danger" data-del aria-label="Excluir">×</button>
             </div>
           </div>`).join('') : '<p class="muted">Nenhum webhook cadastrado.</p>'}
-        <details class="docs"><summary>Formato do envio e verificação</summary>
-          <p class="help">Headers: <code>X-Tracto-Event</code> (nome do evento), <code>X-Tracto-Delivery</code> (id do envio) e <code>X-Tracto-Signature</code> (<code>sha256=</code> + HMAC do corpo com o segredo do webhook). Responda com status 2xx em até 8 segundos.</p>
-          <p class="help">Eventos: ${EVENTS.map(([k, n]) => `<code>${k}</code> ${esc(n.toLowerCase())}`).join(' · ')}.</p>
-          ${codeBlock(payloadEx, 'Exemplo de corpo')}
-          ${codeBlock(verifyEx, 'Verificar assinatura')}
-        </details>
+        <p class="help" style="margin-top:12px">Cada envio vai assinado, pra quem recebe confirmar que veio do CRM. O guia de formato e assinatura está no repositório, em docs/webhooks.md.</p>
       </section>
 
       <section class="panel int-card span-all">
         <div class="int-h"><div><h3>Últimos envios de webhook</h3><p class="help">Status HTTP devolvido por cada destino.</p></div></div>
-        ${dels.length ? `<div class="table-wrap"><table class="int-table"><thead><tr><th>Quando</th><th>Webhook</th><th>Evento</th><th>Lead</th><th>Status</th><th>Resposta</th></tr></thead><tbody>
-          ${dels.map((d) => `<tr><td class="nowrap" title="${fullDate(d.created_at)}">${ago(d.created_at)}</td><td>${esc(hookName(d.webhook_id))}</td><td><code>${esc(d.event)}</code></td><td>${esc(leadName(d.lead_id))}</td><td>${statusPill(d.status_code, d.response)}</td><td class="resp">${esc((d.response || '').slice(0, 140))}</td></tr>`).join('')}
+        ${dels.length ? `<div class="table-wrap"><table class="int-table"><thead><tr><th>Quando</th><th>Webhook</th><th>Evento</th><th>Lead</th><th>Status</th></tr></thead><tbody>
+          ${dels.map((d) => `<tr><td class="nowrap" title="${fullDate(d.created_at)}">${ago(d.created_at)}</td><td>${esc(hookName(d.webhook_id))}</td><td>${esc(EVENTS.find(([k]) => k === d.event)?.[1] || (d.event === 'webhook.test' ? 'Teste' : d.event))}</td><td>${esc(leadName(d.lead_id))}</td><td>${statusPill(d.status_code, d.response)}</td></tr>`).join('')}
         </tbody></table></div>` : '<p class="muted">Nenhum envio ainda.</p>'}
       </section>
     </div>`;
 
   bindCopy(el);
-  const reload = () => renderIntegrations(el);
-  el.querySelector('[data-refresh]').addEventListener('click', reload);
+  const reload = () => renderIntegrations(el, { quiet: true });
+  el.querySelector('[data-refresh]').addEventListener('click', (e) => { e.currentTarget.classList.add('is-spinning'); reload(); });
   el.querySelector('[data-new-key]').addEventListener('click', () => newKeyModal(reload));
   el.querySelector('[data-new-hook]').addEventListener('click', () => hookModal(null, reload));
   el.querySelectorAll('[data-revoke]').forEach((b) => b.addEventListener('click', async () => {
@@ -152,7 +137,7 @@ app.post('/tracto', express.raw({ type: 'application/json' }), (req, res) => {
       try { await DB.testWebhook(w.id); toast('Envio de teste disparado'); setTimeout(reload, 1500); } catch (e) { fail(e); }
     });
     row.querySelector('[data-secret]').addEventListener('click', () => modal(`<h3>Segredo de ${esc(w.name)}</h3>
-      <p class="help">Use pra validar o header <code>X-Tracto-Signature</code>. Guarde como variável de ambiente no sistema que recebe.</p>
+      <p class="help">Entregue esse código só pra quem configurar o sistema que recebe os avisos. Ele confirma que o aviso veio do CRM.</p>
       ${codeBlock(w.secret, 'Segredo')}<div class="modal-foot"><button class="b" data-close>Fechar</button></div>`, (c) => bindCopy(c)));
     row.querySelector('[data-edit]').addEventListener('click', () => hookModal(w, reload));
     row.querySelector('[data-del]').addEventListener('click', async () => {
@@ -190,7 +175,7 @@ function hookModal(w, done) {
       <p class="help" style="margin-top:6px" data-fmt-help>${w?.format === 'pushcut' ? 'Notificação no celular com título, resumo e link direto pro CRM. No app Pushcut crie uma notificação e copie a URL do webhook.' : 'Corpo JSON completo, assinado com HMAC-SHA256.'}</p></div>
     <div class="row"><label class="lbl">URL de destino</label><input class="inp" data-url type="url" value="${esc(w?.url || '')}" placeholder="https://hooks.zapier.com/…"></div>
     <div class="row"><label class="lbl">Eventos</label><div class="ev-list">${EVENTS.map(([k, n, d]) => `
-      <label class="ev"><input type="checkbox" value="${k}" ${sel.has(k) ? 'checked' : ''}><span><b>${esc(n)}</b> <code>${k}</code>${d ? `<small>${esc(d)}</small>` : ''}</span></label>`).join('')}</div></div>
+      <label class="ev"><input type="checkbox" value="${k}" ${sel.has(k) ? 'checked' : ''}><span><b>${esc(n)}</b>${d ? `<small>${esc(d)}</small>` : ''}</span></label>`).join('')}</div></div>
     <div class="modal-foot"><button class="b" data-close>Cancelar</button><button class="b b-primary" data-ok>Salvar</button></div>`, (c, close) => {
     let format = w?.format || 'json';
     c.querySelectorAll('[data-fmt]').forEach((b) => b.addEventListener('click', () => {
@@ -256,8 +241,8 @@ function matchScore(leads, px) {
 
 const PX = { platform: '' , q: '' };
 
-export async function renderPixel(el) {
-  el.innerHTML = '<div class="loading">Carregando…</div>';
+export async function renderPixel(el, { quiet = false } = {}) {
+  if (!quiet) el.innerHTML = '<div class="loading">Carregando…</div>';
   let settings = null, pixels = [], events = [];
   try {
     await DB.refreshIntegrations();
@@ -276,8 +261,7 @@ export async function renderPixel(el) {
   const sent = events.filter((e) => !e.test);
 
   el.innerHTML = `
-    <div class="topline"><h1>Pixels de rastreamento</h1><div class="grow"></div><button class="b" data-refresh>Atualizar status</button></div>
-    ${demoNote()}
+    <div class="topline"><h1>Pixels de rastreamento</h1><div class="grow"></div><button class="b b-refresh" data-refresh>${ICON.refresh}Atualizar status</button></div>
     <section class="panel px-toolbar">
       <label class="search">${ICON.search}<input class="inp" data-q type="search" placeholder="Buscar…" value="${esc(PX.q)}"></label>
       <button class="b ${PX.platform ? 'on' : ''}" data-plat data-pop-anchor><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M12 8v8M8 12h8"/></svg>${PX.platform ? PLATFORMS[PX.platform].name : 'Plataforma'}</button>
@@ -334,19 +318,19 @@ export async function renderPixel(el) {
       </section>
 
       <section class="panel int-card">
-        <div class="int-h"><div><h3>Dados enviados em cada evento</h3></div></div>
+        <div class="int-h"><div><h3>O que é enviado</h3></div></div>
         <ul class="how">
-          <li><b>Criptografados (SHA-256):</b> e-mail, telefone com DDI, nome, sobrenome, estado (do form ou pelo DDD), país e ID do visitante.</li>
-          <li><b>Do navegador:</b> IP, user agent, cookies <code>_fbp</code>/<code>_fbc</code> da Meta e <code>_ga</code>/gclid do Google.</li>
-          <li><b>Contexto:</b> formulário, faixa de faturamento, estágio, valor, UTMs e fonte.</li>
-          <li><b>Deduplicação:</b> o mesmo <code>event_id</code> vai pelo navegador e pelo servidor. A Meta e o Google contam uma conversão só.</li>
+          <li><b>Dados do lead</b> (e-mail, telefone, nome e localização) vão criptografados. Nem a Meta nem o Google recebem o dado aberto.</li>
+          <li><b>Dados da visita</b> (navegador e clique no anúncio) ajudam a reconhecer quem clicou no anúncio.</li>
+          <li><b>Contexto</b>: formulário, faixa de faturamento, estágio no funil, valor e campanha.</li>
+          <li>Cada conversão vai pelo navegador e pelo servidor e é <b>contada uma vez só</b>.</li>
         </ul>
       </section>
 
       <section class="panel int-card span-all">
         <div class="int-h"><div><h3>Eventos enviados pelo servidor</h3><p class="help">${sent.length ? `${num(sent.filter((e) => e.status_code >= 200 && e.status_code < 300).length)} de ${num(sent.length)} aceitos nos últimos envios.` : 'Os envios aparecem aqui com a resposta da Meta e do Google.'}</p></div></div>
-        ${events.length ? `<div class="table-wrap"><table class="int-table"><thead><tr><th>Quando</th><th>Plataforma</th><th>Evento</th><th>Lead</th><th>Valor</th><th>Status</th><th>Resposta</th></tr></thead><tbody>
-          ${events.map((e) => { const v = e.payload?.data?.[0]?.custom_data?.value ?? e.payload?.events?.[0]?.params?.value; return `<tr><td class="nowrap" title="${fullDate(e.created_at)}">${ago(e.created_at)}</td><td>${PLATFORMS[e.platform]?.short || e.platform} <span class="muted">${esc(String(e.pixel_id).slice(-6))}</span></td><td><code>${esc(e.event_name)}</code>${e.test ? ' <span class="pill">teste</span>' : ''}</td><td>${esc(leadName(e.lead_id))}</td><td>${v != null ? brl(v) : '—'}</td><td>${statusPill(e.status_code, e.response)}</td><td class="resp">${esc((e.response || '').slice(0, 160))}</td></tr>`; }).join('')}
+        ${events.length ? `<div class="table-wrap"><table class="int-table"><thead><tr><th>Quando</th><th>Plataforma</th><th>Evento</th><th>Lead</th><th>Valor</th><th>Status</th></tr></thead><tbody>
+          ${events.map((e) => { const v = e.payload?.data?.[0]?.custom_data?.value ?? e.payload?.events?.[0]?.params?.value; return `<tr><td class="nowrap" title="${fullDate(e.created_at)}">${ago(e.created_at)}</td><td>${PLATFORMS[e.platform]?.short || e.platform} <span class="muted">${esc(String(e.pixel_id).slice(-6))}</span></td><td><code>${esc(e.event_name)}</code>${e.test ? ' <span class="pill">teste</span>' : ''}</td><td>${esc(leadName(e.lead_id))}</td><td>${v != null ? brl(v) : '—'}</td><td>${statusPill(e.status_code, e.response)}</td></tr>`; }).join('')}
         </tbody></table></div>` : '<p class="muted">Nenhum evento enviado ainda.</p>'}
       </section>
     </div>`;
@@ -359,9 +343,9 @@ export async function renderPixel(el) {
   ];
   hbars($('[data-coverage]', el), COV.map(([name, fn]) => { const c = formLeads.filter(fn).length; const r = c / (n || 1); return { name, value: c, note: n ? pct(c, n) : '—', color: r >= 0.7 ? 'var(--viz-1)' : r >= 0.3 ? 'var(--ramp-2)' : 'var(--viz-gray)' }; }), { max: n || 1 });
 
-  const reload = () => renderPixel(el);
+  const reload = () => renderPixel(el, { quiet: true });
   bindCopy(el);
-  el.querySelector('[data-refresh]').addEventListener('click', reload);
+  el.querySelector('[data-refresh]').addEventListener('click', (e) => { e.currentTarget.classList.add('is-spinning'); reload(); });
   el.querySelector('[data-add]').addEventListener('click', () => pixelDrawer(null, formLeads, reload));
   const qi = el.querySelector('[data-q]');
   qi.addEventListener('input', () => { PX.q = qi.value; clearTimeout(qi._t); qi._t = setTimeout(() => { reload().then(() => { const i = el.querySelector('[data-q]'); i?.focus(); i?.setSelectionRange(i.value.length, i.value.length); }); }, 250); });

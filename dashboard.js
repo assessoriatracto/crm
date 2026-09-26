@@ -1,20 +1,17 @@
 // Dashboard de leads e do formulário
 import { DB } from '@shared/db.js';
-import { S, $, $$, esc, FAT, stageOf, profileOf, isHot, isInactive, isDue, brl, pct, num, formName, sourceLabel, fail } from './util.js?v=5e3e4be';
+import { dateRange, datePicker, dateBtn, S, $, $$, esc, FAT, stageOf, profileOf, isHot, isInactive, isDue, brl, pct, num, formName, sourceLabel, fail } from './util.js?v=9217f9f';
 
-const D = { period: '30', form: '' };
-const PERIODS = [['7', '7 dias'], ['30', '30 dias'], ['90', '90 dias'], ['all', 'Tudo']];
+const D = { period: '30', from: '', to: '', form: '' };
 const QTYPES = ['short_text', 'long_text', 'email', 'phone', 'number', 'url', 'date', 'choice', 'multi', 'dropdown', 'yes_no', 'rating', 'scale', 'consent'];
 
-function since() {
-  if (D.period === 'all') return null;
-  const d = new Date(); d.setHours(0, 0, 0, 0);
-  return new Date(d - (+D.period - 1) * 86400000);
-}
+const since = () => dateRange(D)[0];
+const until = () => dateRange(D)[1] || new Date();
+const inPeriod = (iso) => { const [a, b] = dateRange(D); const d = new Date(iso); return (!a || d >= a) && (!b || d <= b); };
 
 export async function renderDashboard(el) {
   const from = since();
-  const leads = S.leads.filter((l) => (!from || new Date(l.created_at) >= from) && (!D.form || l.form_id === D.form));
+  const leads = S.leads.filter((l) => inPeriod(l.created_at) && (!D.form || l.form_id === D.form));
   const formIds = [...new Set([...Object.keys(S.forms), ...S.leads.map((l) => l.form_id)])];
 
   const won = leads.filter((l) => stageOf(l)?.kind === 'won');
@@ -23,7 +20,7 @@ export async function renderDashboard(el) {
 
   el.innerHTML = `
     <div class="topline"><h1>Dashboard</h1><div class="grow"></div>
-      <div class="seg">${PERIODS.map(([v, n]) => `<button class="b ${D.period === v ? 'on' : ''}" data-period="${v}">${n}</button>`).join('')}</div>
+      ${dateBtn(D)}
       <select class="inp" data-form style="width:auto"><option value="">Todos os formulários</option>${formIds.map((id) => `<option value="${id}" ${D.form === id ? 'selected' : ''}>${esc(S.forms[id]?.name || (id === 'manual' ? 'Cadastro manual' : id))}</option>`).join('')}</select>
     </div>
     <div class="dash-grid">
@@ -49,7 +46,7 @@ export async function renderDashboard(el) {
       <section class="panel chart-card span-6"><h3>Formulários</h3><p class="sub">Leads por formulário de origem</p><div data-chart="forms"></div></section>
     </div>`;
 
-  el.querySelectorAll('[data-period]').forEach((b) => b.addEventListener('click', () => { D.period = b.dataset.period; renderDashboard(el); }));
+  el.querySelector('[data-date]').addEventListener('click', (e) => datePicker(e.currentTarget, D, (st) => { Object.assign(D, st); renderDashboard(el); }));
   el.querySelector('[data-form]').addEventListener('change', (e) => { D.form = e.target.value; renderDashboard(el); });
 
   columnChart($('[data-chart="days"]', el), dayBuckets(leads, from));
@@ -75,7 +72,7 @@ export async function renderDashboard(el) {
   try {
     const events = await DB.listEvents(from ? from.toISOString() : null);
     if (!el.isConnected) return;
-    dropOff(el, events, leads, from);
+    dropOff(el, events.filter((e) => inPeriod(e.created_at)), leads, from);
   } catch (e) { fail(e); }
 }
 
@@ -97,7 +94,7 @@ function dropOff(el, events, leads, from) {
   const sessions = (pred) => new Set(ev.filter(pred).map((e) => e.session_id)).size;
   const views = sessions((e) => e.event === 'view');
   const starts = sessions((e) => e.event === 'start');
-  const submits = S.leads.filter((l) => l.form_id === fid && (!from || new Date(l.created_at) >= from)).length;
+  const submits = S.leads.filter((l) => l.form_id === fid && inPeriod(l.created_at)).length;
   const qs = form.fields.filter((f) => QTYPES.includes(f.type));
   const strip = (h) => String(h).replace(/<[^>]+>/g, '').replace(/\{\{(\w+)(:\w+)?\}\}/g, '…');
   const rows = [
@@ -148,13 +145,13 @@ function groupTable(host, leads, keyFn, colName) {
 // ---------- colunas por dia/semana ----------
 function bucketDays(leads) {
   const from = since() || (leads.length ? new Date(Math.min(...leads.map((l) => +new Date(l.created_at)))) : new Date());
-  return (Date.now() - from) / 86400000 > 120 ? 7 : 1;
+  return (until() - from) / 86400000 > 120 ? 7 : 1;
 }
 function dayBuckets(leads, from) {
   const step = bucketDays(leads);
   const start = new Date(from || (leads.length ? Math.min(...leads.map((l) => +new Date(l.created_at))) : Date.now()));
   start.setHours(0, 0, 0, 0);
-  const end = new Date(); end.setHours(0, 0, 0, 0);
+  const end = new Date(until()); end.setHours(0, 0, 0, 0);
   const out = [];
   for (let d = new Date(start); d <= end; d = new Date(+d + step * 86400000)) out.push({ date: new Date(d), value: 0, hot: 0 });
   if (!out.length) out.push({ date: end, value: 0, hot: 0 });

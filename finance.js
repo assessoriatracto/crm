@@ -1,25 +1,16 @@
 // Financeiro (estilo UTMify): gasto da Meta Ads × leads e vendas do CRM × receitas e despesas lançadas
 import { DB } from '@shared/db.js';
-import { S, $, $$, esc, ICON, brl, num, pct, fullDate, ago, toast, fail, modal, confirmBox } from './util.js?v=5e3e4be';
+import { dateRange, datePicker, dateBtn, S, $, $$, esc, ICON, brl, num, pct, fullDate, ago, toast, fail, modal, confirmBox } from './util.js?v=9217f9f';
 
 const F = { period: '30', from: '', to: '', level: 'campaign', revenue: 'mensal', sort: 'spend' };
-const PERIODS = [['hoje', 'Hoje'], ['ontem', 'Ontem'], ['7', '7 dias'], ['30', '30 dias'], ['mes', 'Este mês'], ['mespassado', 'Mês passado'], ['custom', 'Personalizado']];
 const CATS = { despesa: ['Ferramentas', 'Equipe', 'Comissões', 'Impostos', 'Tráfego (outras plataformas)', 'Outros'], receita: ['Contrato', 'Setup', 'Consultoria', 'Outros'] };
 const UTM_TEMPLATE = 'utm_source=facebook&utm_medium=paid_social&utm_campaign={{campaign.name}}&utm_term={{adset.name}}&utm_content={{ad.name}}&utm_id={{campaign.id}}';
 const iso = (d) => new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 10);
 
+// intervalo do filtro em datas ISO (Todo o período = desde 2020)
 function range() {
-  const t = new Date(); t.setHours(0, 0, 0, 0);
-  const day = 86400000;
-  switch (F.period) {
-    case 'hoje': return [iso(t), iso(t)];
-    case 'ontem': return [iso(new Date(t - day)), iso(new Date(t - day))];
-    case '7': return [iso(new Date(t - 6 * day)), iso(t)];
-    case 'mes': return [iso(new Date(t.getFullYear(), t.getMonth(), 1)), iso(t)];
-    case 'mespassado': return [iso(new Date(t.getFullYear(), t.getMonth() - 1, 1)), iso(new Date(t.getFullYear(), t.getMonth(), 0))];
-    case 'custom': return [F.from || iso(new Date(t - 29 * day)), F.to || iso(t)];
-    default: return [iso(new Date(t - 29 * day)), iso(t)];
-  }
+  const [a, b] = dateRange(F);
+  return [a ? iso(a) : '2020-01-01', iso(b || new Date())];
 }
 const inRange = (dateIso, [a, b]) => { const d = iso(new Date(dateIso)); return d >= a && d <= b; };
 
@@ -70,13 +61,12 @@ export async function renderFinance(el) {
 
   el.innerHTML = `
     <div class="topline"><h1>Financeiro</h1><div class="grow"></div>
-      <div class="seg">${PERIODS.map(([k, n]) => `<button class="b ${F.period === k ? 'on' : ''}" data-period="${k}">${n}</button>`).join('')}</div>
+      ${dateBtn(F)}
     </div>
-    ${F.period === 'custom' ? `<div class="custom-range panel"><label>De <input type="date" class="inp" data-from value="${r[0]}"></label><label>Até <input type="date" class="inp" data-to value="${r[1]}"></label><button class="b b-primary b-sm" data-apply>Aplicar</button></div>` : ''}
     <div class="fin-actions">
       <div class="seg"><button class="b b-sm ${F.revenue === 'mensal' ? 'on' : ''}" data-rev="mensal">Receita: 1ª mensalidade</button><button class="b b-sm ${F.revenue === 'contrato' ? 'on' : ''}" data-rev="contrato">Receita: contrato (× ${months} meses)</button></div>
       <div class="grow"></div>
-      ${accounts.length ? `<button class="b" data-sync>↻ Sincronizar Meta Ads</button>` : ''}
+      ${accounts.length ? `<button class="b b-refresh" data-sync>${ICON.refresh}Sincronizar Meta Ads</button>` : ''}
       <button class="b b-primary" data-entry>+ Lançamento</button>
     </div>
     <div class="fin-tiles">${tiles.map(([l, v, sub, cls]) => `<section class="panel ftile ${cls || ''}"><div class="t-label">${l}</div><div class="t-value">${v}</div><div class="t-sub">${esc(sub)}</div></section>`).join('')}</div>
@@ -115,8 +105,7 @@ export async function renderFinance(el) {
   dailyChart(el.querySelector('[data-chart]'), r, ins, sales, entries, saleValue);
 
   const reload = () => renderFinance(el);
-  el.querySelectorAll('[data-period]').forEach((b) => b.addEventListener('click', () => { F.period = b.dataset.period; reload(); }));
-  el.querySelector('[data-apply]')?.addEventListener('click', () => { F.from = el.querySelector('[data-from]').value; F.to = el.querySelector('[data-to]').value; if (F.from > F.to) return toast('A data inicial é depois da final', true); reload(); });
+  el.querySelector('[data-date]').addEventListener('click', (e) => datePicker(e.currentTarget, F, (st) => { Object.assign(F, st); reload(); }));
   el.querySelectorAll('[data-rev]').forEach((b) => b.addEventListener('click', () => { F.revenue = b.dataset.rev; reload(); }));
   el.querySelectorAll('[data-level]').forEach((b) => b.addEventListener('click', () => { F.level = b.dataset.level; reload(); }));
   el.querySelector('[data-copy-utm]').addEventListener('click', async () => { try { await navigator.clipboard.writeText(UTM_TEMPLATE); toast('Parâmetros copiados'); } catch (e) { toast('Não consegui copiar', true); } });
@@ -126,12 +115,12 @@ export async function renderFinance(el) {
     try { await DB.deleteFinance(b.closest('tr').dataset.id); reload(); } catch (e) { fail(e); }
   }));
   el.querySelector('[data-sync]')?.addEventListener('click', async (e) => {
-    const btn = e.currentTarget; btn.disabled = true; btn.textContent = 'Sincronizando…';
+    const btn = e.currentTarget; btn.disabled = true; btn.classList.add('is-spinning');
     try {
       await DB.syncAds(null, 30);
       for (const wait of [3000, 4000, 6000]) { await new Promise((ok) => setTimeout(ok, wait)); await DB.processAds(); }
       toast('Gasto da Meta atualizado'); reload();
-    } catch (err) { fail(err); btn.disabled = false; btn.textContent = '↻ Sincronizar Meta Ads'; }
+    } catch (err) { fail(err); btn.disabled = false; btn.classList.remove('is-spinning'); }
   });
   el.querySelector('[data-add-acc]')?.addEventListener('click', () => accountModal(null, reload));
   el.querySelectorAll('.srow[data-id]').forEach((row) => {

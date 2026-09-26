@@ -1,7 +1,7 @@
 // Aba "Recuperação": formulários começados e não concluídos (salvos automaticamente a cada resposta)
 import { DB, LIVE } from '@shared/db.js';
 import { formPath } from '@shared/forms.js';
-import { S, $, $$, esc, ICON, initials, fmtPhone, fullDate, ago, num, pct, toast, fail, modal, confirmBox } from './util.js?v=5e3e4be';
+import { S, $, $$, esc, ICON, initials, fmtPhone, fullDate, ago, num, pct, toast, fail, modal, confirmBox } from './util.js?v=9217f9f';
 
 const SITE = /^(localhost|127\.0\.0\.1)$/.test(location.hostname) ? location.origin : (window.TRACTO_CONFIG?.siteUrl || location.origin);
 const STATUS = {
@@ -30,8 +30,8 @@ export async function loadPartials() {
   return S.partials;
 }
 
-export async function renderRecovery(el) {
-  el.innerHTML = '<div class="loading">Carregando…</div>';
+export async function renderRecovery(el, { quiet = false } = {}) {
+  if (!quiet) el.innerHTML = '<div class="loading">Carregando…</div>';
   try { await loadPartials(); } catch (e) { fail(e); S.partials = []; }
   if (!el.isConnected) return;
   paint(el);
@@ -48,7 +48,7 @@ function paint(el) {
     (!q || [p.nome, p.email, p.instagram, p.utm_campaign].some((v) => (v || '').toLowerCase().includes(q)) || (q.replace(/\D/g, '').length >= 3 && String(p.whatsapp || '').includes(q.replace(/\D/g, '')))));
 
   el.innerHTML = `
-    <div class="topline"><h1>Recuperação</h1><div class="grow"></div><button class="b" data-reload>Atualizar</button></div>
+    <div class="topline"><h1>Recuperação</h1><div class="grow"></div><button class="b b-refresh" data-reload>${ICON.refresh}Atualizar</button></div>
     <p class="muted" style="margin:-6px 0 14px;max-width:760px;line-height:1.55">Cada resposta do formulário é salva na hora. Quem para no meio aparece aqui com o que já preencheu. Depois de 30 minutos parado vira <b style="color:var(--c-text);font-weight:400">abandonado</b>. Mande o link de retomada: a pessoa continua de onde parou, sem digitar de novo.</p>
     <section class="panel kpis">
       <div class="k warn"><span>Abandonados com contato:</span><b>${num(abandoned.filter(hasContact).length)}</b></div>
@@ -88,8 +88,8 @@ function paint(el) {
       }).join('')}
     </tbody></table></div>` : `<div class="panel empty"><h3>Nada por aqui</h3><p>${R.tab === 'abandonado' ? 'Nenhum formulário abandonado. Quando alguém parar no meio, aparece aqui.' : 'Nenhum registro nesse filtro.'}</p></div>`}`;
 
-  const reload = () => renderRecovery(el);
-  el.querySelector('[data-reload]').addEventListener('click', reload);
+  const reload = () => renderRecovery(el, { quiet: true });
+  el.querySelector('[data-reload]').addEventListener('click', (e) => { e.currentTarget.classList.add('is-spinning'); reload(); });
   el.querySelectorAll('[data-tab]').forEach((b) => b.addEventListener('click', () => { R.tab = b.dataset.tab; paint(el); }));
   const qi = el.querySelector('[data-q]');
   qi.addEventListener('input', () => { R.q = qi.value; clearTimeout(qi._t); qi._t = setTimeout(() => { const pos = qi.selectionStart; paint(el); const n = el.querySelector('[data-q]'); n.focus(); n.setSelectionRange(pos, pos); }, 180); });

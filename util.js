@@ -21,6 +21,10 @@ export const COLORS = ['#6AA8FF', '#B58CFF', '#4FD1C5', '#FFAD00', '#FF8A3D', '#
 export const INACTIVE_DAYS = 7;
 
 export const ICON = {
+  link: '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>',
+  edit: '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>',
+  calendar: '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>',
+  refresh: '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12a9 9 0 1 1-2.64-6.36"/><path d="M21 3v6h-6"/></svg>',
   dots: '<svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="5" r="1.8"/><circle cx="12" cy="12" r="1.8"/><circle cx="12" cy="19" r="1.8"/></svg>',
   dotsH: '<svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><circle cx="5" cy="12" r="1.8"/><circle cx="12" cy="12" r="1.8"/><circle cx="19" cy="12" r="1.8"/></svg>',
   caret: '<svg class="caret" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="m6 9 6 6 6-6"/></svg>',
@@ -91,7 +95,7 @@ export function toast(msg, err) {
   t.className = 'toast' + (err ? ' err' : '');
   t.textContent = msg;
   $('#toasts').appendChild(t);
-  setTimeout(() => t.remove(), 3400);
+  setTimeout(() => { t.classList.add('is-leaving'); setTimeout(() => t.remove(), 200); }, 3400);
 }
 export const fail = (e) => { console.error(e); toast('Algo deu errado: ' + (e?.message || 'tente de novo'), true); };
 
@@ -109,7 +113,8 @@ export function popover(anchor, html, bind) {
   const h = p.offsetHeight;
   let left = Math.min(r.left, innerWidth - w - 12);
   let top = r.bottom + 6;
-  if (top + h > innerHeight - 12) top = Math.max(12, r.top - h - 6);
+  if (top + h > innerHeight - 12) { top = Math.max(12, r.top - h - 6); p.dataset.side = 'top'; }
+  if (left + w > r.right + 4 && r.right - w > 12) { left = r.right - w; p.dataset.align = 'right'; }
   p.style.left = Math.max(12, left) + 'px';
   p.style.top = top + 'px';
   openPop = p;
@@ -155,7 +160,8 @@ export function modal(html, bind) {
   m.className = 'modal';
   m.innerHTML = `<div class="modal-card">${html}</div>`;
   document.body.appendChild(m);
-  const close = () => m.remove();
+  let closing = false;
+  const close = () => { if (closing) return; closing = true; m.classList.add('is-closing'); setTimeout(() => m.remove(), 170); };
   m.addEventListener('mousedown', (e) => { if (e.target === m) close(); });
   m.addEventListener('click', (e) => { if (e.target.closest('[data-close]')) close(); });
   const onKey = (e) => { if (e.key === 'Escape') { close(); document.removeEventListener('keydown', onKey); } };
@@ -183,3 +189,57 @@ export function downloadCSV(name, rows) {
   a.click();
   setTimeout(() => URL.revokeObjectURL(a.href), 1000);
 }
+
+// ---------- filtro de datas (atalhos + período personalizado com calendário nativo) ----------
+export const DATE_PRESETS = [
+  ['hoje', 'Hoje'], ['ontem', 'Ontem'], ['7', 'Últimos 7 dias'], ['14', 'Últimos 14 dias'], ['30', 'Últimos 30 dias'],
+  ['90', 'Últimos 90 dias'], ['mes', 'Este mês'], ['mespassado', 'Mês passado'], ['ano', 'Este ano'], ['tudo', 'Todo o período']
+];
+const DAY = 86400000;
+export const isoDay = (d) => new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 10);
+// devolve [início, fim] como Date (fim = 23:59:59); null = sem limite
+export function dateRange({ period = 'tudo', from = '', to = '' } = {}) {
+  const t = new Date(); t.setHours(0, 0, 0, 0);
+  const end = (d) => new Date(d.getTime() + DAY - 1);
+  switch (period) {
+    case 'hoje': return [t, end(t)];
+    case 'ontem': return [new Date(t - DAY), end(new Date(t - DAY))];
+    case '7': case '14': case '30': case '90': return [new Date(t - (+period - 1) * DAY), end(t)];
+    case 'mes': return [new Date(t.getFullYear(), t.getMonth(), 1), end(t)];
+    case 'mespassado': return [new Date(t.getFullYear(), t.getMonth() - 1, 1), end(new Date(t.getFullYear(), t.getMonth(), 0))];
+    case 'ano': return [new Date(t.getFullYear(), 0, 1), end(t)];
+    case 'custom': return [from ? new Date(from + 'T00:00') : null, to ? end(new Date(to + 'T00:00')) : null];
+    default: return [null, null];
+  }
+}
+export function dateLabel(st) {
+  if (st.period !== 'custom') return DATE_PRESETS.find(([k]) => k === st.period)?.[1] || 'Todo o período';
+  const f = (v) => (v ? new Date(v + 'T12:00').toLocaleDateString('pt-BR', { day: '2-digit', month: 'short', year: '2-digit' }) : '…');
+  return `${f(st.from)} – ${f(st.to)}`;
+}
+export function datePicker(anchor, st, onChange, { allowAll = true } = {}) {
+  const presets = DATE_PRESETS.filter(([k]) => allowAll || k !== 'tudo');
+  const [a, b] = dateRange(st);
+  const today = isoDay(new Date());
+  popover(anchor, `<div class="dp">
+      <div class="dp-presets">${presets.map(([k, n]) => `<button class="pi ${st.period === k ? 'active' : ''}" data-p="${k}">${n}${st.period === k ? `<span class="dp-ck">${ICON.check}</span>` : ''}</button>`).join('')}</div>
+      <div class="dp-custom">
+        <div class="ph">Período personalizado</div>
+        <label class="dp-f"><span>De</span><input type="date" class="inp" data-from max="${today}" value="${st.period === 'custom' ? st.from : a ? isoDay(a) : ''}"></label>
+        <label class="dp-f"><span>Até</span><input type="date" class="inp" data-to max="${today}" value="${st.period === 'custom' ? st.to : b ? isoDay(b) : today}"></label>
+        <p class="dp-err" hidden>A data inicial é depois da final.</p>
+        <button class="b b-primary b-sm" data-apply style="width:100%">Aplicar período</button>
+      </div></div>`, (p) => {
+    p.classList.add('pop-date');
+    p.addEventListener('click', (e) => {
+      const btn = e.target.closest('[data-p]');
+      if (btn) { closePop(); onChange({ period: btn.dataset.p, from: '', to: '' }); return; }
+      if (e.target.closest('[data-apply]')) {
+        const from = p.querySelector('[data-from]').value; const to = p.querySelector('[data-to]').value;
+        if (from && to && from > to) { p.querySelector('.dp-err').hidden = false; return; }
+        closePop(); onChange({ period: 'custom', from, to });
+      }
+    });
+  });
+}
+export const dateBtn = (st, attr = 'data-date') => `<button class="b date-btn ${st.period !== 'tudo' ? 'on' : ''}" ${attr} data-pop-anchor>${ICON.calendar}<span>${esc(dateLabel(st))}</span>${ICON.caret}</button>`;

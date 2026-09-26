@@ -1,66 +1,8 @@
-// Páginas "Formulários" e "Ajustes"
+// Página "Ajustes": estágios, rótulos, equipe, times e auditoria
 import { DB, LIVE } from '@shared/db.js';
-import { formPath } from '@shared/forms.js';
-import { S, $, $$, esc, COLORS, num, pct, ago, toast, fail, confirmBox } from './util.js?v=5e3e4be';
-import { openProfile } from './profile.js?v=5e3e4be';
-import { stageModal, moveStage, deleteStageFlow } from './app.js?v=5e3e4be';
-
-const QTYPES = ['short_text', 'long_text', 'email', 'phone', 'number', 'url', 'date', 'choice', 'multi', 'dropdown', 'yes_no', 'rating', 'scale', 'consent'];
-const SITE = /^(localhost|127\.0\.0\.1)$/.test(location.hostname) ? location.origin : (window.TRACTO_CONFIG?.siteUrl || location.origin);
-const formUrl = (id, utm = {}) => {
-  const u = new URL(formPath(S.forms[id]), SITE);
-  Object.entries(utm).forEach(([k, v]) => v && u.searchParams.set(k, v));
-  return u.toString();
-};
-
-// ============================================================
-// FORMULÁRIOS
-// ============================================================
-export async function renderForms(el) {
-  const forms = Object.values(S.forms);
-  el.innerHTML = `
-    <div class="topline"><h1>Formulários</h1><div class="grow"></div><span class="muted">Últimos 30 dias</span></div>
-    <div class="forms-grid">${forms.map((f) => {
-      const qs = f.fields.filter((x) => QTYPES.includes(x.type));
-      const rules = f.fields.filter((x) => x.logic?.length || x.showIf || x.next).length;
-      return `<section class="panel form-card" data-form="${f.id}">
-        <div><h3>${esc(f.name)}</h3><p class="muted" style="margin:4px 0 0">${qs.length} perguntas · ${qs.filter((q) => q.required).length} obrigatórias${rules ? ` · ${rules} regra${rules > 1 ? 's' : ''} de fluxo` : ''}</p></div>
-        <div class="url">${esc(formUrl(f.id))}</div>
-        <div class="form-stats"><div><b data-s="views">…</b><span>Visitas</span></div><div><b data-s="starts">…</b><span>Começaram</span></div><div><b data-s="leads">…</b><span>Leads</span></div><div><b data-s="rate">…</b><span>Conversão</span></div></div>
-        <details><summary class="muted" style="cursor:pointer">Gerar link com UTM</summary>
-          <div class="grid2" style="margin-top:10px"><input class="inp" data-utm="utm_source" placeholder="utm_source (ex: facebook)"><input class="inp" data-utm="utm_medium" placeholder="utm_medium (ex: paid_social)"></div>
-          <input class="inp" data-utm="utm_campaign" placeholder="utm_campaign (ex: diagnostico-ferragistas)" style="margin-top:10px">
-        </details>
-        <div style="display:flex;gap:8px;flex-wrap:wrap"><a class="b b-primary" href="${esc(formUrl(f.id))}" target="_blank" rel="noopener">Abrir formulário</a><button class="b" data-copy>Copiar link</button></div>
-      </section>`;
-    }).join('')}</div>
-    <p class="muted" style="margin-top:16px;line-height:1.6">Os formulários ficam em <b style="color:var(--c-text);font-weight:400">assets/js/forms.js</b>. Cada campo aceita tipo, obrigatório/opcional, condição pra aparecer (showIf) e regras de salto (logic). O form "Diagnóstico completo" é um modelo com todos os recursos.</p>`;
-
-  el.querySelectorAll('.form-card').forEach((card) => {
-    const id = card.dataset.form;
-    const link = () => formUrl(id, Object.fromEntries($$('[data-utm]', card).map((i) => [i.dataset.utm, i.value.trim()])));
-    card.querySelectorAll('[data-utm]').forEach((i) => i.addEventListener('input', () => { card.querySelector('.url').textContent = link(); card.querySelector('a.b-primary').href = link(); }));
-    card.querySelector('[data-copy]').addEventListener('click', async () => {
-      try { await navigator.clipboard.writeText(link()); toast('Link copiado'); } catch (e) { toast('Não consegui copiar. Selecione o link acima.', true); }
-    });
-  });
-
-  try {
-    const from = new Date(Date.now() - 30 * 86400000);
-    const ev = await DB.listEvents(from.toISOString());
-    if (!el.isConnected) return;
-    el.querySelectorAll('.form-card').forEach((card) => {
-      const id = card.dataset.form;
-      const sess = (t) => new Set(ev.filter((e) => e.form_id === id && e.event === t).map((e) => e.session_id)).size;
-      const views = sess('view'); const starts = sess('start');
-      const leads = S.leads.filter((l) => l.form_id === id && new Date(l.created_at) >= from).length;
-      card.querySelector('[data-s="views"]').textContent = num(views);
-      card.querySelector('[data-s="starts"]').textContent = num(starts);
-      card.querySelector('[data-s="leads"]').textContent = num(leads);
-      card.querySelector('[data-s="rate"]').textContent = views ? pct(leads, views) : '—';
-    });
-  } catch (e) { fail(e); }
-}
+import { S, $, $$, esc, COLORS, num, pct, ago, toast, fail, confirmBox } from './util.js?v=9217f9f';
+import { openProfile } from './profile.js?v=9217f9f';
+import { stageModal, moveStage, deleteStageFlow } from './app.js?v=9217f9f';
 
 // ============================================================
 // AJUSTES
@@ -109,8 +51,8 @@ export async function renderSettings(el, reload) {
 
       <section class="panel span2">
         <h3>Equipe e permissões</h3>
-        <p class="help">Novos usuários se cadastram em <b style="color:var(--c-text);font-weight:400">${esc(location.origin + location.pathname)}#/cadastro</b>, confirmam o e-mail e aparecem aqui inativos.
-          <b style="color:var(--c-text);font-weight:400">Admin</b> vê e configura tudo · <b style="color:var(--c-text);font-weight:400">Gestor</b> vê todos os leads, formulários e financeiro · <b style="color:var(--c-text);font-weight:400">SDR</b> vê só os leads dele e os sem dono.</p>
+        <div class="int-h" style="margin:0"><p class="help" style="flex:1">Quem você convidar cria a conta pelo link, confirma o e-mail e aparece aqui aguardando liberação.</p>${isAdmin ? '<button class="b b-sm" data-invite>Copiar link de cadastro</button>' : ''}</div>
+        <p class="help"><b style="color:var(--c-text);font-weight:400">Admin</b> vê e configura tudo · <b style="color:var(--c-text);font-weight:400">Gestor</b> vê todos os leads, formulários e financeiro · <b style="color:var(--c-text);font-weight:400">SDR</b> vê só os leads dele e os sem dono.</p>
         <div class="table-wrap"><table class="int-table team-table"><thead><tr><th>Pessoa</th><th>Papel</th><th>Time</th><th>Pushcut</th><th>Acesso</th></tr></thead><tbody>
         ${S.profiles.map((p) => `
           <tr data-id="${p.id}">
@@ -141,6 +83,9 @@ export async function renderSettings(el, reload) {
 
   const refresh = async () => { await reload(); renderSettings(el, reload); };
   el.querySelector('[data-profile]').addEventListener('click', () => openProfile());
+  el.querySelector('[data-invite]')?.addEventListener('click', async () => {
+    try { await navigator.clipboard.writeText(location.origin + location.pathname + '#/cadastro'); toast('Link de cadastro copiado'); } catch (e) { toast('Não consegui copiar', true); }
+  });
 
   if (isManager) {
     el.querySelector('[data-stages]').addEventListener('change', async (e) => {

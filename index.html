@@ -9,8 +9,21 @@
 <link rel="icon" href="https://assessoriatracto.com.br/assets/img/favicon.ico" sizes="any">
 <link rel="icon" type="image/svg+xml" href="https://assessoriatracto.com.br/assets/img/favicon.svg">
 <link rel="stylesheet" href="https://assessoriatracto.com.br/assets/css/app.css?v=3">
-<link rel="stylesheet" href="crm.css?v=5e3e4be">
+<link rel="stylesheet" href="crm.css?v=9217f9f">
 <script>
+// sempre em conexão segura
+if (location.protocol === 'http:' && !/^(localhost|127\.0\.0\.1)$/.test(location.hostname)) location.replace('https://' + location.host + location.pathname + location.search + location.hash);
+// se algo impedir o CRM de abrir, mostra aviso em vez de tela vazia
+window.__crmFail = function () {
+  if (document.getElementById('crmFail')) return;
+  var d = document.createElement('div');
+  d.id = 'crmFail';
+  d.style.cssText = 'position:fixed;inset:0;display:grid;place-items:center;padding:24px;text-align:center;font-family:Aspekta,system-ui,sans-serif;background:#050505;color:#fff;z-index:9999';
+  d.innerHTML = '<div><p style="font-size:20px;margin:0 0 8px">Não foi possível abrir o CRM</p><p style="color:#AFAFAF;margin:0 0 20px">Confira sua conexão e tente de novo.</p><button onclick="location.reload()" style="border:0;border-radius:10px;padding:12px 22px;background:linear-gradient(90deg,#FFAB00,#C98500);color:#fff;font-weight:700;cursor:pointer">Recarregar</button></div>';
+  document.body.appendChild(d);
+};
+window.addEventListener('error', function (e) { if (e.target && (e.target.tagName === 'SCRIPT' || e.target.tagName === 'LINK')) window.__crmFail(); }, true);
+setTimeout(function () { var l = document.getElementById('login'), a = document.getElementById('app'); if (l && a && l.hidden && a.hidden) window.__crmFail(); }, 8000);
 // aplica o tema antes de pintar a página (evita piscar)
 (function () {
   var t = null;
@@ -20,7 +33,7 @@
 })();
 </script>
 <!-- módulos compartilhados com o site principal (forms, banco). No deploy do subdomínio aponta pro domínio principal. -->
-<script type="importmap">{ "imports": { "@shared/db.js": "https://assessoriatracto.com.br/assets/js/db.js?v=5e3e4bee3e4be", "@shared/forms.js": "https://assessoriatracto.com.br/assets/js/forms.js?v=5e3e4bee3e4be" } }</script>
+<script type="importmap">{ "imports": { "@shared/db.js": "https://assessoriatracto.com.br/assets/js/db.js?v=9217f9ff9f", "@shared/forms.js": "https://assessoriatracto.com.br/assets/js/forms.js?v=9217f9ff9f" } }</script>
 </head>
 <body>
 
@@ -47,7 +60,7 @@
 
   <main class="main">
     <div class="demo-bar" id="demoBar" hidden>
-      <span><b>Modo demo.</b> Os dados ficam só neste navegador. Configure o Supabase em assets/js/tracto-config.js pra usar de verdade.</span>
+      <span><b>Modo demonstração.</b> Os dados ficam só neste navegador.</span>
       <button class="b b-sm" id="seedBtn" type="button">Gerar leads de exemplo</button>
     </div>
     <div id="view"></div>
@@ -58,7 +71,7 @@
 <aside class="drawer" id="drawer" aria-hidden="true" aria-label="Detalhes do lead"><div class="dr-body"></div></aside>
 <div class="toasts" id="toasts" aria-live="polite"></div>
 
-<script src="https://assessoriatracto.com.br/assets/js/tracto-config.js?v=5e3e4be"></script>
-<script type="module" src="app.js?v=5e3e4be"></script>
+<script src="https://assessoriatracto.com.br/assets/js/tracto-config.js?v=9217f9f"></script>
+<script type="module" src="app.js?v=9217f9f"></script>
 </body>
 </html>
