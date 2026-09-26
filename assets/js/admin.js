@@ -1,8 +1,8 @@
 // Página "Ajustes": estágios, rótulos, equipe, times e auditoria
 import { DB, LIVE } from '@shared/db.js';
-import { S, $, $$, esc, COLORS, num, pct, ago, toast, fail, confirmBox } from './util.js?v=9217f9f';
-import { openProfile } from './profile.js?v=9217f9f';
-import { stageModal, moveStage, deleteStageFlow } from './app.js?v=9217f9f';
+import { S, $, $$, esc, COLORS, num, pct, ago, toast, fail, confirmBox } from './util.js?v=2609261618';
+import { openProfile } from './profile.js?v=2609261618';
+import { stageModal, moveStage, deleteStageFlow } from './app.js?v=2609261618';
 
 // ============================================================
 // AJUSTES
@@ -56,7 +56,7 @@ export async function renderSettings(el, reload) {
         <div class="table-wrap"><table class="int-table team-table"><thead><tr><th>Pessoa</th><th>Papel</th><th>Time</th><th>Pushcut</th><th>Acesso</th></tr></thead><tbody>
         ${S.profiles.map((p) => `
           <tr data-id="${p.id}">
-            <td><div class="td-lead"><span class="av">${esc((p.nome || '?').split(/\s+/).slice(0, 2).map((w) => w[0]).join('').toUpperCase())}</span><div><b>${esc(p.nome)}${p.id === S.me?.id ? ' <span class="muted" style="font-weight:400">(você)</span>' : ''}</b><small>${esc(p.email)}</small></div></div></td>
+            <td><div class="td-lead"><span class="av">${esc((p.nome || '?').split(/\s+/).slice(0, 2).map((w) => w[0]).join('').toUpperCase())}</span><div><b>${esc(p.nome)}${p.id === S.me?.id ? ' <span class="muted" style="font-weight:400">(você)</span>' : ''}</b><small>${esc(p.email)}${p.cargo ? ' · ' + esc(p.cargo) : ''}</small></div></div></td>
             <td>${isAdmin ? `<select class="inp" data-role style="width:auto">${Object.entries(ROLE).map(([k, n]) => `<option value="${k}" ${p.role === k ? 'selected' : ''}>${n}</option>`).join('')}</select>` : ROLE[p.role] || ''}</td>
             <td>${isAdmin ? `<select class="inp" data-team style="width:auto"><option value="">Sem time</option>${teams.map((t) => `<option value="${t.id}" ${p.team_id === t.id ? 'selected' : ''}>${esc(t.name)}</option>`).join('')}</select>` : esc(teams.find((t) => t.id === p.team_id)?.name || '—')}</td>
             <td>${p.pushcut_url ? '<span class="pill good">Ativo</span>' : '<span class="muted">—</span>'}</td>

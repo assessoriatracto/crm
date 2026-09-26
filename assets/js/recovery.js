@@ -1,9 +1,9 @@
 // Aba "Recuperação": formulários começados e não concluídos (salvos automaticamente a cada resposta)
 import { DB, LIVE } from '@shared/db.js';
 import { formPath } from '@shared/forms.js';
-import { S, $, $$, esc, ICON, initials, fmtPhone, fullDate, ago, num, pct, toast, fail, modal, confirmBox } from './util.js?v=9217f9f';
+import { S, $, $$, esc, ICON, initials, fmtPhone, fullDate, ago, num, pct, toast, fail, modal, confirmBox } from './util.js?v=2609261618';
 
-const SITE = /^(localhost|127\.0\.0\.1)$/.test(location.hostname) ? location.origin : (window.TRACTO_CONFIG?.siteUrl || location.origin);
+const SITE = window.TRACTO_CONFIG?.siteUrl || 'https://assessoriatracto.com.br';
 const STATUS = {
   abandonado: ['Abandonado', 'bad'], em_andamento: ['Preenchendo agora', 'wait'], recuperado: ['Recuperado', 'good'], descartado: ['Descartado', '']
 };

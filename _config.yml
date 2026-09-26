@@ -1,0 +1,2 @@
+# GitHub Pages: publica só o CRM (index.html + assets). O resto é código de apoio.
+exclude: [supabase, docs, tools, README.md]

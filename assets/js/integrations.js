@@ -1,7 +1,7 @@
 // Abas "Integrações" (API + webhooks) e "Pixel" (Meta Pixel + Conversions API)
 import { DB, LIVE } from '@shared/db.js';
-import { S, $, $$, esc, FAT, ICON, num, pct, brl, fullDate, ago, toast, fail, modal, confirmBox, menu } from './util.js?v=9217f9f';
-import { hbars } from './dashboard.js?v=9217f9f';
+import { S, $, $$, esc, FAT, ICON, num, pct, brl, fullDate, ago, toast, fail, modal, confirmBox, menu } from './util.js?v=2609261618';
+import { hbars } from './dashboard.js?v=2609261618';
 import { PIXEL_EVENTS_RECOMMENDED } from '@shared/db.js';
 
 const EVENTS = [

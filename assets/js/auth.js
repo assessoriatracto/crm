@@ -2,7 +2,7 @@
 // Boas práticas: senha forte + checagem de senhas vazadas (k-anonimato), mensagens genéricas,
 // bloqueio temporário após tentativas, 2FA (TOTP), sessão encerrada por inatividade e consentimento LGPD registrado.
 import { DB, LIVE } from '@shared/db.js';
-import { $, esc, toast } from './util.js?v=9217f9f';
+import { $, esc, toast } from './util.js?v=2609261618';
 
 export const PRIVACY_VERSION = '2026-09';
 const SITE = window.TRACTO_CONFIG?.siteUrl || 'https://assessoriatracto.com.br';
@@ -12,7 +12,7 @@ const COMMON = ['123456', 'senha', 'password', 'qwerty', 'tracto', 'abc123', '11
 
 const ICON_EYE = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7S1 12 1 12z"/><circle cx="12" cy="12" r="3"/></svg>';
 // no subdomínio do CRM os arquivos compartilhados vêm do domínio principal
-const ASSETS = /^(localhost|127\.0\.0\.1)$/.test(location.hostname) ? location.origin : SITE;
+const ASSETS = SITE;
 const LOGO = `<img src="${ASSETS}/assets/img/tracto-logo.svg?v=3" alt="Tracto" class="auth-logo">`;
 
 // ---------- senha ----------
@@ -145,12 +145,29 @@ export function showMfa(onDone) {
   });
 }
 
+const CARGOS = ['Sócio ou diretor', 'Gestor comercial', 'SDR / pré-vendas', 'Closer / vendas', 'Gestor de tráfego', 'Atendimento / CS', 'Financeiro', 'Outro'];
+const maskPhone = (v) => {
+  const d = v.replace(/\D/g, '').replace(/^55(?=\d{10,11}$)/, '').slice(0, 11);
+  if (d.length <= 2) return d.length ? `(${d}` : '';
+  if (d.length <= 6) return `(${d.slice(0, 2)}) ${d.slice(2)}`;
+  if (d.length <= 10) return `(${d.slice(0, 2)}) ${d.slice(2, 6)}-${d.slice(6)}`;
+  return `(${d.slice(0, 2)}) ${d.slice(2, 7)}-${d.slice(7)}`;
+};
+
 export function showSignUp() {
   screen(`<h1>Criar <em>conta</em></h1>
-    <p class="auth-sub">Depois de confirmar o e-mail, um administrador libera seu acesso.</p>
+    <p class="auth-sub">Preencha seus dados. Depois de confirmar o e-mail, um administrador libera seu acesso.</p>
     <form class="auth-form" novalidate>
-      ${field('sNome', 'Nome completo', 'text', 'autocomplete="name" maxlength="120" required')}
+      <div class="auth-grid">
+        ${field('sNome', 'Nome', 'text', 'autocomplete="given-name" maxlength="60" required')}
+        ${field('sSobrenome', 'Sobrenome', 'text', 'autocomplete="family-name" maxlength="60" required')}
+      </div>
       ${field('sEmail', 'E-mail de trabalho', 'email', 'autocomplete="email" required')}
+      ${field('sEmail2', 'Confirmar e-mail', 'email', 'autocomplete="off" required')}
+      <div class="auth-grid">
+        ${field('sPhone', 'WhatsApp', 'tel', 'inputmode="tel" autocomplete="tel-national" placeholder="(62) 99999-9999" required')}
+        <div class="row"><label class="lbl" for="sCargo">Cargo</label><select class="inp" id="sCargo" required><option value="">Selecione</option>${CARGOS.map((c) => `<option>${c}</option>`).join('')}</select></div>
+      </div>
       ${field('sPass', 'Senha', 'password', 'autocomplete="new-password" required')}
       <div class="pw-meter" data-score="0"><i></i><i></i><i></i><i></i></div><p class="pw-hint"></p>
       ${field('sPass2', 'Confirmar senha', 'password', 'autocomplete="new-password" required')}
@@ -159,25 +176,34 @@ export function showSignUp() {
       <p class="auth-err" role="alert"></p>
     </form>
     <p class="auth-alt">Já tem conta? <a href="#/entrar" class="link">Entrar</a></p>`, (el) => {
+    el.querySelector('.auth-card').classList.add('wide');
     bindEyes(el);
-    meter(el, 'sPass', () => ({ email: el.querySelector('#sEmail').value, nome: el.querySelector('#sNome').value }));
+    const $f = (id) => el.querySelector('#' + id);
+    $f('sPhone').addEventListener('input', (e) => { e.target.value = maskPhone(e.target.value); });
+    // não deixa colar no "confirmar" (confirmação de verdade)
+    ['sEmail2', 'sPass2'].forEach((id) => $f(id).addEventListener('paste', (e) => e.preventDefault()));
+    meter(el, 'sPass', () => ({ email: $f('sEmail').value, nome: $f('sNome').value + ' ' + $f('sSobrenome').value }));
     el.querySelector('form').addEventListener('submit', async (e) => {
       e.preventDefault();
-      const nome = el.querySelector('#sNome').value.trim(); const email = el.querySelector('#sEmail').value.trim().toLowerCase();
-      const pass = el.querySelector('#sPass').value; const pass2 = el.querySelector('#sPass2').value;
-      if (nome.split(/\s+/).length < 2) return err(el, 'Informe nome e sobrenome.');
+      const nome = $f('sNome').value.trim(); const sobrenome = $f('sSobrenome').value.trim();
+      const email = $f('sEmail').value.trim().toLowerCase(); const email2 = $f('sEmail2').value.trim().toLowerCase();
+      const phone = $f('sPhone').value.replace(/\D/g, ''); const cargo = $f('sCargo').value;
+      const pass = $f('sPass').value; const pass2 = $f('sPass2').value;
+      if (nome.length < 2 || sobrenome.length < 2) return err(el, 'Informe nome e sobrenome.');
       if (!/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(email)) return err(el, 'E-mail inválido.');
-      const chk = passwordCheck(pass, { email, nome });
+      if (email !== email2) return err(el, 'Os e-mails não conferem.');
+      if (phone.length < 10 || phone.length > 11) return err(el, 'Informe o WhatsApp com DDD.');
+      if (!cargo) return err(el, 'Selecione seu cargo.');
+      const chk = passwordCheck(pass, { email, nome: nome + ' ' + sobrenome });
       if (!chk.ok) return err(el, 'Senha fraca: ' + chk.issues.join(', ') + '.');
       if (pass !== pass2) return err(el, 'As senhas não conferem.');
-      if (!el.querySelector('#sConsent').checked) return err(el, 'É preciso aceitar a Política de Privacidade.');
+      if (!$f('sConsent').checked) return err(el, 'É preciso aceitar a Política de Privacidade.');
       const btn = el.querySelector('.auth-btn'); setBusy(btn, true);
       if (await pwned(pass)) { setBusy(btn, false); return err(el, 'Essa senha já apareceu em vazamentos de dados na internet. Escolha outra.'); }
       try {
-        await DB.signUp({ email, password: pass, nome, consentVersion: PRIVACY_VERSION });
+        await DB.signUp({ email, password: pass, nome: `${nome} ${sobrenome}`, phone: '55' + phone, cargo, consentVersion: PRIVACY_VERSION });
         showCheckEmail(email);
       } catch (ex) {
-        // mensagem genérica: não revela se o e-mail já existe
         setBusy(btn, false);
         err(el, /rate|many/i.test(ex.message) ? 'Muitas tentativas. Aguarde alguns minutos.' : /password/i.test(ex.message) ? 'Senha não aceita. Escolha uma mais forte.' : 'Não foi possível criar a conta. Confira os dados e tente de novo.');
       }

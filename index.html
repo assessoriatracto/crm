@@ -9,7 +9,7 @@
 <link rel="icon" href="https://assessoriatracto.com.br/assets/img/favicon.ico" sizes="any">
 <link rel="icon" type="image/svg+xml" href="https://assessoriatracto.com.br/assets/img/favicon.svg">
 <link rel="stylesheet" href="https://assessoriatracto.com.br/assets/css/app.css?v=3">
-<link rel="stylesheet" href="crm.css?v=9217f9f">
+<link rel="stylesheet" href="assets/css/crm.css?v=2609261618">
 <script>
 // sempre em conexão segura
 if (location.protocol === 'http:' && !/^(localhost|127\.0\.0\.1)$/.test(location.hostname)) location.replace('https://' + location.host + location.pathname + location.search + location.hash);
@@ -32,8 +32,8 @@ setTimeout(function () { var l = document.getElementById('login'), a = document.
   document.documentElement.dataset.theme = t;
 })();
 </script>
-<!-- módulos compartilhados com o site principal (forms, banco). No deploy do subdomínio aponta pro domínio principal. -->
-<script type="importmap">{ "imports": { "@shared/db.js": "https://assessoriatracto.com.br/assets/js/db.js?v=9217f9ff9f", "@shared/forms.js": "https://assessoriatracto.com.br/assets/js/forms.js?v=9217f9ff9f" } }</script>
+<!-- módulos compartilhados com o site (banco, formulários, config): vêm de assessoriatracto.com.br. tools/versao.sh atualiza as versões. -->
+<script type="importmap">{ "imports": { "@shared/db.js": "https://assessoriatracto.com.br/assets/js/db.js?v=2609261618", "@shared/forms.js": "https://assessoriatracto.com.br/assets/js/forms.js?v=2609261618" } }</script>
 </head>
 <body>
 
@@ -71,7 +71,7 @@ setTimeout(function () { var l = document.getElementById('login'), a = document.
 <aside class="drawer" id="drawer" aria-hidden="true" aria-label="Detalhes do lead"><div class="dr-body"></div></aside>
 <div class="toasts" id="toasts" aria-live="polite"></div>
 
-<script src="https://assessoriatracto.com.br/assets/js/tracto-config.js?v=9217f9f"></script>
-<script type="module" src="app.js?v=9217f9f"></script>
+<script src="https://assessoriatracto.com.br/assets/js/tracto-config.js?v=2609261618"></script>
+<script type="module" src="assets/js/app.js?v=2609261618"></script>
 </body>
 </html>

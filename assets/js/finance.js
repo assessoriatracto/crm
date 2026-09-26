@@ -1,8 +1,9 @@
 // Financeiro (estilo UTMify): gasto da Meta Ads × leads e vendas do CRM × receitas e despesas lançadas
 import { DB } from '@shared/db.js';
-import { dateRange, datePicker, dateBtn, S, $, $$, esc, ICON, brl, num, pct, fullDate, ago, toast, fail, modal, confirmBox } from './util.js?v=9217f9f';
+import { dateRange, datePicker, dateBtn, S, $, $$, esc, ICON, brl, num, pct, fullDate, ago, toast, fail, modal, confirmBox } from './util.js?v=2609261618';
 
-const F = { period: '30', from: '', to: '', level: 'campaign', revenue: 'mensal', sort: 'spend' };
+const F = { period: '30', from: '', to: '', level: 'campaign', revenue: 'mensal', sort: 'spend', tab: 'geral' };
+const GRAPH = 'v21.0';
 const CATS = { despesa: ['Ferramentas', 'Equipe', 'Comissões', 'Impostos', 'Tráfego (outras plataformas)', 'Outros'], receita: ['Contrato', 'Setup', 'Consultoria', 'Outros'] };
 const UTM_TEMPLATE = 'utm_source=facebook&utm_medium=paid_social&utm_campaign={{campaign.name}}&utm_term={{adset.name}}&utm_content={{ad.name}}&utm_id={{campaign.id}}';
 const iso = (d) => new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 10);
@@ -14,7 +15,17 @@ function range() {
 }
 const inRange = (dateIso, [a, b]) => { const d = iso(new Date(dateIso)); return d >= a && d <= b; };
 
-export async function renderFinance(el) {
+const TABS = [['geral', 'Visão geral'], ['contas', 'Contas de anúncio']];
+const tabBar = () => `<nav class="ptabs" role="tablist">${TABS.map(([k, n]) => `<button role="tab" class="ptab ${F.tab === k ? 'on' : ''}" aria-selected="${F.tab === k}" data-tab="${k}">${n}</button>`).join('')}</nav>`;
+function bindTabs(el) {
+  el.querySelectorAll('[data-tab]').forEach((b) => b.addEventListener('click', () => {
+    if (F.tab === b.dataset.tab) return;
+    F.tab = b.dataset.tab; renderFinance(el, true);
+  }));
+}
+
+export async function renderFinance(el, swap = false) {
+  if (F.tab === 'contas') return renderAccounts(el, swap);
   el.innerHTML = '<div class="loading">Carregando…</div>';
   const r = range();
   let ins = [], entries = [], accounts = [], settings = null;
@@ -46,7 +57,7 @@ export async function renderFinance(el) {
 
   const tiles = [
     ['Faturamento', brl(faturamento), `${num(sales.length)} venda${sales.length === 1 ? '' : 's'}${revManual ? ' + ' + brl(revManual) + ' lançados' : ''}`, 'accent'],
-    ['Gastos com anúncios', brl(spend), accounts.length || ins.length ? `${num(imp)} impressões` : 'conecte a Meta Ads abaixo'],
+    ['Gastos com anúncios', brl(spend), accounts.length || ins.length ? `${num(imp)} impressões` : 'conecte na aba Contas de anúncio'],
     ['Lucro', brl(lucro), `margem ${faturamento ? pct(lucro, faturamento) : '—'}`, lucro < 0 ? 'neg' : 'pos'],
     ['ROAS', x2(ratio(revSales, spend)), 'receita de vendas ÷ gasto'],
     ['ROI', ratio(lucro, despesas) == null ? '—' : pct(lucro, despesas), `despesas totais ${brl(despesas)}`],
@@ -63,6 +74,8 @@ export async function renderFinance(el) {
     <div class="topline"><h1>Financeiro</h1><div class="grow"></div>
       ${dateBtn(F)}
     </div>
+    ${tabBar()}
+    <div class="tab-body">
     <div class="fin-actions">
       <div class="seg"><button class="b b-sm ${F.revenue === 'mensal' ? 'on' : ''}" data-rev="mensal">Receita: 1ª mensalidade</button><button class="b b-sm ${F.revenue === 'contrato' ? 'on' : ''}" data-rev="contrato">Receita: contrato (× ${months} meses)</button></div>
       <div class="grow"></div>
@@ -92,12 +105,10 @@ export async function renderFinance(el) {
         </tbody></table></div>` : '<p class="muted">Nenhum lançamento no período.</p>'}
       </section>
       <section class="panel int-card">
-        <div class="int-h"><div><h3>Contas de anúncio</h3><p class="help">O CRM puxa o gasto da Meta a cada 3 horas (por anúncio e por dia).</p></div>${isAdmin ? '<button class="b b-sm b-primary" data-add-acc>+ Conta</button>' : ''}</div>
-        ${accounts.length ? accounts.map((a) => `<div class="srow" data-id="${a.id}"><span class="plat plat-meta"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M3 15c0-4 2-8 4.5-8 3 0 5 8 9 8 2 0 3.5-1.5 3.5-4s-1.5-4-3.5-4c-3.5 0-5.5 8-9 8C5 15 3 14 3 15z"/></svg></span>
-          <div class="grow"><b>${esc(a.name)}</b><div class="muted" style="font-size:12px">${esc(a.account_id)} · ${a.last_error ? `<span style="color:var(--fg-red)">${esc(a.last_error)}</span>` : a.last_sync_at ? 'sincronizado ' + (ago(a.last_sync_at) === 'agora' ? 'agora' : 'há ' + ago(a.last_sync_at)) : 'aguardando 1ª sincronização'}</div></div>
-          ${isAdmin ? `<button class="switch ${a.enabled ? 'on' : ''}" data-acc-toggle></button><button class="b b-sm" data-acc-edit>Editar</button><button class="b b-sm b-danger" data-acc-del>×</button>` : ''}</div>`).join('')
-          : `<p class="muted">${isAdmin ? 'Nenhuma conta conectada. Adicione a conta da Meta Ads com um token de acesso (permissão ads_read).' : 'Peça pra um admin conectar a conta da Meta Ads.'}</p>`}
+        <div class="int-h"><div><h3>Contas de anúncio</h3><p class="help">${accounts.length ? `${accounts.filter((a) => a.enabled).length} ativa${accounts.filter((a) => a.enabled).length === 1 ? '' : 's'} · gasto atualizado a cada 3 horas` : 'Conecte o perfil do Facebook pra puxar o gasto das campanhas.'}</p></div><button class="b b-sm" data-go-acc>Gerenciar</button></div>
+        ${accounts.slice(0, 4).map((a) => `<div class="srow">${META_ICON}<div class="grow"><b>${esc(a.name)}</b><div class="muted" style="font-size:12px">${accStatus(a)}</div></div>${a.enabled ? '<span class="pill good">Ativa</span>' : '<span class="pill">Pausada</span>'}</div>`).join('')}
       </section>
+    </div>
     </div>`;
 
   // tabela por nível
@@ -105,6 +116,9 @@ export async function renderFinance(el) {
   dailyChart(el.querySelector('[data-chart]'), r, ins, sales, entries, saleValue);
 
   const reload = () => renderFinance(el);
+  bindTabs(el);
+  if (swap) el.querySelector('.tab-body').classList.add('swap-in');
+  el.querySelector('[data-go-acc]').addEventListener('click', () => { F.tab = 'contas'; renderFinance(el, true); });
   el.querySelector('[data-date]').addEventListener('click', (e) => datePicker(e.currentTarget, F, (st) => { Object.assign(F, st); reload(); }));
   el.querySelectorAll('[data-rev]').forEach((b) => b.addEventListener('click', () => { F.revenue = b.dataset.rev; reload(); }));
   el.querySelectorAll('[data-level]').forEach((b) => b.addEventListener('click', () => { F.level = b.dataset.level; reload(); }));
@@ -122,14 +136,186 @@ export async function renderFinance(el) {
       toast('Gasto da Meta atualizado'); reload();
     } catch (err) { fail(err); btn.disabled = false; btn.classList.remove('is-spinning'); }
   });
-  el.querySelector('[data-add-acc]')?.addEventListener('click', () => accountModal(null, reload));
+}
+
+// ================= Contas de anúncio: login do Facebook + contas ativas =================
+const META_ICON = '<span class="plat plat-meta"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M3 15c0-4 2-8 4.5-8 3 0 5 8 9 8 2 0 3.5-1.5 3.5-4s-1.5-4-3.5-4c-3.5 0-5.5 8-9 8C5 15 3 14 3 15z"/></svg></span>';
+const FB_ICON = '<svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M24 12a12 12 0 1 0-13.9 11.9v-8.4H7.1V12h3V9.4c0-3 1.8-4.7 4.5-4.7 1.3 0 2.7.2 2.7.2v3h-1.5c-1.5 0-2 .9-2 1.9V12h3.4l-.5 3.5h-2.9v8.4A12 12 0 0 0 24 12z"/></svg>';
+const daysLeft = (d) => (d ? Math.ceil((new Date(d) - Date.now()) / 86400000) : null);
+function accStatus(a) {
+  if (a.last_error) return `<span style="color:var(--fg-red)">${esc(a.last_error)}</span>`;
+  const left = daysLeft(a.token_expires_at);
+  const sync = a.last_sync_at ? 'sincronizado ' + (ago(a.last_sync_at) === 'agora' ? 'agora' : 'há ' + ago(a.last_sync_at)) : 'aguardando 1ª sincronização';
+  if (left != null && left <= 0) return '<span style="color:var(--fg-red)">acesso expirou · reconecte o Facebook</span>';
+  if (left != null && left <= 10) return `${sync} · <span style="color:var(--amber-ink)">acesso expira em ${left} dia${left === 1 ? '' : 's'}</span>`;
+  return sync;
+}
+
+let sdk = null;
+function loadFbSdk(appId) {
+  if (sdk && sdk.appId === appId) return sdk.p;
+  const p = new Promise((ok, bad) => {
+    const init = () => { window.FB.init({ appId, version: GRAPH, cookie: false, xfbml: false }); ok(window.FB); };
+    if (window.FB) return init();
+    window.fbAsyncInit = init;
+    const s = document.createElement('script');
+    s.src = 'https://connect.facebook.net/pt_BR/sdk.js'; s.async = true; s.crossOrigin = 'anonymous';
+    s.onerror = () => { sdk = null; bad(new Error('Não consegui carregar o login do Facebook. Desative bloqueadores de anúncio nesta página e tente de novo.')); };
+    document.head.appendChild(s);
+    setTimeout(() => bad(new Error('O Facebook demorou pra responder. Tente de novo.')), 20000);
+  });
+  sdk = { appId, p };
+  return p;
+}
+const fbApi = (FB, path, params = {}) => new Promise((ok, bad) => FB.api(path, 'GET', params, (r) => (!r || r.error ? bad(new Error(r?.error?.message || 'erro no Facebook')) : ok(r))));
+async function fbAccounts(FB) {
+  const out = []; let after = null;
+  do {
+    const r = await fbApi(FB, '/me/adaccounts', { fields: 'name,account_id,currency,account_status,business{name}', limit: 100, ...(after ? { after } : {}) });
+    out.push(...(r.data || []));
+    after = r.paging?.next ? r.paging.cursors?.after : null;
+  } while (after && out.length < 500);
+  return out;
+}
+const ACC_STATUS = { 1: 'Ativa', 2: 'Desativada', 3: 'Pagamento pendente', 7: 'Em análise', 8: 'Pagamento pendente', 9: 'Em período de carência', 100: 'Encerrando', 101: 'Encerrada' };
+
+async function renderAccounts(el, swap) {
+  el.innerHTML = '<div class="loading">Carregando…</div>';
+  const isAdmin = S.me?.role === 'admin';
+  let accounts = [], app = {};
+  try { [accounts, app] = await Promise.all([DB.listAdAccounts(), isAdmin ? DB.getAppSettings().catch(() => ({})) : {}]); } catch (e) { fail(e); }
+  if (!el.isConnected) return;
+  app = app || {};
+  const hasApp = !!app.meta_app_id;
+  const profiles = [...new Set(accounts.filter((a) => a.fb_user_name).map((a) => a.fb_user_name))];
+  const soonest = accounts.filter((a) => a.connected_via === 'facebook' && a.token_expires_at).map((a) => daysLeft(a.token_expires_at)).sort((a, b) => a - b)[0];
+
+  el.innerHTML = `
+    <div class="topline"><h1>Financeiro</h1><div class="grow"></div></div>
+    ${tabBar()}
+    <div class="tab-body">
+    <section class="panel int-card fb-card">
+      <div class="fb-hero">
+        <span class="fb-badge">${FB_ICON}</span>
+        <div class="grow">
+          <h3>${profiles.length ? 'Perfil do Facebook <em>conectado</em>' : 'Conecte o perfil do <em>Facebook</em>'}</h3>
+          <p class="help">${profiles.length
+            ? `${esc(profiles.join(', '))} · ${soonest == null ? '' : soonest > 0 ? `acesso válido por mais ${soonest} dia${soonest === 1 ? '' : 's'}` : 'acesso expirado'}`
+            : 'Entre com o Facebook, escolha as contas de anúncio e o CRM passa a puxar gasto, impressões, cliques e leads de cada campanha, conjunto e anúncio.'}</p>
+        </div>
+        ${isAdmin ? `<button class="b b-fb" data-fb ${hasApp ? '' : 'disabled'}>${FB_ICON}${profiles.length ? 'Reconectar / adicionar contas' : 'Entrar com o Facebook'}</button>` : ''}
+      </div>
+      ${isAdmin && !hasApp ? `<p class="fb-note">Antes do primeiro login, configure o app da Meta logo abaixo (é feito uma vez só).</p>` : ''}
+      ${isAdmin && soonest != null && soonest <= 10 ? `<p class="fb-note warn">O Facebook libera o acesso por 60 dias. Clique em Reconectar pra renovar sem perder o histórico.</p>` : ''}
+    </section>
+
+    <section class="panel int-card" style="margin-top:12px">
+      <div class="int-h"><div><h3>Contas de anúncio</h3><p class="help">Gasto sincronizado a cada 3 horas, por anúncio e por dia. Só as contas ativas entram no financeiro.</p></div>
+        ${accounts.length ? `<button class="b b-refresh" data-sync>${ICON.refresh}Sincronizar agora</button>` : ''}</div>
+      ${accounts.length ? accounts.map((a) => `<div class="srow" data-id="${a.id}">${META_ICON}
+          <div class="grow"><b>${esc(a.name)}</b><div class="muted" style="font-size:12px">${esc(a.account_id)}${a.currency ? ' · ' + esc(a.currency) : ''}${a.connected_via === 'facebook' ? ' · via Facebook' : ' · token manual'} · ${accStatus(a)}</div></div>
+          ${isAdmin ? `<button class="switch ${a.enabled ? 'on' : ''}" data-acc-toggle aria-label="${a.enabled ? 'Pausar' : 'Ativar'} conta"></button>${a.connected_via === 'facebook' ? '' : '<button class="b b-sm" data-acc-edit>Editar</button>'}<button class="b b-sm b-danger" data-acc-del aria-label="Desconectar">×</button>` : (a.enabled ? '<span class="pill good">Ativa</span>' : '<span class="pill">Pausada</span>')}</div>`).join('')
+        : `<div class="empty-mini"><p class="muted">${isAdmin ? 'Nenhuma conta ativa ainda. Use "Entrar com o Facebook" acima.' : 'Peça pra um admin conectar o Facebook.'}</p></div>`}
+      ${isAdmin ? '<p class="help" style="margin-top:10px">Prefere um token de usuário do sistema (não expira)? <a href="#" class="link" data-add-acc>Adicionar conta com token</a></p>' : ''}
+    </section>
+
+    ${isAdmin ? `<section class="panel int-card" style="margin-top:12px">
+      <details class="docs" ${hasApp ? '' : 'open'}><summary>App da Meta ${hasApp ? `<span class="pill good" style="margin-left:6px">configurado</span>` : '<span class="pill wait" style="margin-left:6px">pendente</span>'}</summary>
+        <ol class="steps">
+          <li>Acesse <a class="link" href="https://developers.facebook.com/apps/" target="_blank" rel="noopener">developers.facebook.com/apps</a> e clique em <b>Criar app</b>. Caso de uso: <b>Outro</b> e tipo <b>Empresa</b>, vinculado ao portfólio da Tracto.</li>
+          <li>Adicione o produto <b>Login do Facebook para Empresas</b> (ou Login do Facebook). Em Configurações, coloque <b>${esc(location.origin)}</b> em "Domínios permitidos para o SDK do JavaScript" e em "URIs de redirecionamento do OAuth válidos".</li>
+          <li>Em Configurações do app &gt; Básico: domínio <b>${esc(location.hostname)}</b>, URL da política de privacidade <b>https://assessoriatracto.com.br/privacidade/</b>. Copie o <b>ID do app</b> e a <b>Chave secreta</b>.</li>
+          <li>Em Casos de uso &gt; Permissões, adicione <b>ads_read</b> e <b>business_management</b>. Enquanto o app estiver em desenvolvimento, só administradores do app conseguem conectar (é o suficiente pra uso interno).</li>
+        </ol>
+        <div class="grid2">
+          <div class="row"><label class="lbl" for="mApp">ID do app</label><input class="inp" id="mApp" inputmode="numeric" value="${esc(app.meta_app_id || '')}" placeholder="Ex: 1234567890123456"></div>
+          <div class="row"><label class="lbl" for="mSecret">Chave secreta do app</label><input class="inp" id="mSecret" type="password" autocomplete="off" spellcheck="false" placeholder="${hasApp ? '•••••••• salva · cole outra pra trocar' : 'cole a chave secreta'}"></div>
+        </div>
+        <p class="help">A chave secreta fica só no servidor: é usada pra transformar o login em acesso de 60 dias e nunca volta pro navegador.</p>
+        <div style="display:flex;justify-content:flex-end;margin-top:8px"><button class="b b-primary" data-save-app>Salvar app</button></div>
+      </details>
+    </section>` : ''}
+    </div>`;
+
+  const reload = () => renderAccounts(el);
+  bindTabs(el);
+  if (swap) el.querySelector('.tab-body').classList.add('swap-in');
+
+  el.querySelector('[data-save-app]')?.addEventListener('click', async (e) => {
+    const btn = e.currentTarget;
+    const id = el.querySelector('#mApp').value.trim(); const secret = el.querySelector('#mSecret').value.trim();
+    if (!/^\d{8,20}$/.test(id)) return toast('O ID do app tem só números', true);
+    if (!hasApp && !/^[a-f0-9]{32}$/i.test(secret)) return toast('Cole a chave secreta (32 caracteres)', true);
+    if (secret && !/^[a-f0-9]{32}$/i.test(secret)) return toast('A chave secreta tem 32 caracteres', true);
+    btn.disabled = true;
+    try { await DB.saveAppSettings({ meta_app_id: id, ...(secret ? { meta_app_secret: secret } : {}) }); sdk = null; toast('App da Meta salvo'); reload(); } catch (err) { btn.disabled = false; fail(err); }
+  });
+
+  el.querySelector('[data-fb]')?.addEventListener('click', async (e) => {
+    const btn = e.currentTarget; btn.disabled = true; btn.classList.add('is-busy');
+    const done = () => { btn.disabled = false; btn.classList.remove('is-busy'); };
+    try {
+      const FB = await loadFbSdk(app.meta_app_id);
+      const auth = await new Promise((ok) => FB.login((r) => ok(r.authResponse), { scope: 'ads_read,business_management', return_scopes: true, auth_type: 'rerequest' }));
+      if (!auth) { done(); return toast('Login cancelado', true); }
+      if (!String(auth.grantedScopes || '').includes('ads_read')) { done(); return toast('Autorize a permissão de ler anúncios (ads_read) pra continuar', true); }
+      const [me, list] = await Promise.all([fbApi(FB, '/me', { fields: 'name' }), fbAccounts(FB)]);
+      if (!list.length) { done(); return toast('Esse perfil não tem acesso a nenhuma conta de anúncio', true); }
+      const conn = await DB.metaConnect(auth.accessToken, auth.userID, me.name);
+      let st = null;
+      for (const wait of [800, 1200, 1500, 2000, 3000, 4000]) {
+        await new Promise((ok) => setTimeout(ok, wait));
+        st = await DB.metaConnectStatus(conn);
+        if (st.status !== 'pending') break;
+      }
+      done();
+      if (st?.status !== 'ok') return toast(st?.error ? 'O Facebook recusou: ' + st.error : 'O Facebook não respondeu. Tente de novo.', true);
+      pickAccounts(conn, me.name, list, accounts, reload);
+    } catch (err) { done(); fail(err); }
+  });
+
+  el.querySelector('[data-sync]')?.addEventListener('click', async (e) => {
+    const btn = e.currentTarget; btn.disabled = true; btn.classList.add('is-spinning');
+    try {
+      await DB.syncAds(null, 30);
+      for (const wait of [3000, 4000, 6000]) { await new Promise((ok) => setTimeout(ok, wait)); await DB.processAds(); }
+      toast('Gasto da Meta atualizado'); reload();
+    } catch (err) { fail(err); btn.disabled = false; btn.classList.remove('is-spinning'); }
+  });
+  el.querySelector('[data-add-acc]')?.addEventListener('click', (e) => { e.preventDefault(); accountModal(null, reload); });
   el.querySelectorAll('.srow[data-id]').forEach((row) => {
     const a = accounts.find((x) => x.id === row.dataset.id); if (!a) return;
-    row.querySelector('[data-acc-toggle]')?.addEventListener('click', async () => { try { await DB.saveAdAccount({ id: a.id, enabled: !a.enabled }); reload(); } catch (e) { fail(e); } });
+    row.querySelector('[data-acc-toggle]')?.addEventListener('click', async () => { try { await DB.saveAdAccount({ id: a.id, enabled: !a.enabled }); toast(a.enabled ? 'Conta pausada' : 'Conta ativada'); reload(); } catch (e) { fail(e); } });
     row.querySelector('[data-acc-edit]')?.addEventListener('click', () => accountModal(a, reload));
     row.querySelector('[data-acc-del]')?.addEventListener('click', async () => {
       if (!(await confirmBox(`Desconectar a conta "${a.name}"? O histórico de gasto dela também sai do financeiro.`, 'Desconectar'))) return;
       try { await DB.deleteAdAccount(a.id); reload(); } catch (e) { fail(e); }
+    });
+  });
+}
+
+// escolhe quais contas do perfil ficam ativas no CRM
+function pickAccounts(conn, fbName, list, current, done) {
+  const active = new Set(current.map((a) => a.account_id));
+  const rows = list.map((a) => ({ id: a.id, name: a.name, currency: a.currency, status: a.account_status, biz: a.business?.name }))
+    .sort((a, b) => (a.status === 1 ? 0 : 1) - (b.status === 1 ? 0 : 1) || a.name.localeCompare(b.name));
+  modal(`<h3>Ativar contas de anúncio</h3>
+    <p class="help" style="margin-top:-4px">Conectado como <b>${esc(fbName)}</b>. Marque as contas que o financeiro deve acompanhar.</p>
+    <div class="acc-pick">${rows.map((a) => `<label class="acc-opt"><input type="checkbox" value="${esc(a.id)}" ${active.has(a.id) || (!current.length && a.status === 1) ? 'checked' : ''}>
+      <span class="grow"><b>${esc(a.name)}</b><small class="muted">${esc(a.id)}${a.biz ? ' · ' + esc(a.biz) : ''} · ${esc(a.currency || '')}</small></span>
+      <span class="pill ${a.status === 1 ? 'good' : 'wait'}">${ACC_STATUS[a.status] || 'Status ' + a.status}</span></label>`).join('')}</div>
+    <div class="modal-foot"><button class="b" data-close>Cancelar</button><button class="b b-primary" data-ok>Ativar selecionadas</button></div>`, (c, close) => {
+    c.querySelector('[data-ok]').addEventListener('click', async (e) => {
+      const btn = e.currentTarget;
+      const pick = [...c.querySelectorAll('input:checked')].map((i) => rows.find((r) => r.id === i.value)).map((r) => ({ id: r.id, name: r.name, currency: r.currency }));
+      if (!pick.length) return toast('Marque pelo menos uma conta', true);
+      btn.disabled = true;
+      try {
+        const n = await DB.metaActivate(conn, pick);
+        close(); toast(`${n} conta${n === 1 ? '' : 's'} ativada${n === 1 ? '' : 's'}. Buscando os últimos 30 dias…`);
+        for (const wait of [3000, 4000, 6000]) { await new Promise((ok) => setTimeout(ok, wait)); await DB.processAds(); }
+        done();
+      } catch (err) { btn.disabled = false; fail(err); }
     });
   });
 }

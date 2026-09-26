@@ -800,3 +800,35 @@ textarea.inp,.rte{min-height:auto;}
   .conn-row{grid-template-columns:1fr auto;}
   .conn-row span{grid-column:1/-1;}
 }
+
+.auth-card.wide{max-width:520px;}
+.auth-grid{display:grid;grid-template-columns:1fr 1fr;gap:0 12px;}
+@media (max-width:480px){ .auth-grid{grid-template-columns:1fr;} }
+
+/* abas internas de página */
+.ptabs{display:flex;gap:4px;border-bottom:1px solid var(--border);margin:4px 0 16px;}
+.ptab{position:relative;background:none;border:0;color:var(--gray-3);font:inherit;font-size:14px;padding:10px 14px;cursor:pointer;transition:color var(--dur-small) var(--ease-out);}
+.ptab:hover{color:var(--c-text);}
+.ptab::after{content:"";position:absolute;left:10px;right:10px;bottom:-1px;height:2px;border-radius:2px;background:var(--amber);transform:scaleX(0);transition:transform var(--dur-medium) var(--ease-out);}
+.ptab.on{color:var(--c-text);}
+.ptab.on::after{transform:scaleX(1);}
+/* Facebook */
+.fb-hero{display:flex;align-items:center;gap:16px;flex-wrap:wrap;}
+.fb-hero h3{margin:0 0 4px;}
+.fb-hero h3 em{font-family:'PP Editorial Old',serif;font-style:italic;color:var(--amber);font-weight:400;}
+.fb-badge{width:44px;height:44px;border-radius:12px;display:grid;place-items:center;background:#1877F2;color:#fff;flex:none;}
+.fb-badge svg{width:24px;height:24px;}
+.b.b-fb{background:#1877F2;border-color:#1877F2;color:#fff;display:inline-flex;align-items:center;gap:8px;}
+.b.b-fb:hover:not(:disabled){background:#0f66d8;}
+.b.b-fb:disabled{opacity:.5;cursor:not-allowed;}
+.b.b-fb.is-busy{opacity:.75;cursor:progress;}
+.fb-note{margin:12px 0 0;font-size:13px;color:var(--gray-3);}
+.fb-note.warn{color:var(--amber-ink);}
+.steps{margin:10px 0 14px;padding-left:20px;display:grid;gap:8px;font-size:13.5px;line-height:1.5;}
+.acc-pick{display:grid;gap:6px;max-height:52vh;overflow:auto;margin:10px 0;}
+.acc-opt{display:flex;align-items:center;gap:12px;padding:10px 12px;border:1px solid var(--border);border-radius:12px;cursor:pointer;transition:border-color var(--dur-small) var(--ease-out),background var(--dur-small) var(--ease-out);}
+.acc-opt:hover{border-color:var(--amber);}
+.acc-opt:has(input:checked){border-color:var(--amber);background:color-mix(in srgb,var(--amber) 7%,transparent);}
+.acc-opt small{display:block;font-size:12px;}
+.acc-opt input{accent-color:var(--amber);width:16px;height:16px;}
+@media (max-width:600px){ .fb-hero .b-fb{width:100%;justify-content:center;} }
