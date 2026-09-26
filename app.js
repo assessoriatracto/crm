@@ -3,9 +3,10 @@ import {
   S, $, $$, esc, ICON, FAT, COLORS, initials, isHot, stageOf, profileOf, labelOf, isInactive, isDue, fatShort, brl, pct, num,
   fmtPhone, fullDate, longDate, addedAt, ago, sourceLabel, formName, waLink, toast, fail, popover, closePop, menu, multiSelect,
   modal, confirmBox, downloadCSV
-} from './util.js?v=3217c3c';
-import { renderDashboard } from './dashboard.js?v=3217c3c';
-import { renderForms, renderSettings } from './admin.js?v=3217c3c';
+} from './util.js?v=eba7a90';
+import { renderDashboard } from './dashboard.js?v=eba7a90';
+import { renderForms, renderSettings } from './admin.js?v=eba7a90';
+import { renderIntegrations, renderPixel, leadMetaEvents, statusPill } from './integrations.js?v=eba7a90';
 
 // ============================================================
 // preferências locais (por navegador)
@@ -45,12 +46,6 @@ document.addEventListener('click', (e) => {
   e.preventDefault();
   applyTheme(document.documentElement.dataset.theme === 'light' ? 'dark' : 'light');
 });
-// acompanha o sistema enquanto a pessoa não escolheu manualmente
-matchMedia('(prefers-color-scheme: light)').addEventListener('change', (e) => {
-  let saved = null; try { saved = localStorage.getItem('tracto_theme'); } catch (err) {}
-  if (!saved) applyTheme(e.matches ? 'light' : 'dark');
-});
-
 // ============================================================
 // boot / auth / router
 // ============================================================
@@ -108,6 +103,8 @@ function route() {
   if (r === 'dashboard') renderDashboard(view);
   else if (r === 'formularios') renderForms(view);
   else if (r === 'ajustes') renderSettings(view, async () => { await loadAll(false); });
+  else if (r === 'integracoes') renderIntegrations(view);
+  else if (r === 'pixel') renderPixel(view);
   else renderLeads();
 }
 export const rerender = route;
@@ -195,8 +192,8 @@ function renderLeads() {
     <section class="panel toolbar">
       <div class="tb-row">
         <div class="seg">
-          <button class="b ${V.view === 'board' ? 'on' : ''}" data-act="view" data-v="board"><svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor"><rect x="3" y="4" width="4.5" height="16" rx="1"/><rect x="9.75" y="4" width="4.5" height="12" rx="1"/><rect x="16.5" y="4" width="4.5" height="8" rx="1"/></svg><span class="long">Visualização de </span>pipeline</button>
-          <button class="b ${V.view === 'table' ? 'on' : ''}" data-act="view" data-v="table"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 10h18M3 15h18M9 4v16"/></svg><span class="long">Visualização de </span>tabela</button>
+          <button class="b ${V.view === 'board' ? 'on' : ''}" data-act="view" data-v="board"><svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor"><rect x="3" y="4" width="4.5" height="16" rx="1"/><rect x="9.75" y="4" width="4.5" height="12" rx="1"/><rect x="16.5" y="4" width="4.5" height="8" rx="1"/></svg>Visualização de pipeline</button>
+          <button class="b ${V.view === 'table' ? 'on' : ''}" data-act="view" data-v="table"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 10h18M3 15h18M9 4v16"/></svg>Visualização de tabela</button>
         </div>
         <div class="grow"></div>
         <button class="b" data-act="toggle-filters"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 6h16M7 12h10M10 18h4"/></svg>${V.showFilters ? 'Ocultar filtros' : 'Mostrar filtros'}</button>
@@ -623,6 +620,7 @@ function renderDrawer() {
         <div class="form-meta">${esc(formName(l))}<br>Identificação do lead ${esc(l.id.slice(0, 8).toUpperCase())}<br>Enviado em ${esc(longDate(l.created_at))}.</div>
         ${(l.answers || []).length ? `<div class="answers">${l.answers.map((a) => `<div><div class="q">${esc(a.label)}</div><div class="a">${esc(a.value)}</div></div>`).join('')}</div>` : '<p class="muted">Lead cadastrado manualmente, sem respostas de formulário.</p>'}
       </div>
+      <div class="sec" id="metaSec" hidden><h4>Eventos enviados à Meta</h4><div class="meta-evs"></div></div>
       ${tracking.length ? `<div class="sec"><h4>Rastreamento</h4><dl class="kv" style="margin:10px 0 0">${tracking.map(([k, n]) => `<dt>${n}</dt><dd>${esc(l[k])}</dd>`).join('')}<dt>Fonte</dt><dd>${sourceLabel(l.source)}</dd></dl></div>` : ''}
       <div class="dr-foot"><button class="b b-danger" data-d="delete"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18M8 6V4h8v2M19 6l-1 14H6L5 6"/></svg>Excluir lead</button></div>
     </div>`;
@@ -630,7 +628,24 @@ function renderDrawer() {
   if (drawer._acts) paintActivity(drawer._acts);
 }
 
+async function loadMetaEvents() {
+  const id = S.openId;
+  const evs = await leadMetaEvents(id);
+  if (id !== S.openId) return;
+  const sec = $('#metaSec'); if (!sec) return;
+  // um evento por linha (o mesmo evento vai pra cada pixel)
+  const byId = new Map();
+  evs.filter((e) => !e.test).forEach((e) => { if (!byId.has(e.event_id)) byId.set(e.event_id, { ...e, pixels: 0, ok: 0 }); const r = byId.get(e.event_id); r.pixels++; if (e.status_code >= 200 && e.status_code < 300) r.ok++; });
+  const rows = [...byId.values()];
+  sec.hidden = !rows.length;
+  sec.querySelector('.meta-evs').innerHTML = rows.map((e) => {
+    const v = e.payload?.data?.[0]?.custom_data?.value;
+    return `<div class="meta-ev"><code>${esc(e.event_name)}</code><span class="muted">${fullDate(e.created_at)}${v != null ? ' · ' + brl(v) : ''}</span>${e.ok === e.pixels ? `<span class="pill good">${e.pixels} pixel${e.pixels > 1 ? 's' : ''}</span>` : statusPill(e.status_code, e.response)}</div>`;
+  }).join('');
+}
+
 async function loadActivity() {
+  loadMetaEvents();
   const id = S.openId;
   try {
     const acts = await DB.listActivity(id);

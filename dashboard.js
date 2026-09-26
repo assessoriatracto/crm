@@ -1,6 +1,6 @@
 // Dashboard de leads e do formulário
 import { DB } from '@shared/db.js';
-import { S, $, $$, esc, FAT, stageOf, profileOf, isHot, isInactive, isDue, brl, pct, num, formName, sourceLabel, fail } from './util.js?v=3217c3c';
+import { S, $, $$, esc, FAT, stageOf, profileOf, isHot, isInactive, isDue, brl, pct, num, formName, sourceLabel, fail } from './util.js?v=eba7a90';
 
 const D = { period: '30', form: '' };
 const PERIODS = [['7', '7 dias'], ['30', '30 dias'], ['90', '90 dias'], ['all', 'Tudo']];
@@ -34,7 +34,9 @@ export async function renderDashboard(el) {
       ${tile('Em aberto', num(leads.length - won.length - lost.length), `${num(leads.filter(isInactive).length)} sem atividade há 7+ dias`)}
       ${tile('Lembretes vencidos', num(S.leads.filter(isDue).length), 'em todos os leads')}
 
-      <section class="panel chart-card span-8"><h3>Leads por ${bucketDays(leads) > 1 ? 'semana' : 'dia'}</h3><p class="sub">Quantos leads entraram no período</p><div class="chart" data-chart="days"></div></section>
+      <section class="panel chart-card span-8"><h3>Leads por ${bucketDays(leads) > 1 ? 'semana' : 'dia'}</h3><p class="sub">Quantos leads entraram no período</p>
+        <div class="legend"><span><i style="background:var(--viz-1)"></i>Quentes (R$50 mil+)</span><span><i style="background:var(--viz-neutral)"></i>Demais</span></div>
+        <div class="chart" data-chart="days"></div></section>
       <section class="panel chart-card span-4"><h3>Pipeline</h3><p class="sub">Leads do período em cada estágio</p><div data-chart="funnel"></div></section>
 
       <section class="panel chart-card span-6"><h3>Abandono do formulário</h3><p class="sub" data-drop-sub>Carregando eventos…</p><div data-chart="drop"></div></section>
@@ -51,9 +53,20 @@ export async function renderDashboard(el) {
   el.querySelector('[data-form]').addEventListener('change', (e) => { D.form = e.target.value; renderDashboard(el); });
 
   columnChart($('[data-chart="days"]', el), dayBuckets(leads, from));
-  hbars($('[data-chart="funnel"]', el), S.stages.map((s) => { const n = leads.filter((l) => l.stage_id === s.id).length; return { name: s.name, value: n, note: pct(n, leads.length) }; }));
-  hbars($('[data-chart="fat"]', el), [...FAT, null].map((f) => { const n = leads.filter((l) => (l.faturamento || null) === f).length; return { name: f || 'Não informado', value: n, note: pct(n, leads.length), soft: f === null }; }).filter((r) => r.value || r.name !== 'Não informado'));
-  hbars($('[data-chart="source"]', el), ['pago', 'organico', 'manual'].map((s) => { const n = leads.filter((l) => l.source === s).length; return { name: sourceLabel(s), value: n, note: pct(n, leads.length) }; }).filter((r) => r.value));
+  const openStages = S.stages.filter((s) => s.kind === 'open');
+  hbars($('[data-chart="funnel"]', el), S.stages.map((s) => {
+    const n = leads.filter((l) => l.stage_id === s.id).length;
+    const i = openStages.indexOf(s);
+    // estágios em andamento: rampa de âmbar (avança = mais intenso); ganho: branco; perdido: cinza
+    const color = s.kind === 'won' ? 'var(--viz-cream)' : s.kind === 'lost' ? 'var(--viz-gray)' : rampAt(i, openStages.length);
+    return { name: s.name, value: n, note: pct(n, leads.length), color };
+  }));
+  hbars($('[data-chart="fat"]', el), [...FAT, null].map((f, i) => {
+    const n = leads.filter((l) => (l.faturamento || null) === f).length;
+    return { name: f || 'Não informado', value: n, note: pct(n, leads.length), color: f ? `var(--ramp-${i + 1})` : 'var(--viz-gray)' };
+  }).filter((r) => r.value || r.name !== 'Não informado'));
+  const SRC_COLOR = { pago: 'var(--viz-1)', organico: 'var(--viz-cream)', manual: 'var(--viz-gray)', api: 'var(--ramp-2)' };
+  hbars($('[data-chart="source"]', el), ['pago', 'organico', 'manual', 'api'].map((s) => { const n = leads.filter((l) => l.source === s).length; return { name: sourceLabel(s), value: n, note: pct(n, leads.length), color: SRC_COLOR[s] }; }).filter((r) => r.value));
   hbars($('[data-chart="forms"]', el), formIds.map((id) => { const n = leads.filter((l) => l.form_id === id).length; return { name: S.forms[id]?.name || (id === 'manual' ? 'Cadastro manual' : id), value: n, note: pct(n, leads.length) }; }).filter((r) => r.value).sort((a, b) => b.value - a.value));
   groupTable($('[data-chart="camp"]', el), leads, (l) => l.utm_campaign || 'Sem campanha', 'Campanha');
   groupTable($('[data-chart="team"]', el), leads, (l) => profileOf(l.assigned_to)?.nome || 'Não atribuído', 'Pessoa');
@@ -64,6 +77,12 @@ export async function renderDashboard(el) {
     if (!el.isConnected) return;
     dropOff(el, events, leads, from);
   } catch (e) { fail(e); }
+}
+
+// posição i de n numa rampa de 5 tons de âmbar (ordinal: mais avançado = mais intenso)
+function rampAt(i, n) {
+  const k = n <= 1 ? 4 : Math.round((i / (n - 1)) * 4);
+  return `var(--ramp-${Math.max(1, Math.min(5, k + 1))})`;
 }
 
 function tile(label, value, sub, accent) {
@@ -86,7 +105,7 @@ function dropOff(el, events, leads, from) {
     { name: 'Começaram', value: starts },
     ...qs.map((q, i) => ({ name: `${i + 1}. ${strip(q.title)}`, value: sessions((e) => e.event === 'step' && e.step_id === q.id), soft: !!q.showIf })),
     { name: 'Enviaram', value: submits }
-  ].map((r, i, arr) => ({ ...r, note: i ? pct(r.value, arr[0].value) : '100%' }));
+  ].map((r, i, arr) => ({ ...r, note: i ? pct(r.value, arr[0].value) : '100%', color: i === 0 ? 'var(--viz-cream)' : rampAt(i - 1, arr.length - 1) }));
 
   const rate = views ? pct(submits, views) : '—';
   $('[data-formrate]', el).textContent = rate;
@@ -96,13 +115,13 @@ function dropOff(el, events, leads, from) {
 }
 
 // ---------- barras horizontais ----------
-function hbars(host, rows, { max } = {}) {
+export function hbars(host, rows, { max } = {}) {
   if (!rows.length || rows.every((r) => !r.value)) { host.innerHTML = '<p class="muted">Sem dados no período.</p>'; return; }
   const m = max || Math.max(...rows.map((r) => r.value), 1);
   host.innerHTML = `<div class="hbars">${rows.map((r) => `
     <div class="hb" title="${esc(r.name)}: ${num(r.value)}${r.note ? ' (' + r.note + ')' : ''}">
       <span class="n">${esc(r.name)}</span>
-      <span class="track"><span class="fill ${r.soft ? 'soft' : ''}" style="width:0"></span></span>
+      <span class="track"><span class="fill ${r.soft ? 'soft' : ''}" style="width:0;${r.color ? `background:${r.color}` : ''}"></span></span>
       <span class="v">${num(r.value)}${r.note ? `<small>${r.note}</small>` : ''}</span>
     </div>`).join('')}</div>`;
   requestAnimationFrame(() => $$('.fill', host).forEach((f, i) => { f.style.width = (rows[i].value / m) * 100 + '%'; }));
@@ -153,7 +172,7 @@ function niceMax(v) {
 }
 function columnChart(host, data) {
   const W = Math.max(320, host.clientWidth);
-  const H = 220; const padL = 30; const padB = 24; const padT = 8;
+  const H = 230; const padL = 30; const padB = 24; const padT = 18;
   const max = niceMax(Math.max(...data.map((d) => d.value), 1));
   const iw = W - padL; const ih = H - padB - padT;
   const bw = iw / data.length;
@@ -164,11 +183,26 @@ function columnChart(host, data) {
   const fmt = (d) => d.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' });
   const every = Math.ceil(data.length / Math.max(2, Math.floor(iw / 64)));
 
+  // coluna empilhada: base = demais (neutro), topo = quentes (âmbar); só o topo da pilha é arredondado
+  const seg = (x, yTop, yBot, round) => {
+    const h = yBot - yTop; if (h <= 0) return '';
+    const r = round ? Math.min(4, barW / 2, h) : 0;
+    return r ? `M${x},${yBot} V${yTop + r} Q${x},${yTop} ${x + r},${yTop} H${x + barW - r} Q${x + barW},${yTop} ${x + barW},${yTop + r} V${yBot} Z`
+             : `M${x},${yBot} V${yTop} H${x + barW} V${yBot} Z`;
+  };
+  const GAP = 2;
+  const showTotals = bw >= 16;
   const bars = data.map((d, i) => {
-    const x = padL + i * bw + (bw - barW) / 2;
     if (!d.value) return '';
-    const top = y(d.value); const h = padT + ih - top; const r = Math.min(4, barW / 2, h);
-    return `<path class="bar" data-i="${i}" d="M${x},${padT + ih} V${top + r} Q${x},${top} ${x + r},${top} H${x + barW - r} Q${x + barW},${top} ${x + barW},${top + r} V${padT + ih} Z"/>`;
+    const x = padL + i * bw + (bw - barW) / 2;
+    const base = padT + ih;
+    const rest = d.value - d.hot;
+    const yRest = y(rest); const yTop = y(d.value);
+    let out = '';
+    if (rest) out += `<path class="bar rest" data-i="${i}" d="${seg(x, yRest, base, !d.hot)}"/>`;
+    if (d.hot) out += `<path class="bar hot" data-i="${i}" d="${seg(x, yTop, rest ? yRest - GAP : base, true)}"/>`;
+    if (showTotals) out += `<text class="tot" x="${x + barW / 2}" y="${yTop - 5}" text-anchor="middle">${d.value}</text>`;
+    return out;
   }).join('');
   host.innerHTML = `<svg viewBox="0 0 ${W} ${H}" height="${H}" role="img" aria-label="Leads por período">
     ${ticks.map((t) => `<line class="gl" x1="${padL}" x2="${W}" y1="${y(t)}" y2="${y(t)}"/><text class="ax" x="${padL - 8}" y="${y(t) + 4}" text-anchor="end">${num(t)}</text>`).join('')}
