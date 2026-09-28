@@ -1,6 +1,6 @@
 // Financeiro (estilo UTMify): gasto da Meta Ads × leads e vendas do CRM × receitas e despesas lançadas
 import { DB } from '@shared/db.js';
-import { BRAND, dateRange, datePicker, dateBtn, S, $, $$, esc, ICON, brl, num, pct, fullDate, ago, toast, fail, modal, confirmBox } from './util.js?v=2609281253';
+import { BRAND, dateRange, datePicker, dateBtn, S, $, $$, esc, ICON, brl, num, pct, fullDate, ago, toast, fail, modal, confirmBox } from './util.js?v=2609281327';
 
 const F = { period: '30', from: '', to: '', level: 'campaign', revenue: 'mensal', sort: 'spend', tab: 'geral' };
 const GRAPH = 'v21.0';
@@ -229,9 +229,12 @@ async function renderAccounts(el, swap) {
     const done = () => { btn.disabled = false; btn.classList.remove('is-busy'); };
     try {
       const FB = await loadFbSdk(appId);
-      const auth = await new Promise((ok) => FB.login((r) => ok(r.authResponse), { scope: 'ads_read,business_management', return_scopes: true, auth_type: 'rerequest' }));
+      // app do tipo Empresa usa a configuração do Login para Empresas; sem ela, pede as permissões direto
+      const cfgId = window.TRACTO_CONFIG?.metaLoginConfigId;
+      const opts = cfgId ? { config_id: cfgId, return_scopes: true } : { scope: 'ads_read,business_management', return_scopes: true, auth_type: 'rerequest' };
+      const auth = await new Promise((ok) => FB.login((r) => ok(r.authResponse), opts));
       if (!auth) { done(); return toast('Login cancelado', true); }
-      if (!String(auth.grantedScopes || '').includes('ads_read')) { done(); return toast('Autorize a permissão de ler anúncios (ads_read) pra continuar', true); }
+      if (auth.grantedScopes && !String(auth.grantedScopes).includes('ads_read')) { done(); return toast('Autorize a permissão de ler anúncios (ads_read) pra continuar', true); }
       const [me, list] = await Promise.all([fbApi(FB, '/me', { fields: 'name' }), fbAccounts(FB)]);
       if (!list.length) { done(); return toast('Esse perfil não tem acesso a nenhuma conta de anúncio', true); }
       const conn = await DB.metaConnect(auth.accessToken, auth.userID, me.name);
