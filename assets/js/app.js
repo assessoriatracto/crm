@@ -1,17 +1,17 @@
 import { DB, LIVE, CONFIGURED } from '@shared/db.js';
 import {
-  S, $, $$, esc, ICON, FAT, COLORS, initials, isHot, stageOf, profileOf, labelOf, isInactive, isDue, fatShort, brl, pct, num,
+  go, routeName, S, $, $$, esc, ICON, FAT, COLORS, initials, isHot, stageOf, profileOf, labelOf, isInactive, isDue, fatShort, brl, pct, num,
   fmtPhone, fullDate, longDate, addedAt, ago, sourceLabel, formName, waLink, toast, fail, popover, closePop, menu, multiSelect,
   modal, confirmBox, downloadCSV, dateRange, datePicker, dateBtn
-} from './util.js?v=2609281500';
-import { renderDashboard } from './dashboard.js?v=2609281500';
-import { renderSettings } from './admin.js?v=2609281500';
-import { renderIntegrations, renderPixel, leadMetaEvents, statusPill } from './integrations.js?v=2609281500';
-import { renderRecovery, loadPartials } from './recovery.js?v=2609281500';
-import { showSignIn, showSignUp, showForgot, showReset, showMfa, showPending, watchIdle, AUTH_ROUTES } from './auth.js?v=2609281500';
-import { openProfile } from './profile.js?v=2609281500';
-import { renderBuilder } from './builder.js?v=2609281500';
-import { renderFinance } from './finance.js?v=2609281500';
+} from './util.js?v=2609281600';
+import { renderDashboard } from './dashboard.js?v=2609281600';
+import { renderSettings } from './admin.js?v=2609281600';
+import { renderIntegrations, renderPixel, leadMetaEvents, statusPill } from './integrations.js?v=2609281600';
+import { renderRecovery, loadPartials } from './recovery.js?v=2609281600';
+import { showSignIn, showSignUp, showForgot, showReset, showMfa, showPending, watchIdle, AUTH_ROUTES } from './auth.js?v=2609281600';
+import { openProfile } from './profile.js?v=2609281600';
+import { renderBuilder } from './builder.js?v=2609281600';
+import { renderFinance } from './finance.js?v=2609281600';
 
 // ============================================================
 // preferências locais (por navegador)
@@ -37,7 +37,7 @@ function applyTheme(next) {
   const set = () => {
     root.dataset.theme = next;
     try { localStorage.setItem('tracto_theme', next); } catch (e) {}
-    if (location.hash.startsWith('#/dashboard')) route(); // redesenha gráficos com as cores novas
+    if (routeName() === 'dashboard') route(); // redesenha gráficos com as cores novas
   };
   const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
   if (reduce) return set();
@@ -54,12 +54,12 @@ document.addEventListener('click', (e) => {
 // ============================================================
 // boot / auth / router
 // ============================================================
-const hashRoute = () => (location.hash.replace('#/', '') || 'leads').split('?')[0];
+const hashRoute = routeName;
 let started = false;
 
 async function boot() {
   const r = hashRoute();
-  const enter = () => { location.hash = '#/leads'; boot(); };
+  const enter = () => { go('leads', { replace: true }); boot(); };
   if (!CONFIGURED) return showSignIn(enter, 'O CRM está em manutenção. Tente de novo em alguns minutos.');
   // no modo demo as telas de acesso podem ser abertas pelo endereço, pra conferir o visual
   if (!LIVE && ['entrar', 'cadastro', 'esqueci', 'redefinir'].includes(r)) {
@@ -76,7 +76,7 @@ async function boot() {
   if (aal && aal.nextLevel === 'aal2' && aal.currentLevel !== 'aal2') return showMfa(enter);
   try { S.me = await DB.me(); } catch (e) { S.me = null; }
   if (!S.me?.ativo) return showPending(S.me);
-  if (AUTH_ROUTES.includes(r)) history.replaceState(null, '', location.pathname + '#/leads');
+  if (AUTH_ROUTES.includes(r)) history.replaceState(null, '', '/leads');
   if (started) return route();
   started = true;
   $('#login').hidden = true;
@@ -89,7 +89,7 @@ async function boot() {
     if (table === 'leads' && type === 'INSERT' && row) toast('Novo lead: ' + row.nome);
     clearTimeout(boot._t);
     boot._t = setTimeout(async () => {
-      if (table === 'partial_leads') { await refreshPartialsBadge(); if (location.hash.startsWith('#/recuperacao')) route(); return; }
+      if (table === 'partial_leads') { await refreshPartialsBadge(); if (routeName() === 'recuperacao') route(); return; }
       await loadAll(false); route();
     }, 400);
   });
@@ -101,8 +101,10 @@ async function boot() {
   const due = S.leads.filter(isDue).length;
   if (due) toast(`Você tem ${due} lembrete${due > 1 ? 's' : ''} vencido${due > 1 ? 's' : ''}`);
 }
-window.addEventListener('hashchange', () => { if (!started || AUTH_ROUTES.includes(hashRoute())) boot(); else route(); });
-if (LIVE) DB.onAuth((event) => { if (event === 'PASSWORD_RECOVERY') { location.hash = '#/redefinir'; } if (event === 'SIGNED_OUT' && started) location.reload(); });
+const onNav = () => { if (!started || AUTH_ROUTES.includes(hashRoute())) boot(); else route(); };
+window.addEventListener('tracto:nav', onNav);
+window.addEventListener('popstate', () => window.dispatchEvent(new Event('tracto:nav')));
+if (LIVE) DB.onAuth((event) => { if (event === 'PASSWORD_RECOVERY') { go('redefinir', { replace: true }); } if (event === 'SIGNED_OUT' && started) location.reload(); });
 
 // o menu mostra só o que o papel permite (o banco também bloqueia)
 const ROLE_ROUTES = { admin: null, gestor: ['leads', 'recuperacao', 'dashboard', 'financeiro', 'formularios', 'ajustes'], sdr: ['leads', 'recuperacao', 'dashboard', 'ajustes'] };
@@ -145,7 +147,7 @@ function openMore() {
 }
 $('[data-more]').addEventListener('click', (e) => { e.preventDefault(); openMore(); });
 
-$('#logoutBtn').addEventListener('click', async (e) => { e.preventDefault(); await DB.signOut(); location.hash = '#/entrar'; location.reload(); });
+$('#logoutBtn').addEventListener('click', async (e) => { e.preventDefault(); await DB.signOut(); location.replace('/entrar'); });
 $('#meBtn')?.addEventListener('click', (e) => { e.preventDefault(); openProfile(); });
 
 async function refreshPartialsBadge() {
@@ -169,9 +171,9 @@ let lastRoute = null;
 function route() {
   closePop();
   let r = hashRoute();
-  if (!can(r)) { r = 'leads'; history.replaceState(null, '', location.pathname + '#/leads'); }
+  if (!can(r)) { r = 'leads'; history.replaceState(null, '', '/leads'); }
   // animação grande só quando a página muda (refiltrar/atualizar não anima)
-  const key = location.hash.split('?')[0] + (location.hash.includes('?id=') ? '#editor' : '');
+  const key = location.pathname + (location.search.includes('id=') ? '#editor' : '');
   if (key !== lastRoute) {
     lastRoute = key;
     const v = $('#view'); v.classList.remove('view-enter'); void v.offsetWidth; v.classList.add('view-enter');
@@ -274,7 +276,7 @@ function renderLeads() {
       <div class="k"><span>Leads convertidos:</span><b>${won.length ? num(won.length) : '--'}</b></div>
       <div class="k"><span>Taxa de conversão:</span><b>${won.length ? pct(won.length, list.length) : '--'}</b></div>
       ${list.some(isDue) ? `<div class="k warn"><span>Lembretes vencidos:</span><b>${list.filter(isDue).length}</b></div>` : ''}
-      <div class="grow"></div><a class="link" href="#/dashboard">Ver dashboard</a>
+      <div class="grow"></div><a class="link" href="/dashboard">Ver dashboard</a>
     </section>
     <section id="leadsBody"></section>`;
 
@@ -457,7 +459,7 @@ view.addEventListener('click', async (e) => {
   if (act === 'clear') { V.f = { q: '', period: 'tudo', from: '', to: '', campaigns: [], forms: [], stages: [], sources: [], assignees: [], labels: [] }; renderLeads(); return; }
   if (act === 'new-lead') { newLeadModal(); return; }
   if (act === 'add-stage') { stageModal(); return; }
-  if (act === 'more') { const mob = matchMedia('(max-width:760px)').matches; menu(a, [...(mob ? [{ label: 'Adicionar estágio personalizado', action: () => stageModal() }, { label: V.bulkMode ? 'Sair da edição em massa' : 'Edição em massa', action: () => { V.bulkMode = !V.bulkMode; V.sel.clear(); renderLeads(); } }] : []), { label: 'Exportar leads filtrados (CSV)', action: () => exportCSV(filtered()) }, { label: 'Gerenciar estágios e rótulos', action: () => { location.hash = '#/ajustes'; } }]); return; }
+  if (act === 'more') { const mob = matchMedia('(max-width:760px)').matches; menu(a, [...(mob ? [{ label: 'Adicionar estágio personalizado', action: () => stageModal() }, { label: V.bulkMode ? 'Sair da edição em massa' : 'Edição em massa', action: () => { V.bulkMode = !V.bulkMode; V.sel.clear(); renderLeads(); } }] : []), { label: 'Exportar leads filtrados (CSV)', action: () => exportCSV(filtered()) }, { label: 'Gerenciar estágios e rótulos', action: () => { go('ajustes'); } }]); return; }
   if (act === 'sort') { const k = a.dataset.k; V.sort = { key: k, dir: V.sort.key === k ? -V.sort.dir : (k === 'created_at' ? -1 : 1) }; renderLeads(); return; }
   if (act === 'sel-all') { const list = filtered(); const all = list.every((l) => V.sel.has(l.id)); list.forEach((l) => (all ? V.sel.delete(l.id) : V.sel.add(l.id))); renderLeads(); return; }
   if (act === 'sel' && row) { toggleSel(row.dataset.id); return; }
@@ -842,7 +844,7 @@ $('#seedBtn').addEventListener('click', async () => {
 });
 
 let resizeT;
-window.addEventListener('resize', () => { clearTimeout(resizeT); resizeT = setTimeout(() => { if (location.hash.startsWith('#/dashboard')) route(); }, 250); });
+window.addEventListener('resize', () => { clearTimeout(resizeT); resizeT = setTimeout(() => { if (routeName() === 'dashboard') route(); }, 250); });
 
 setInterval(() => { if (hashRoute() === 'leads' && !S.openId && !$('.pop') && !$('.modal') && document.activeElement?.tagName !== 'INPUT') route(); }, 60000);
 boot().catch((e) => { console.error(e); window.__crmFail?.(); });

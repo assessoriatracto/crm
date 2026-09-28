@@ -23,7 +23,7 @@ Formulário novo feito no construtor já fica no ar em `/aplicar/<endereço>/`, 
 4. Authentication > Sign In / Providers > Email: deixe **Enable sign ups** e **Confirm email** ligados (o cadastro do CRM exige confirmação e aprovação de um admin).
 5. Authentication > URL Configuration: Site URL `https://crm.assessoriatracto.com.br` e em Redirect URLs adicione `https://crm.assessoriatracto.com.br/**`.
 6. Authentication > Multi-Factor: deixe TOTP habilitado (vem ligado) pra quem quiser ativar a verificação em duas etapas.
-7. Crie sua conta em `https://crm.assessoriatracto.com.br/#/cadastro`. A primeira conta vira admin ativa automaticamente.
+7. Crie sua conta em `https://crm.assessoriatracto.com.br/cadastro`. A primeira conta vira admin ativa automaticamente.
 8. Facebook (Financeiro > Contas de anúncio): crie um app da Meta, cole o ID do app e a chave secreta no CRM e clique em Entrar com o Facebook. O passo a passo aparece na própria aba.
 9. E-mails: o envio padrão do Supabase tem limite baixo por hora. Pra equipe grande, configure um SMTP próprio em Authentication > Emails > SMTP Settings.
 10. Database > Extensions: confira se **pg_net** e **pg_cron** estão ativas (o schema tenta ativar sozinho).

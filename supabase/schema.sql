@@ -710,7 +710,7 @@ language sql stable security definer set search_path = public as $$
       p_data#>>'{lead,estagio,nome}',
       coalesce(p_data#>>'{lead,whatsapp}', p_data#>>'{formulario_incompleto,whatsapp}'),
       p_data#>>'{nota,texto}'),
-    'defaultAction', jsonb_build_object('url', (select crm_url from app_settings where id = 1) || '/#/' ||
+    'defaultAction', jsonb_build_object('url', (select crm_url from app_settings where id = 1) || '/' ||
       case when p_event = 'lead.abandoned' then 'recuperacao' else 'leads' end)
   ));
 $$;
@@ -747,7 +747,7 @@ begin
   perform http_post_json(v_url, jsonb_build_object(
     'title', '🔥 Lead pra você: ' || l.nome,
     'text', concat_ws(' · ', l.faturamento, l.whatsapp, coalesce(l.form_name, l.form_id)),
-    'defaultAction', jsonb_build_object('url', (select crm_url from app_settings where id = 1) || '/#/leads')));
+    'defaultAction', jsonb_build_object('url', (select crm_url from app_settings where id = 1) || '/leads')));
 end $$;
 
 -- ---------- Meta Conversions API ----------

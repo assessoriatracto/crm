@@ -1,8 +1,8 @@
 // Página "Ajustes": estágios, rótulos, equipe, times e auditoria
 import { DB, LIVE } from '@shared/db.js';
-import { S, $, $$, esc, ICON, COLORS, num, pct, ago, toast, fail, confirmBox } from './util.js?v=2609281500';
-import { openProfile } from './profile.js?v=2609281500';
-import { stageModal, moveStage, deleteStageFlow } from './app.js?v=2609281500';
+import { S, $, $$, esc, ICON, COLORS, num, pct, ago, toast, fail, confirmBox } from './util.js?v=2609281600';
+import { openProfile } from './profile.js?v=2609281600';
+import { stageModal, moveStage, deleteStageFlow } from './app.js?v=2609281600';
 
 // ============================================================
 // AJUSTES
@@ -84,7 +84,7 @@ export async function renderSettings(el, reload) {
   const refresh = async () => { await reload(); renderSettings(el, reload); };
   el.querySelector('[data-profile]').addEventListener('click', () => openProfile());
   el.querySelector('[data-invite]')?.addEventListener('click', async () => {
-    try { await navigator.clipboard.writeText(location.origin + location.pathname + '#/cadastro'); toast('Link de cadastro copiado'); } catch (e) { toast('Não consegui copiar', true); }
+    try { await navigator.clipboard.writeText(location.origin + '/cadastro'); toast('Link de cadastro copiado'); } catch (e) { toast('Não consegui copiar', true); }
   });
 
   if (isManager) {

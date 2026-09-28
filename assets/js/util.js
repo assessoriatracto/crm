@@ -27,6 +27,24 @@ export const BRAND = {
   google_ads: '<svg width="20" height="20" viewBox="300 286 600 600" aria-hidden="true"><path d="M407 753 600 418" stroke="#FBBC04" stroke-width="192" stroke-linecap="round"/><path d="M600 418l192 335" stroke="#4285F4" stroke-width="192" stroke-linecap="round"/><circle cx="407" cy="753" r="96" fill="#34A853"/></svg>',
   gtm: '<svg width="20" height="20" viewBox="0 0 24 24" aria-hidden="true"><path fill="#8AB4F8" d="m14.1 23.3-4.2-4.1 9-9.3 4.3 4.2z"/><path fill="#4285F4" d="M14.2 5 10 .7 1 9.7a2.4 2.4 0 0 0 0 3.4l9 9.1 4.1-4.2L7.3 11.4z"/><path fill="#8AB4F8" d="M23 9.7 14.1.8a2.4 2.4 0 0 0-3.4 0 2.4 2.4 0 0 0 0 3.4l8.9 8.9a2.4 2.4 0 0 0 3.4 0 2.4 2.4 0 0 0 0-3.4z"/><circle fill="#246FDB" cx="12" cy="21.3" r="2.6"/></svg>'
 };
+// ---------- navegação sem # (caminhos reais: /leads, /financeiro…) ----------
+export const routeName = () => (location.pathname.replace(/^\/+|\/+$/g, '').split('/')[0] || 'leads');
+export function go(to, { replace = false } = {}) {
+  const url = '/' + String(to).replace(/^[#/]+/, '');
+  if (url === location.pathname + location.search) return;
+  history[replace ? 'replaceState' : 'pushState'](null, '', url);
+  window.dispatchEvent(new Event('tracto:nav'));
+}
+// links internos (href="/…") navegam sem recarregar a página
+document.addEventListener('click', (e) => {
+  const a = e.target.closest('a[href^="/"]');
+  if (!a || a.target === '_blank' || a.hasAttribute('download') || e.defaultPrevented || e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
+  if (a.getAttribute('href').startsWith('//')) return;
+  e.preventDefault(); go(a.getAttribute('href'));
+});
+// endereços antigos com # continuam funcionando
+if (location.hash.startsWith('#/')) history.replaceState(null, '', '/' + location.hash.slice(2));
+
 export const ICON = {
   user: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="8" r="4"/><path d="M4 21c1.2-4 4.3-6 8-6s6.8 2 8 6"/></svg>',
   up: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 19V5M6 11l6-6 6 6"/></svg>',

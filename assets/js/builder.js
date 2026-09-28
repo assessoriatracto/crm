@@ -1,7 +1,7 @@
 // Construtor de formulários (estilo Typeform): lista, editor de etapas, lógica, tema e prévia ao vivo
 import { DB } from '@shared/db.js';
 import { FORMS, formPath } from '@shared/forms.js';
-import { S, $, $$, esc, ICON, num, pct, toast, fail, modal, confirmBox, menu, popover, closePop } from './util.js?v=2609281500';
+import { go, S, $, $$, esc, ICON, num, pct, toast, fail, modal, confirmBox, menu, popover, closePop } from './util.js?v=2609281600';
 import { BTN_ICONS } from '@shared/form-engine.js';
 
 const SITE = window.TRACTO_CONFIG?.siteUrl || 'https://assessoriatracto.com.br';
@@ -109,7 +109,7 @@ function blankField(type) {
 // LISTA
 // ============================================================
 export async function renderBuilder(el) {
-  const id = new URLSearchParams(location.hash.split('?')[1] || '').get('id');
+  const id = new URLSearchParams(location.search).get('id');
   el.innerHTML = '<div class="loading">Carregando…</div>';
   try {
     B.forms = await DB.listForms();
@@ -148,7 +148,7 @@ export async function renderBuilder(el) {
   el.querySelector('[data-new]').addEventListener('click', () => newFormModal(el));
   el.querySelectorAll('.form-row').forEach((card) => {
     const f = B.forms.find((x) => x.id === card.dataset.id);
-    card.querySelector('[data-edit]').addEventListener('click', () => { location.hash = '#/formularios?id=' + f.id; });
+    card.querySelector('[data-edit]').addEventListener('click', () => { go('formularios?id=' + f.id); });
     card.querySelector('[data-copy-link]').addEventListener('click', async () => { try { await navigator.clipboard.writeText(formUrl(f)); toast('Link copiado'); } catch (e) { toast('Não consegui copiar', true); } });
     card.querySelector('[data-more]').addEventListener('click', (e) => menu(e.currentTarget, [
       { label: 'Abrir formulário', action: () => window.open(formUrl(f), '_blank', 'noopener') },
@@ -190,7 +190,7 @@ function newFormModal(el) {
         : structuredClone(FORMS[tpl].fields);
       try {
         const f = await DB.saveForm({ id: slug, slug, name, fields, settings: {}, published: false });
-        close(); location.hash = '#/formularios?id=' + f.id;
+        close(); go('formularios?id=' + f.id);
       } catch (e) { fail(e); }
     });
   });
@@ -205,7 +205,7 @@ function openEditor(el, form) {
   el.innerHTML = `
     <div class="bld">
       <header class="bld-top">
-        <a class="b b-ghost" href="#/formularios" data-back>${ICON.back}Formulários</a>
+        <a class="b b-ghost" href="/formularios" data-back>${ICON.back}Formulários</a>
         <input class="bld-name" data-fname value="${esc(form.name)}" maxlength="120" aria-label="Nome do formulário">
         <span class="bld-status" data-status>${form.published ? '<span class="pill good">Publicado</span>' : '<span class="pill">Rascunho</span>'}</span>
         <div class="grow"></div>
@@ -228,7 +228,7 @@ function openEditor(el, form) {
   const onMsg = (e) => { if (e.source === frame.contentWindow && e.data?.type === 'tracto-preview-ready') { B.frameReady = true; pushPreview(); } };
   addEventListener('message', onMsg);
   const stopWatch = () => removeEventListener('message', onMsg);
-  window.addEventListener('hashchange', () => { stopWatch(); if (B.dirty) save(); }, { once: true });
+  window.addEventListener('tracto:nav', () => { stopWatch(); if (B.dirty) save(); }, { once: true });
 
   el.querySelector('[data-fname]').addEventListener('input', (e) => { form.name = e.target.value; changed(false); });
   el.querySelector('[data-settings]').addEventListener('click', () => settingsModal(form));

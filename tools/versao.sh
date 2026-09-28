@@ -7,3 +7,5 @@ cd "$(dirname "$0")/.."
 V="$(date +%y%m%d%H%M)"
 perl -pi -e "s#\.(js|css)\?v=\d+#.\$1?v=$V#g" index.html assets/js/*.js
 echo "versão $V"
+# GitHub Pages: qualquer caminho (/leads, /financeiro…) cai no 404.html, que é o próprio CRM
+cp index.html 404.html

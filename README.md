@@ -8,7 +8,7 @@ ficam no repositório **assessoriatracto/tracto**. Este repositório é só o CR
 ## Estrutura
 
 ```
-index.html            página única do CRM (rotas por #/…)
+index.html            página única do CRM (rotas por caminho: /leads, /financeiro…; 404.html é cópia dela)
 assets/css/crm.css    estilos (tema claro/escuro, animações)
 assets/js/
   app.js              inicialização, rotas, central de leads (pipeline e tabela), permissões

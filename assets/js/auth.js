@@ -2,7 +2,7 @@
 // Boas práticas: senha forte + checagem de senhas vazadas (k-anonimato), mensagens genéricas,
 // bloqueio temporário após tentativas, 2FA (TOTP), sessão encerrada por inatividade e consentimento LGPD registrado.
 import { DB, LIVE } from '@shared/db.js';
-import { $, esc, toast, ICON } from './util.js?v=2609281500';
+import { $, esc, toast, ICON } from './util.js?v=2609281600';
 
 export const PRIVACY_VERSION = '2026-09';
 const SITE = window.TRACTO_CONFIG?.siteUrl || 'https://assessoriatracto.com.br';
@@ -86,11 +86,11 @@ export function showSignIn(onDone, msg = '') {
     <form class="auth-form" novalidate>
       ${field('aEmail', 'E-mail', 'email', 'autocomplete="username" required')}
       ${field('aPass', 'Senha', 'password', 'autocomplete="current-password" required')}
-      <div class="auth-row"><span></span><a href="#/esqueci" class="link">Esqueci a senha</a></div>
+      <div class="auth-row"><span></span><a href="/esqueci" class="link">Esqueci a senha</a></div>
       <button class="btn btn-pill auth-btn" type="submit">ENTRAR <span class="chev">›</span></button>
       <p class="auth-err" role="alert">${esc(msg)}</p>
     </form>
-    <p class="auth-alt">Não tem conta? <a href="#/cadastro" class="link">Criar conta</a></p>`, (el) => {
+    <p class="auth-alt">Não tem conta? <a href="/cadastro" class="link">Criar conta</a></p>`, (el) => {
     bindEyes(el);
     if (msg) el.querySelector('.auth-err').classList.add('show');
     el.querySelector('form').addEventListener('submit', async (e) => {
@@ -175,7 +175,7 @@ export function showSignUp() {
       <button class="btn btn-pill auth-btn" type="submit">CRIAR CONTA <span class="chev">›</span></button>
       <p class="auth-err" role="alert"></p>
     </form>
-    <p class="auth-alt">Já tem conta? <a href="#/entrar" class="link">Entrar</a></p>`, (el) => {
+    <p class="auth-alt">Já tem conta? <a href="/entrar" class="link">Entrar</a></p>`, (el) => {
     el.querySelector('.auth-card').classList.add('wide');
     bindEyes(el);
     const $f = (id) => el.querySelector('#' + id);
@@ -215,7 +215,7 @@ function showCheckEmail(email) {
   screen(`<div class="auth-icon">${ICON.mailOpen}</div><h1>Confirme seu <em>e-mail</em></h1>
     <p class="auth-sub">Se o endereço <b>${esc(email)}</b> puder ser usado, enviamos um link de confirmação. Abra o e-mail e clique no link pra ativar a conta. Depois disso, um administrador libera seu acesso.</p>
     <button class="btn btn-pill auth-btn" data-resend type="button">REENVIAR E-MAIL</button>
-    <p class="auth-alt"><a href="#/entrar" class="link">Voltar pro login</a></p>`, (el) => {
+    <p class="auth-alt"><a href="/entrar" class="link">Voltar pro login</a></p>`, (el) => {
     const b = el.querySelector('[data-resend]');
     b.addEventListener('click', async () => {
       b.disabled = true; try { await DB.resendConfirmation(email); } catch (e) {} toast('Se a conta existir, reenviamos o e-mail');
@@ -232,14 +232,14 @@ export function showForgot() {
       <button class="btn btn-pill auth-btn" type="submit">ENVIAR LINK <span class="chev">›</span></button>
       <p class="auth-err" role="alert"></p>
     </form>
-    <p class="auth-alt"><a href="#/entrar" class="link">Voltar pro login</a></p>`, (el) => {
+    <p class="auth-alt"><a href="/entrar" class="link">Voltar pro login</a></p>`, (el) => {
     el.querySelector('form').addEventListener('submit', async (e) => {
       e.preventDefault();
       const email = el.querySelector('#fEmail').value.trim().toLowerCase();
       if (!/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(email)) return err(el, 'E-mail inválido.');
       const btn = el.querySelector('.auth-btn'); setBusy(btn, true);
       try { await DB.resetPassword(email); } catch (ex) { /* resposta igual pra não revelar contas */ }
-      screen(`<div class="auth-icon">${ICON.mailOpen}</div><h1>Confira seu <em>e-mail</em></h1><p class="auth-sub">Se existir uma conta com <b>${esc(email)}</b>, você vai receber um link pra redefinir a senha. O link vale por 1 hora.</p><p class="auth-alt"><a href="#/entrar" class="link">Voltar pro login</a></p>`);
+      screen(`<div class="auth-icon">${ICON.mailOpen}</div><h1>Confira seu <em>e-mail</em></h1><p class="auth-sub">Se existir uma conta com <b>${esc(email)}</b>, você vai receber um link pra redefinir a senha. O link vale por 1 hora.</p><p class="auth-alt"><a href="/entrar" class="link">Voltar pro login</a></p>`);
     });
   });
 }
@@ -275,7 +275,7 @@ export function showPending(profile) {
     <button class="btn btn-pill auth-btn" data-retry type="button">JÁ FUI LIBERADO</button>
     <p class="auth-alt"><a href="#" class="link" data-out>Sair</a></p>`, (el) => {
     el.querySelector('[data-retry]').addEventListener('click', () => location.reload());
-    el.querySelector('[data-out]').addEventListener('click', async (e) => { e.preventDefault(); await DB.signOut(); location.hash = '#/entrar'; location.reload(); });
+    el.querySelector('[data-out]').addEventListener('click', async (e) => { e.preventDefault(); await DB.signOut(); location.replace('/entrar'); });
   });
 }
 
@@ -288,7 +288,7 @@ export function watchIdle() {
   ['click', 'keydown', 'mousemove', 'touchstart', 'scroll'].forEach((ev) => addEventListener(ev, () => { clearTimeout(touch._t); touch._t = setTimeout(touch, 1000); }, { passive: true }));
   setInterval(async () => {
     const last = +(localStorage.getItem(KEY) || Date.now());
-    if (Date.now() - last > IDLE_MS) { await DB.signOut(); location.hash = '#/entrar'; location.reload(); }
+    if (Date.now() - last > IDLE_MS) { await DB.signOut(); location.replace('/entrar'); }
   }, 60000);
 }
 

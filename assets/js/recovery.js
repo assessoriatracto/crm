@@ -1,7 +1,7 @@
 // Aba "Recuperação": formulários começados e não concluídos (salvos automaticamente a cada resposta)
 import { DB, LIVE } from '@shared/db.js';
 import { formPath } from '@shared/forms.js';
-import { S, $, $$, esc, ICON, initials, fmtPhone, fullDate, ago, num, pct, toast, fail, modal, confirmBox } from './util.js?v=2609281500';
+import { go, S, $, $$, esc, ICON, initials, fmtPhone, fullDate, ago, num, pct, toast, fail, modal, confirmBox } from './util.js?v=2609281600';
 
 const SITE = window.TRACTO_CONFIG?.siteUrl || 'https://assessoriatracto.com.br';
 const STATUS = {
@@ -106,7 +106,7 @@ function paint(el) {
       if (!(await confirmBox(`Descartar o formulário de ${p.nome || 'sem nome'}?`, 'Descartar'))) return;
       try { await DB.updatePartial(p.id, { status: 'descartado', updated_at: new Date().toISOString() }); toast('Descartado'); reload(); } catch (e) { fail(e); }
     });
-    row.querySelector('[data-open-lead]')?.addEventListener('click', () => { location.hash = '#/leads'; setTimeout(() => window.dispatchEvent(new CustomEvent('tracto:open-lead', { detail: p.lead_id })), 120); });
+    row.querySelector('[data-open-lead]')?.addEventListener('click', () => { go('leads'); setTimeout(() => window.dispatchEvent(new CustomEvent('tracto:open-lead', { detail: p.lead_id })), 120); });
   });
 }
 
