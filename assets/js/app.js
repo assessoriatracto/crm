@@ -2,17 +2,17 @@ import { DB, LIVE, CONFIGURED } from '@shared/db.js';
 import {
   go, routeName, S, $, $$, esc, ICON, FAT, COLORS, initials, isHot, stageOf, profileOf, labelOf, isInactive, isDue, fatShort, brl, pct, num,
   fmtPhone, fullDate, longDate, addedAt, ago, sourceLabel, formName, waLink, toast, fail, popover, closePop, menu, multiSelect,
-  modal, confirmBox, downloadCSV, dateRange, datePicker, dateBtn
-} from './util.js?v=2609282017';
-import { importModal } from './import.js?v=2609282017';
-import { renderDashboard } from './dashboard.js?v=2609282017';
-import { renderSettings } from './admin.js?v=2609282017';
-import { renderIntegrations, renderPixel, leadMetaEvents, statusPill } from './integrations.js?v=2609282017';
-import { renderRecovery, loadPartials } from './recovery.js?v=2609282017';
-import { showSignIn, showSignUp, showForgot, showReset, showMfa, showPending, watchIdle, AUTH_ROUTES } from './auth.js?v=2609282017';
-import { openProfile } from './profile.js?v=2609282017';
-import { renderBuilder } from './builder.js?v=2609282017';
-import { renderFinance } from './finance.js?v=2609282017';
+  modal, confirmBox, downloadCSV, dateRange, datePicker, dateBtn, daysToSale, fmtDays
+} from './util.js?v=2609282021';
+import { importModal } from './import.js?v=2609282021';
+import { renderDashboard } from './dashboard.js?v=2609282021';
+import { renderSettings } from './admin.js?v=2609282021';
+import { renderIntegrations, renderPixel, leadMetaEvents, statusPill } from './integrations.js?v=2609282021';
+import { renderRecovery, loadPartials } from './recovery.js?v=2609282021';
+import { showSignIn, showSignUp, showForgot, showReset, showMfa, showPending, watchIdle, AUTH_ROUTES } from './auth.js?v=2609282021';
+import { openProfile } from './profile.js?v=2609282021';
+import { renderBuilder } from './builder.js?v=2609282021';
+import { renderFinance } from './finance.js?v=2609282021';
 
 // ============================================================
 // preferências locais (por navegador)
@@ -391,7 +391,7 @@ function boardHtml(list) {
 // ---------- tabela ----------
 const COLS = [
   ['nome', 'Nome'], ['whatsapp', 'Contato'], ['stage', 'Estágio'], ['assigned', 'Atribuído a'], ['labels', 'Rótulos'],
-  ['faturamento', 'Faturamento'], ['form', 'Formulário'], ['source', 'Fonte'], ['utm_campaign', 'Campanha'], ['created_at', 'Criado em']
+  ['faturamento', 'Faturamento'], ['form', 'Formulário'], ['source', 'Fonte'], ['utm_campaign', 'Campanha'], ['created_at', 'Criado em'], ['ttc', 'Até a venda']
 ];
 function sortVal(l, k) {
   if (k === 'stage') return stageOf(l)?.position ?? 99;
@@ -399,6 +399,7 @@ function sortVal(l, k) {
   if (k === 'faturamento') return FAT.indexOf(l.faturamento);
   if (k === 'form') return formName(l);
   if (k === 'labels') return (l.label_ids || []).length;
+  if (k === 'ttc') return daysToSale(l) ?? 99999;
   return (l[k] ?? '').toString().toLowerCase();
 }
 function tableHtml(list) {
@@ -424,6 +425,7 @@ function tableHtml(list) {
         <td>${sourceLabel(l.source)}</td>
         <td class="ellip" title="${esc(l.utm_campaign || '')}">${esc(l.utm_campaign || '—')}</td>
         <td class="nowrap" title="${fullDate(l.created_at)}">${new Date(l.created_at).toLocaleDateString('pt-BR')} <small class="muted">${new Date(l.created_at).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}</small></td>
+        <td class="nowrap">${l.won_at ? `<span class="ttc">${fmtDays(daysToSale(l))}</span>` : '<span class="muted">—</span>'}</td>
       </tr>`;
     }).join('')}
     </tbody></table></div>`;
@@ -726,6 +728,7 @@ function renderDrawer() {
         </div>
         <div class="${l.won_at ? 'grid2' : ''}" style="margin-top:10px"><div><label class="lbl">Valor do contrato (R$/mês)</label><input class="inp" data-field="valor" inputmode="decimal" value="${l.valor ?? ''}" placeholder="0"></div>
           ${l.won_at ? `<div><label class="lbl">Contrato cancelado em</label><input class="inp" type="date" data-field="canceled_at" value="${l.canceled_at || ''}"></div>` : ''}</div>
+        <p class="ttc-line">${l.won_at ? (daysToSale(l) < 1 ? 'Virou venda <b>no mesmo dia</b> em que chegou como lead' : `Virou venda <b>${fmtDays(daysToSale(l))}</b> depois de chegar como lead`) : ((Date.now() - new Date(l.created_at)) / 86400000 < 1 ? 'Chegou como lead <b>hoje</b>' : `Lead há <b>${fmtDays((Date.now() - new Date(l.created_at)) / 86400000)}</b>`)}</p>
       </div>
       <div class="sec">
         <h4>Lembrete</h4>

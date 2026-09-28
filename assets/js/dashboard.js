@@ -1,7 +1,7 @@
 // Dashboard: visão executiva e enxuta da saúde do negócio.
 // O detalhe (campanhas, lançamentos, gráficos por dia) fica no Financeiro e na Central de leads.
 import { DB } from '@shared/db.js';
-import { dateRange, datePicker, dateBtn, S, $, $$, esc, ICON, brl, num, isDue, isInactive, fail } from './util.js?v=2609282017';
+import { dateRange, datePicker, dateBtn, S, $, $$, esc, ICON, brl, num, isDue, isInactive, fail, fmtDays } from './util.js?v=2609282021';
 
 const D = { period: '30', from: '', to: '' };
 const DAY = 86400000;
@@ -45,6 +45,10 @@ function metrics(ins, leads, a, b, contractsList, useMeta) {
   const canceled = contractsList.filter((c) => c.canceled && inR(c.canceled));
   const activeEnd = contractsList.filter((c) => activeAt(c, b));
   const mrr = activeEnd.reduce((s, c) => s + c.monthly, 0);
+  // tempo até a venda: do dia em que virou lead até a venda (só vendas ligadas a um lead)
+  const ttc = news.filter((c) => c.lead).map((c) => Math.max(0, (c.start - new Date(c.lead.created_at)) / DAY)).sort((x, y) => x - y);
+  const ttcAvg = ttc.length ? ttc.reduce((s, d) => s + d, 0) / ttc.length : null;
+  const ttcMed = ttc.length ? (ttc.length % 2 ? ttc[(ttc.length - 1) / 2] : (ttc[ttc.length / 2 - 1] + ttc[ttc.length / 2]) / 2) : null;
   return {
     spend, nLeads, crmLeads, hasAds: insR.length > 0,
     cpl: nLeads ? spend / nLeads : null,
@@ -54,7 +58,8 @@ function metrics(ins, leads, a, b, contractsList, useMeta) {
     conv: nLeads ? news.length / nLeads : null,
     active: activeEnd.length, mrr, ticket: activeEnd.length ? mrr / activeEnd.length : null,
     churnN: canceled.length, churn: activeStart.length ? canceled.length / activeStart.length : null,
-    churnMrr: canceled.reduce((s, c) => s + c.monthly, 0)
+    churnMrr: canceled.reduce((s, c) => s + c.monthly, 0),
+    ttcAvg, ttcMed, ttcN: ttc.length, ttcMin: ttc.length ? ttc[0] : null
   };
 }
 
@@ -141,13 +146,15 @@ export async function renderDashboard(el) {
       ${kpi('Churn', pctTxt(cur.churn), cur.churnN ? `${num(cur.churnN)} cancelamento${cur.churnN === 1 ? '' : 's'} no período` : 'nenhum cancelamento no período', delta(cur.churn, prev.churn, 'down', true))}
     </div>
     <h2 class="dash-h">Aquisição <span>no período</span></h2>
-    <div class="kx-grid kx-6">
+    <div class="kx-grid kx-4">
       ${kpi('Investimento', brl(cur.spend), cur.hasAds ? 'Meta Ads' : 'sem campanhas no período', delta(cur.spend, prev.spend, null))}
       ${kpi('Leads', num(cur.nLeads), cur.hasAds ? `resultados da Meta · ${num(cur.crmLeads)} no CRM` : 'no CRM', delta(cur.nLeads, prev.nLeads))}
       ${kpi('Custo por lead', money(cur.cpl), 'investimento ÷ leads', delta(cur.cpl, prev.cpl, 'down'))}
-      ${kpi('Novos clientes', num(cur.newClients), `conversão ${pctTxt(cur.conv)} dos leads`, delta(cur.newClients, prev.newClients))}
+      ${kpi('Novos clientes', num(cur.newClients), `${brl(cur.newValue)} em contratos`, delta(cur.newClients, prev.newClients))}
+      ${kpi('Taxa de conversão', pctTxt(cur.conv), 'leads que viraram venda', delta(cur.conv, prev.conv, 'up', true))}
+      ${kpi('Tempo até a venda', cur.ttcAvg == null ? '—' : fmtDays(cur.ttcAvg), cur.ttcAvg == null ? 'média de lead a venda' : `média · mediana ${fmtDays(cur.ttcMed)} · ${num(cur.ttcN)} venda${cur.ttcN === 1 ? '' : 's'}`, delta(cur.ttcAvg, prev.ttcAvg, 'down'))}
       ${kpi('CAC', money(cur.cac), ltv && cur.cac ? `LTV:CAC ${(ltv / cur.cac).toLocaleString('pt-BR', { maximumFractionDigits: 1 })}x` : 'investimento ÷ novos clientes', delta(cur.cac, prev.cac, 'down'))}
-      ${kpi('ROAS', cur.roas == null ? '—' : cur.roas.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + 'x', `${brl(cur.newValue)} em contratos fechados`, delta(cur.roas, prev.roas))}
+      ${kpi('ROAS', cur.roas == null ? '—' : cur.roas.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + 'x', 'contratos fechados ÷ investimento', delta(cur.roas, prev.roas))}
     </div>` : ''}
     <div class="dash-row ${canMoney ? '' : 'two'}">
       <section class="panel dcard">

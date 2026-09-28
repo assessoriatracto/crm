@@ -1,7 +1,7 @@
 // Financeiro (estilo UTMify): gasto da Meta Ads × leads e vendas do CRM × receitas e despesas lançadas
 import { DB } from '@shared/db.js';
-import { renderClients } from './clients.js?v=2609282017';
-import { BRAND, dateRange, datePicker, dateBtn, S, $, $$, esc, ICON, brl, num, pct, fullDate, ago, toast, fail, modal, confirmBox } from './util.js?v=2609282017';
+import { renderClients } from './clients.js?v=2609282021';
+import { BRAND, popover, dateRange, datePicker, dateBtn, S, $, $$, esc, ICON, brl, num, pct, fullDate, ago, toast, fail, modal, confirmBox } from './util.js?v=2609282021';
 
 const F = { period: '30', from: '', to: '', level: 'campaign', revenue: 'mensal', sort: 'spend', tab: 'geral' };
 const GRAPH = 'v21.0';
@@ -143,7 +143,8 @@ export async function renderFinance(el, swap = false) {
     <section class="panel adt-card">
       <div class="adt-head">
         <nav class="adt-tabs" role="tablist">${[['campaign', 'Campanhas'], ['adset', 'Conjuntos de anúncios'], ['ad', 'Anúncios']].map(([k, n]) => `<button role="tab" aria-selected="${F.level === k}" class="adt-tab ${F.level === k ? 'on' : ''}" data-level="${k}">${LVL_IC[k]}<span>${n}</span></button>`).join('')}</nav>
-        <label class="adt-search">${ICON.search}<input type="search" data-adt-q placeholder="Buscar por nome" value="${esc(F.q || '')}"></label>
+        <div class="adt-tools"><label class="adt-search">${ICON.search}<input type="search" data-adt-q placeholder="Buscar por nome" value="${esc(F.q || '')}"></label>
+          <button class="b b-ic adt-colbtn" data-cols data-pop-anchor><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M9 4v16M15 4v16"/></svg><span>Colunas</span></button></div>
       </div>
       <div class="adt-wrap" data-table></div>
       <p class="adt-note">Resultados, gasto e cliques vêm da Meta (mesma atribuição do Gerenciador). Vendas e faturamento vêm do CRM, ligados pelas UTMs dos anúncios.</p>
@@ -169,6 +170,7 @@ export async function renderFinance(el, swap = false) {
 
   // tabela por nível
   renderTable(el.querySelector('[data-table]'), ins, leads, tblSales, tblValue);
+  el.querySelector('[data-cols]').addEventListener('click', (e) => colsPicker(e.currentTarget));
   let qT; el.querySelector('[data-adt-q]').addEventListener('input', (e) => { clearTimeout(qT); qT = setTimeout(() => { F.q = e.target.value; renderTable(el.querySelector('[data-table]'), ins, leads, tblSales, tblValue); }, 150); });
   dailyChart(el.querySelector('[data-chart]'), r, ins, sales, entries, saleValue);
 
@@ -418,6 +420,35 @@ function bindLeadActions(el, reload) {
   card.querySelector('[data-la-auto]')?.addEventListener('click', (e) => save([], e.currentTarget));
 }
 
+// escolher colunas da tabela de campanhas (fica salvo neste navegador)
+function colsPicker(anchor) {
+  const on = new Set(visibleCols().map((c) => c[0]));
+  const groups = [...new Set(ALL_COLS.map((c) => c[0]))];
+  popover(anchor, `<div class="colp"><div class="ph">Colunas da tabela</div>
+    ${groups.map((g) => `<div class="colp-g">${g}</div>${ALL_COLS.filter((c) => c[0] === g).map(([, k, n, , tip]) => `<button type="button" class="pi colp-i" data-k="${k}"><span class="cbx ${on.has(k) ? 'on' : ''}">${ICON.check}</span><span class="colp-t"><span>${n}</span>${tip ? `<small>${esc(tip)}</small>` : ''}</span></button>`).join('')}`).join('')}
+    <hr><div class="pfoot"><button class="b b-sm b-ghost" data-reset>Restaurar padrão</button></div></div>`, (p) => {
+    const save = () => {
+      try { localStorage.setItem(COLS_KEY, JSON.stringify([...on])); } catch (e) {}
+      if (lastTable && lastTable[0].isConnected) renderTable(...lastTable);
+    };
+    p.addEventListener('click', (e) => {
+      const b = e.target.closest('[data-k]');
+      if (b) {
+        const k = b.dataset.k;
+        if (on.has(k)) { if (on.size <= 1) return toast('Deixe pelo menos uma coluna', true); on.delete(k); } else on.add(k);
+        b.querySelector('.cbx').classList.toggle('on', on.has(k));
+        save();
+      }
+      if (e.target.closest('[data-reset]')) {
+        on.clear(); DEFAULT_COLS.forEach((k) => on.add(k));
+        p.querySelectorAll('[data-k]').forEach((x) => x.querySelector('.cbx').classList.toggle('on', on.has(x.dataset.k)));
+        try { localStorage.removeItem(COLS_KEY); } catch (e2) {}
+        if (lastTable && lastTable[0].isConnected) renderTable(...lastTable);
+      }
+    });
+  }, { closable: true, cls: 'pop-cols' });
+}
+
 function pickAccounts(conn, fbName, list, current, done) {
   const cur = new Map(current.map((a) => [a.account_id, a]));
   const rows = list.map((a) => ({ id: a.id, name: a.name, currency: a.currency, status: a.account_status, biz: a.business?.name }))
@@ -482,20 +513,52 @@ const resultName = (ind) => {
 };
 const LVL_IC = {campaign: '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 7.5A2.5 2.5 0 0 1 5.5 5h3.6a2 2 0 0 1 1.5.7l1.3 1.6h6.6A2.5 2.5 0 0 1 21 9.8v7.7a2.5 2.5 0 0 1-2.5 2.5h-13A2.5 2.5 0 0 1 3 17.5z"/></svg>', adset: '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></svg>', ad: '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="m3 16 5-5 4 4 3-3 6 6"/><circle cx="16" cy="9" r="1.5"/></svg>'};
 const LEVELS = [['campaign', 'Campanhas', 'campanha'], ['adset', 'Conjuntos de anúncios', 'conjunto'], ['ad', 'Anúncios', 'anúncio']];
-const COLS = [
-  ['results', 'Resultados'], ['cpr', 'Custo por resultado'], ['spend', 'Valor usado'], ['imp', 'Impressões'], ['cpm', 'CPM'],
-  ['link', 'Cliques no link'], ['ctr', 'CTR'], ['cpc', 'CPC'], ['sales', 'Vendas'], ['rev', 'Faturamento'], ['roas', 'ROAS'], ['profit', 'Lucro']
+// colunas disponíveis (grupo, chave, nome, visível por padrão, explicação)
+const ALL_COLS = [
+  ['Desempenho', 'results', 'Resultados', true, 'Coluna Resultados do Gerenciador de Anúncios'],
+  ['Desempenho', 'cpr', 'Custo por resultado', true],
+  ['Desempenho', 'spend', 'Valor usado', true],
+  ['Desempenho', 'imp', 'Impressões', true],
+  ['Desempenho', 'cpm', 'CPM', true, 'Custo por mil impressões'],
+  ['Cliques', 'link', 'Cliques no link', true],
+  ['Cliques', 'ctr', 'CTR', true, 'Cliques no link ÷ impressões'],
+  ['Cliques', 'cpc', 'CPC', true, 'Custo por clique no link'],
+  ['Cliques', 'lpv', 'Visualizações da página', false, 'Quem clicou e a página carregou'],
+  ['Cliques', 'connect', 'Connect rate', false, 'Visualizações da página ÷ cliques no link'],
+  ['Cliques', 'cplpv', 'Custo por visualização', false, 'Valor usado ÷ visualizações da página'],
+  ['Conversas', 'msgs', 'Conversas iniciadas', false, 'WhatsApp e Direct'],
+  ['Conversas', 'cpmsg', 'Custo por conversa', false],
+  ['Leads e vendas', 'crm', 'Leads no CRM', false, 'Leads que chegaram ao CRM com a UTM dessa linha'],
+  ['Leads e vendas', 'conv', 'Taxa de conversão', false, 'Vendas ÷ leads'],
+  ['Leads e vendas', 'sales', 'Vendas', true],
+  ['Leads e vendas', 'cpa', 'Custo por venda', false, 'Valor usado ÷ vendas (CAC da campanha)'],
+  ['Leads e vendas', 'rev', 'Faturamento', true],
+  ['Leads e vendas', 'ticket', 'Ticket médio', false, 'Faturamento ÷ vendas'],
+  ['Leads e vendas', 'roas', 'ROAS', true, 'Faturamento ÷ valor usado'],
+  ['Leads e vendas', 'profit', 'Lucro', true, 'Faturamento − valor usado']
 ];
+const COLS_KEY = 'tracto_adt_cols';
+const DEFAULT_COLS = ALL_COLS.filter((c) => c[3]).map((c) => c[1]);
+function visibleCols() {
+  let keys = null;
+  try { keys = JSON.parse(localStorage.getItem(COLS_KEY)); } catch (e) {}
+  if (!Array.isArray(keys) || !keys.length) keys = DEFAULT_COLS;
+  return ALL_COLS.filter((c) => keys.includes(c[1])).map((c) => [c[1], c[2], c[4]]);
+}
+let lastTable = null; // últimos argumentos da tabela (pra redesenhar ao trocar colunas)
 
 function renderTable(host, ins, leads, sales, saleValue) {
+  lastTable = [host, ins, leads, sales, saleValue];
+  const COLS = visibleCols();
   const key = { campaign: ['campaign_id', 'campaign_name'], adset: ['adset_id', 'adset_name'], ad: ['ad_id', 'ad_name'] }[F.level];
   const utm = { campaign: 'utm_campaign', adset: 'utm_term', ad: 'utm_content' }[F.level];
   const lastDay = ins.reduce((a, x) => (x.date > a ? x.date : a), '');
   const rows = new Map();
   ins.forEach((x) => {
     const k = x[key[0]] || x[key[1]];
-    const r = rows.get(k) || { id: x[key[0]], name: x[key[1]] || '(sem nome)', campaign: x.campaign_name, adset: x.adset_name, spend: 0, imp: 0, clicks: 0, link: 0, results: 0, leads: 0, ind: {}, last: '' };
+    const r = rows.get(k) || { id: x[key[0]], name: x[key[1]] || '(sem nome)', campaign: x.campaign_name, adset: x.adset_name, spend: 0, imp: 0, clicks: 0, link: 0, lpv: 0, msgs: 0, crm: 0, results: 0, leads: 0, ind: {}, last: '' };
     r.spend += Number(x.spend); r.imp += Number(x.impressions); r.clicks += Number(x.clicks); r.link += Number(x.link_clicks || 0);
+    r.lpv += Number(x.landing_views || 0); r.msgs += Number(x.messages || 0);
     r.leads += rowLeads(x);
     // "Resultados" = o que a Meta mostra na coluna de mesmo nome; sem ela, os leads
     const res = x.results != null ? Number(x.results) : rowLeads(x);
@@ -508,15 +571,18 @@ function renderTable(host, ins, leads, sales, saleValue) {
   // vendas do CRM ligadas pela UTM (ou pelo id da campanha em utm_id)
   const match = (l) => [...rows.values()].find((r) => (F.level === 'campaign' && l.utm_id && l.utm_id === r.id) || (l[utm] && l[utm] === r.name));
   rows.forEach((r) => Object.assign(r, { sales: 0, rev: 0, indicator: Object.entries(r.ind).sort((a, b) => b[1] - a[1])[0]?.[0] || '' }));
-  const unmatched = { name: 'Sem anúncio identificado', sub: 'Orgânico, indicação ou link sem UTM', spend: 0, imp: 0, clicks: 0, link: 0, results: 0, leads: 0, sales: 0, rev: 0, none: true };
-  leads.forEach((l) => { if (!match(l)) unmatched.leads++; });
+  const unmatched = { name: 'Sem anúncio identificado', sub: 'Orgânico, indicação ou link sem UTM', spend: 0, imp: 0, clicks: 0, link: 0, lpv: 0, msgs: 0, crm: 0, results: 0, leads: 0, sales: 0, rev: 0, none: true };
+  leads.forEach((l) => { const r = match(l); if (r) r.crm++; else { unmatched.leads++; unmatched.crm++; } });
   sales.forEach((l) => { const r = match(l) || unmatched; r.sales++; r.rev += saleValue(l); });
   unmatched.results = unmatched.leads;
 
   const val = (r, k) => ({
     results: r.results, cpr: r.results ? r.spend / r.results : null, spend: r.spend, imp: r.imp, cpm: r.imp ? (r.spend / r.imp) * 1000 : null,
     link: r.link || r.clicks, ctr: r.imp ? (r.link || r.clicks) / r.imp : null, cpc: (r.link || r.clicks) ? r.spend / (r.link || r.clicks) : null,
-    sales: r.sales, rev: r.rev, roas: r.spend ? r.rev / r.spend : null, profit: r.rev - r.spend
+    sales: r.sales, rev: r.rev, roas: r.spend ? r.rev / r.spend : null, profit: r.rev - r.spend,
+    lpv: r.lpv, connect: (r.link || r.clicks) && r.lpv ? r.lpv / (r.link || r.clicks) : null, cplpv: r.lpv ? r.spend / r.lpv : null,
+    msgs: r.msgs, cpmsg: r.msgs ? r.spend / r.msgs : null, crm: r.crm,
+    conv: (r.leads || r.crm) ? r.sales / (r.leads || r.crm) : null, cpa: r.sales && r.spend ? r.spend / r.sales : null, ticket: r.sales ? r.rev / r.sales : null
   })[k];
   const q = (F.q || '').trim().toLowerCase();
   let list = [...rows.values()].filter((r) => !q || `${r.name} ${r.campaign || ''} ${r.adset || ''}`.toLowerCase().includes(q));
@@ -526,7 +592,8 @@ function renderTable(host, ins, leads, sales, saleValue) {
   const levelName = LEVELS.find(([k]) => k === F.level);
   if (!list.length) { host.innerHTML = `<div class="adt-empty">${q ? 'Nada encontrado com essa busca.' : 'Sem gasto nem leads no período.'}</div>`; return; }
 
-  const tot = list.filter((r) => !r.none).reduce((a, r) => { ['spend', 'imp', 'clicks', 'link', 'results', 'leads'].forEach((k) => { a[k] += r[k]; }); return a; }, { spend: 0, imp: 0, clicks: 0, link: 0, results: 0, leads: 0 });
+  const tot = list.filter((r) => !r.none).reduce((a, r) => { ['spend', 'imp', 'clicks', 'link', 'lpv', 'msgs', 'results', 'leads'].forEach((k) => { a[k] += r[k]; }); return a; }, { spend: 0, imp: 0, clicks: 0, link: 0, lpv: 0, msgs: 0, results: 0, leads: 0 });
+  tot.crm = list.reduce((a, r) => a + (r.crm || 0), 0);
   list.forEach((r) => { tot.sales = (tot.sales || 0) + r.sales; tot.rev = (tot.rev || 0) + r.rev; });
   const inds = new Set(list.filter((r) => !r.none && r.indicator).map((r) => r.indicator));
   tot.indicator = inds.size === 1 ? [...inds][0] : '';
@@ -535,7 +602,8 @@ function renderTable(host, ins, leads, sales, saleValue) {
   const dash = '<span class="adt-dash">—</span>';
   const cell = (r, k, isTot) => {
     const v = val(r, k);
-    if (r.none && ['cpr', 'spend', 'imp', 'cpm', 'link', 'ctr', 'cpc', 'roas', 'profit'].includes(k)) return dash;
+    if (r.none && ['cpr', 'spend', 'imp', 'cpm', 'link', 'ctr', 'cpc', 'roas', 'profit', 'lpv', 'connect', 'cplpv', 'msgs', 'cpmsg', 'cpa'].includes(k)) return dash;
+    const pctv = (x) => (x == null ? dash : (x * 100).toLocaleString('pt-BR', { minimumFractionDigits: 1, maximumFractionDigits: 1 }) + '%');
     switch (k) {
       case 'results': {
         if (isTot && mixed) return `<b>${num(r.leads)}</b><small>leads</small>`;
@@ -551,6 +619,10 @@ function renderTable(host, ins, leads, sales, saleValue) {
       case 'sales': return v ? `<b>${num(v)}</b>` : dash;
       case 'rev': return v ? money2(v) : dash;
       case 'roas': return !r.rev ? dash : `<span class="roas ${v >= 1 ? 'good' : 'bad'}">${v.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}x</span>`;
+      case 'lpv': case 'msgs': case 'crm': return v ? num(v) : dash;
+      case 'connect': return v == null ? dash : `<span class="roas ${v >= 0.7 ? 'good' : v < 0.5 ? 'bad' : ''}">${pctv(v)}</span>`;
+      case 'conv': return pctv(v);
+      case 'cplpv': case 'cpmsg': case 'cpa': case 'ticket': return v == null ? dash : money2(v);
       case 'profit': return !r.rev && !r.sales ? `<span class="neg">${money2(v)}</span>` : `<span class="${v < 0 ? 'neg' : 'pos'}">${money2(v)}</span>`;
     }
     return '';
@@ -563,7 +635,7 @@ function renderTable(host, ins, leads, sales, saleValue) {
   const sub = (r) => r.none ? r.sub : F.level === 'campaign' ? '' : F.level === 'adset' ? r.campaign : `${r.campaign || ''}${r.adset ? ' › ' + r.adset : ''}`;
   const sortIc = (k) => (sk === k ? `<span class="adt-sort">${dir > 0 ? ICON.up : ICON.down}</span>` : '');
   host.innerHTML = `<table class="adt">
-    <thead><tr><th class="adt-name" data-sort="name">${levelName[1].replace(' de anúncios', '')}</th>${COLS.map(([k, n]) => `<th class="num ${sk === k ? 'on' : ''}" data-sort="${k}">${n}${sortIc(k)}</th>`).join('')}</tr></thead>
+    <thead><tr><th class="adt-name" data-sort="name">${levelName[1].replace(' de anúncios', '')}</th>${COLS.map(([k, n, tip]) => `<th class="num ${sk === k ? 'on' : ''}" data-sort="${k}" ${tip ? `title="${esc(tip)}"` : ''}>${n}${sortIc(k)}</th>`).join('')}</tr></thead>
     <tbody>${list.map((r) => `<tr class="${r.none ? 'adt-none' : ''}">
       <td class="adt-name"><div class="adt-n">${status(r)}<div class="adt-t"><b title="${esc(r.name)}">${esc(r.name)}</b>${sub(r) ? `<small title="${esc(sub(r))}">${esc(sub(r))}</small>` : ''}</div></div></td>
       ${COLS.map(([k]) => `<td class="num">${cell(r, k)}</td>`).join('')}</tr>`).join('')}</tbody>

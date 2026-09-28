@@ -45,6 +45,10 @@ document.addEventListener('click', (e) => {
 // endereços antigos com # continuam funcionando
 if (location.hash.startsWith('#/')) history.replaceState(null, '', '/' + location.hash.slice(2));
 
+// tempo até a venda: dias entre virar lead e a venda (null se ainda não vendeu)
+export const daysToSale = (l) => (l?.won_at ? Math.max(0, (new Date(l.won_at) - new Date(l.created_at)) / 86400000) : null);
+export const fmtDays = (d) => (d == null ? '—' : d < 1 ? 'mesmo dia' : `${Math.round(d)} dia${Math.round(d) === 1 ? '' : 's'}`);
+
 export const ICON = {
   upload: '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 16V4M7 9l5-5 5 5M4 16v3a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-3"/></svg>',
   user: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="8" r="4"/><path d="M4 21c1.2-4 4.3-6 8-6s6.8 2 8 6"/></svg>',
