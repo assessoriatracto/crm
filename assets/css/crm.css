@@ -412,7 +412,7 @@ tbody tr.sel{background:rgba(255,173,0,.07);}
 .srow .inp.grow{min-width:130px;}
 
 /* ---------- integrações / pixel ---------- */
-.int-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;align-items:start;}
+.int-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;align-items:stretch;}
 .int-card{padding:18px;min-width:0;}
 .int-card.span-all{grid-column:1/-1;}
 .int-h{display:flex;align-items:flex-start;gap:14px;margin-bottom:12px;}
@@ -894,3 +894,8 @@ th.sortable svg{width:12px;height:12px;vertical-align:-1px;margin-left:4px;color
   .kpis .k{flex:none;}
 }
 @media (max-width:760px){ .toasts{bottom:calc(84px + env(safe-area-inset-bottom));width:calc(100% - 32px);} .toast{max-width:100%;} }
+
+/* estado vazio padrão dos cards (mesma altura e ritmo nos dois lados) */
+.int-card .empty-line{margin:0;padding:14px 0 2px;border-top:1px solid var(--border);font-size:14px;}
+.int-card .int-h .help{margin-bottom:0;}
+.int-h > .b{align-self:center;}

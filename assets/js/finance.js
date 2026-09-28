@@ -1,6 +1,6 @@
 // Financeiro (estilo UTMify): gasto da Meta Ads × leads e vendas do CRM × receitas e despesas lançadas
 import { DB } from '@shared/db.js';
-import { dateRange, datePicker, dateBtn, S, $, $$, esc, ICON, brl, num, pct, fullDate, ago, toast, fail, modal, confirmBox } from './util.js?v=2609280031';
+import { dateRange, datePicker, dateBtn, S, $, $$, esc, ICON, brl, num, pct, fullDate, ago, toast, fail, modal, confirmBox } from './util.js?v=2609281224';
 
 const F = { period: '30', from: '', to: '', level: 'campaign', revenue: 'mensal', sort: 'spend', tab: 'geral' };
 const GRAPH = 'v21.0';
@@ -102,10 +102,11 @@ export async function renderFinance(el, swap = false) {
         <div class="int-h"><div><h3>Lançamentos</h3><p class="help">Receitas e despesas fora dos anúncios: ferramentas, equipe, impostos, setup…</p></div></div>
         ${entries.length ? `<div class="table-wrap"><table class="int-table"><thead><tr><th>Data</th><th>Tipo</th><th>Categoria</th><th>Descrição</th><th class="num">Valor</th><th></th></tr></thead><tbody>
           ${entries.map((e) => `<tr data-id="${e.id}"><td class="nowrap">${new Date(e.date + 'T12:00').toLocaleDateString('pt-BR')}</td><td><span class="pill ${e.kind === 'receita' ? 'good' : 'bad'}">${e.kind === 'receita' ? 'Receita' : 'Despesa'}</span></td><td>${esc(e.category)}</td><td>${esc(e.description || '')}</td><td class="num">${brl(e.amount)}</td><td style="text-align:right"><button class="b b-sm b-ghost" data-edel aria-label="Excluir">×</button></td></tr>`).join('')}
-        </tbody></table></div>` : '<p class="muted">Nenhum lançamento no período.</p>'}
+        </tbody></table></div>` : '<p class="muted empty-line">Nenhum lançamento no período.</p>'}
       </section>
       <section class="panel int-card">
         <div class="int-h"><div><h3>Contas de anúncio</h3><p class="help">${accounts.length ? `${accounts.filter((a) => a.enabled).length} ativa${accounts.filter((a) => a.enabled).length === 1 ? '' : 's'} · gasto atualizado a cada 3 horas` : 'Conecte o perfil do Facebook pra puxar o gasto das campanhas.'}</p></div><button class="b b-sm" data-go-acc>Gerenciar</button></div>
+        ${accounts.length ? '' : '<p class="muted empty-line">Nenhuma conta conectada.</p>'}
         ${accounts.slice(0, 4).map((a) => `<div class="srow">${META_ICON}<div class="grow"><b>${esc(a.name)}</b><div class="muted" style="font-size:12px">${accStatus(a)}</div></div>${a.enabled ? '<span class="pill good">Ativa</span>' : '<span class="pill">Pausada</span>'}</div>`).join('')}
       </section>
     </div>
