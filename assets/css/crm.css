@@ -477,9 +477,10 @@ code.wrap{word-break:break-all;}
 .px-table tbody tr{cursor:default;}
 .px-name{display:flex;align-items:center;gap:14px;font-size:15px;}
 .plat{display:inline-grid;place-items:center;width:30px;height:30px;border-radius:8px;margin-right:10px;vertical-align:middle;background:var(--c-hover);color:var(--c-text);}
-.plat-meta{background:#EAF1FF;color:#1877F2;}
-.plat-ga4{background:#FFF3E0;color:#E37400;}
-.plat-google_ads{background:#E8F5E9;color:#1E8E3E;}
+.plat-meta,.plat-ga4,.plat-google_ads,.plat-gtm{background:#fff;border:1px solid rgba(0,0,0,.08);}
+.plat-opt .plat{width:44px;height:44px;border-radius:12px;}
+.plat-opt .plat svg{width:24px;height:24px;}
+.plat-pick{margin-bottom:6px;}
 .id-chip{display:inline-flex;align-items:center;gap:8px;padding:6px 10px;border-radius:8px;background:var(--c-sunken);border:1px solid var(--border);font-family:ui-monospace,Menlo,monospace;font-size:13px;color:var(--gray-2);}
 .id-chip button{border:none;background:none;color:var(--gray-3);display:grid;place-items:center;padding:0;}
 .id-chip button:hover{color:var(--c-text);}

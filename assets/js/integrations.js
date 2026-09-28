@@ -1,7 +1,7 @@
 // Abas "Integrações" (API + webhooks) e "Pixel" (Meta Pixel + Conversions API)
 import { DB, LIVE } from '@shared/db.js';
-import { S, $, $$, esc, FAT, ICON, num, pct, brl, fullDate, ago, toast, fail, modal, confirmBox, menu } from './util.js?v=2609281234';
-import { hbars } from './dashboard.js?v=2609281234';
+import { S, $, $$, esc, FAT, ICON, BRAND, num, pct, brl, fullDate, ago, toast, fail, modal, confirmBox, menu } from './util.js?v=2609281242';
+import { hbars } from './dashboard.js?v=2609281242';
 import { PIXEL_EVENTS_RECOMMENDED } from '@shared/db.js';
 
 const EVENTS = [
@@ -208,11 +208,7 @@ const PLATFORMS = {
   google_ads: { name: 'Google Ads', short: 'Google Ads', idLabel: 'ID da conversão', idHelp: 'Google Ads > Metas > Conversões > sua conversão de lead > Configuração da tag. É o "AW-" seguido de números.', idPh: 'AW-123456789',
     credLabel: 'Rótulo da conversão', credHelp: 'Na mesma tela, o texto depois da barra em "send_to": AW-123456789/<b>esteRotulo</b>. Ative "Conversões otimizadas" na conversão pra receber e-mail e telefone.', credPh: 'AbCdEfGhIj' }
 };
-const PLATFORM_ICON = {
-  meta: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M3 15c0-4 2-8 4.5-8 3 0 5 8 9 8 2 0 3.5-1.5 3.5-4s-1.5-4-3.5-4c-3.5 0-5.5 8-9 8C5 15 3 14 3 15z"/></svg>',
-  ga4: '<svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><rect x="4" y="12" width="4" height="8" rx="2"/><rect x="10" y="8" width="4" height="12" rx="2"/><rect x="16" y="4" width="4" height="16" rx="2"/></svg>',
-  google_ads: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M9 4 3 16M15 4l6 12"/><circle cx="6" cy="18" r="2.4" fill="currentColor"/></svg>'
-};
+const PLATFORM_ICON = BRAND;
 // o que cada chave de evento significa em cada plataforma
 const EVENT_ROWS = [
   ['page_view', 'Visita à página', { meta: 'PageView', ga4: 'page_view' }, 'Toda abertura do formulário'],
