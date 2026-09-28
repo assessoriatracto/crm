@@ -1712,3 +1712,5 @@ drop function if exists public.capi_test();
 drop function if exists public.activity_touch_lead();
 drop function if exists public.activity_integrations();
 drop function if exists public.leads_before_update();
+
+select public.ads_sync(null, 180);
