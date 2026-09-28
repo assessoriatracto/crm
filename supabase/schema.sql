@@ -167,6 +167,20 @@ drop trigger if exists on_auth_user_created on auth.users;
 create trigger on_auth_user_created after insert on auth.users
 for each row execute function public.handle_new_user();
 
+-- troca de e-mail confirmada no login: atualiza o perfil
+create or replace function public.handle_user_email_change() returns trigger
+language plpgsql security definer set search_path = public as $$
+begin
+  if new.email is distinct from old.email and new.email is not null then
+    update public.profiles set email = new.email where id = new.id;
+    perform audit('update', 'profiles', new.id::text, jsonb_build_object('email_alterado', true));
+  end if;
+  return new;
+end $$;
+drop trigger if exists on_auth_user_email_changed on auth.users;
+create trigger on_auth_user_email_changed after update of email on auth.users
+for each row execute function public.handle_user_email_change();
+
 insert into public.profiles (id, nome, email, ativo)
 select u.id, split_part(u.email, '@', 1), u.email, false from auth.users u
 on conflict (id) do nothing;
@@ -208,7 +222,9 @@ begin
      and not exists (select 1 from profiles where role = 'admin' and ativo and id <> old.id) then
     raise exception 'a equipe precisa ter pelo menos um admin ativo';
   end if;
-  new.email := old.email; new.consent_at := old.consent_at; new.consent_version := old.consent_version;
+  -- e-mail do perfil só muda junto com o e-mail de login (troca confirmada)
+  if new.email is distinct from (select u.email from auth.users u where u.id = new.id) then new.email := old.email; end if;
+  new.consent_at := old.consent_at; new.consent_version := old.consent_version;
   return new;
 end $$;
 drop trigger if exists profiles_guard on public.profiles;
@@ -582,6 +598,9 @@ alter table public.ad_insights add column if not exists link_clicks bigint not n
 alter table public.ad_insights add column if not exists landing_views int not null default 0;
 alter table public.ad_insights add column if not exists messages int not null default 0;
 alter table public.ad_insights add column if not exists actions jsonb;
+-- coluna "Resultados" do Gerenciador de Anúncios (o evento que a campanha otimiza)
+alter table public.ad_insights add column if not exists results int;
+alter table public.ad_insights add column if not exists result_indicator text;
 
 alter table public.ad_accounts add column if not exists connected_via text not null default 'token';
 alter table public.ad_accounts add column if not exists token_expires_at timestamptz;
@@ -1345,7 +1364,7 @@ begin
         'https://graph.facebook.com/' || v_ver || '/' || a.account_id || '/insights',
         -- use_unified_attribution_setting: mesma janela de atribuição do Gerenciador de Anúncios (coluna Resultados)
         jsonb_build_object('access_token', a.access_token, 'level', 'ad', 'time_increment', '1', 'limit', '500', 'use_unified_attribution_setting', 'true',
-          'fields', 'campaign_id,campaign_name,adset_id,adset_name,ad_id,ad_name,spend,impressions,clicks,inline_link_clicks,reach,actions',
+          'fields', 'campaign_id,campaign_name,adset_id,adset_name,ad_id,ad_name,spend,impressions,clicks,inline_link_clicks,reach,actions,results',
           'time_range', jsonb_build_object('since', to_char(current_date - greatest(p_days, 1) + 1, 'YYYY-MM-DD'), 'until', to_char(current_date, 'YYYY-MM-DD'))::text);
       insert into ad_sync_jobs (account_ref, request_id) values (a.id, v_req);
       n := n + 1;
@@ -1362,6 +1381,18 @@ language sql immutable as $$
   select sum((a->>'value')::numeric)::int from jsonb_array_elements(coalesce(p_actions, '[]'::jsonb)) a where a->>'action_type' = p_type;
 $$;
 
+-- "Resultados" da Meta: soma dos valores e o indicador (ex: conversions:offsite_conversion.fb_pixel_custom.RespondiConversion)
+create or replace function public.results_value(p_results jsonb) returns int
+language sql immutable as $$
+  select sum((v->>'value')::numeric)::int from jsonb_array_elements(coalesce(p_results, '[]'::jsonb)) r, jsonb_array_elements(coalesce(r->'values', '[]'::jsonb)) v;
+$$;
+-- o resultado é um lead? (formulário, pixel, conversão personalizada, cadastro, conversa…) — visitas ao perfil, engajamento e cliques não
+create or replace function public.is_lead_result(p_indicator text) returns boolean
+language sql immutable as $$
+  select coalesce(p_indicator ~* '(lead|conversions:|registration|application|contact|schedule|messaging_conversation_started)'
+    and p_indicator !~* '(profile_visit|engagement|link_click|landing_page|video|thruplay|reach|impression|purchase)', false);
+$$;
+
 create or replace function public.ads_sync_process() returns int
 language plpgsql security definer set search_path = public as $$
 declare j record; v_body jsonb; r jsonb; v_next bigint; n int := 0;
@@ -1376,21 +1407,23 @@ begin
       if coalesce(j.status_code, 0) between 200 and 299 and v_body ? 'data' then
         for r in select * from jsonb_array_elements(v_body->'data') loop
           insert into ad_insights (account_ref, date, campaign_id, campaign_name, adset_id, adset_name, ad_id, ad_name, spend, impressions, clicks, reach, meta_leads,
-                                   link_clicks, landing_views, messages, actions, updated_at)
+                                   link_clicks, landing_views, messages, actions, results, result_indicator, updated_at)
           values (j.account_ref, (r->>'date_start')::date, r->>'campaign_id', r->>'campaign_name', r->>'adset_id', r->>'adset_name', r->>'ad_id', r->>'ad_name',
             coalesce((r->>'spend')::numeric, 0), coalesce((r->>'impressions')::bigint, 0), coalesce((r->>'clicks')::bigint, 0), (r->>'reach')::bigint,
-            -- "lead" já é o total de leads da Meta; os tipos específicos só entram se ele não vier (evita contar em dobro)
-            coalesce(action_count(r->'actions', 'lead'),
-                     coalesce(action_count(r->'actions', 'onsite_conversion.lead_grouped'), 0) + coalesce(action_count(r->'actions', 'offsite_conversion.fb_pixel_lead'), 0)),
+            -- leads = coluna "Resultados" do Gerenciador quando a campanha otimiza por lead;
+            -- sem ela, o "lead" da Meta (os tipos específicos só entram se ele não vier, pra não contar em dobro)
+            case when is_lead_result(r#>>'{results,0,indicator}') then coalesce(results_value(r->'results'), 0)
+                 else coalesce(action_count(r->'actions', 'lead'),
+                               coalesce(action_count(r->'actions', 'onsite_conversion.lead_grouped'), 0) + coalesce(action_count(r->'actions', 'offsite_conversion.fb_pixel_lead'), 0)) end,
             coalesce((r->>'inline_link_clicks')::bigint, action_count(r->'actions', 'link_click'), 0),
             coalesce(action_count(r->'actions', 'landing_page_view'), 0),
             coalesce(action_count(r->'actions', 'onsite_conversion.messaging_conversation_started_7d'), 0),
-            r->'actions', now())
+            r->'actions', results_value(r->'results'), r#>>'{results,0,indicator}', now())
           on conflict (account_ref, date, ad_id) do update set
             campaign_id = excluded.campaign_id, campaign_name = excluded.campaign_name, adset_id = excluded.adset_id, adset_name = excluded.adset_name,
             ad_name = excluded.ad_name, spend = excluded.spend, impressions = excluded.impressions, clicks = excluded.clicks,
             reach = excluded.reach, meta_leads = excluded.meta_leads, link_clicks = excluded.link_clicks, landing_views = excluded.landing_views,
-            messages = excluded.messages, actions = excluded.actions, updated_at = now();
+            messages = excluded.messages, actions = excluded.actions, results = excluded.results, result_indicator = excluded.result_indicator, updated_at = now();
           n := n + 1;
         end loop;
         -- próxima página

@@ -1,6 +1,6 @@
 // Financeiro (estilo UTMify): gasto da Meta Ads × leads e vendas do CRM × receitas e despesas lançadas
 import { DB } from '@shared/db.js';
-import { BRAND, dateRange, datePicker, dateBtn, S, $, $$, esc, ICON, brl, num, pct, fullDate, ago, toast, fail, modal, confirmBox } from './util.js?v=2609281638';
+import { BRAND, dateRange, datePicker, dateBtn, S, $, $$, esc, ICON, brl, num, pct, fullDate, ago, toast, fail, modal, confirmBox } from './util.js?v=2609281726';
 
 const F = { period: '30', from: '', to: '', level: 'campaign', revenue: 'mensal', sort: 'spend', tab: 'geral' };
 const GRAPH = 'v21.0';
@@ -320,7 +320,7 @@ function leadActionsCard(ins, settings, canEdit) {
   const list = [...tot.entries()].sort((a, b) => b[1] - a[1]);
   const autoN = ins.reduce((a, x) => a + Number(x.meta_leads || 0), 0);
   return `<section class="panel int-card" style="margin-top:12px" data-lead-actions>
-    <div class="int-h"><div><h3>O que conta como lead</h3><p class="help">Escolha as mesmas ações da coluna "Resultados" das suas campanhas no Gerenciador de Anúncios. Números dos últimos 30 dias, somando as contas ativas.</p></div></div>
+    <div class="int-h"><div><h3>O que conta como lead</h3><p class="help">No automático, o CRM usa a coluna "Resultados" de cada campanha, igual ao Gerenciador de Anúncios. Só ligue ações abaixo se quiser contar de outro jeito. Números dos últimos 30 dias, somando as contas ativas.</p></div></div>
     ${list.length ? `<div class="acc-pick">${list.map(([t, n]) => `<label class="acc-opt ${chosen.includes(t) ? 'on' : ''}" data-t="${esc(t)}">
         <span class="grow acc-info"><b>${esc(actionName(t))}</b><small class="muted">${esc(t)}</small></span>
         <span class="la-n">${num(n)}</span>

@@ -1,7 +1,7 @@
-// "Meu perfil": dados pessoais, Pushcut, senha e verificação em duas etapas
+// "Meu perfil": dados pessoais, Pushcut, e-mail, senha e verificação em duas etapas
 import { DB, LIVE } from '@shared/db.js';
-import { S, esc, toast, fail, modal } from './util.js?v=2609281638';
-import { passwordCheck } from './auth.js?v=2609281638';
+import { S, esc, toast, fail, modal } from './util.js?v=2609281726';
+import { passwordCheck } from './auth.js?v=2609281726';
 
 const ROLE = { admin: 'Admin', gestor: 'Gestor', sdr: 'SDR' };
 
@@ -21,6 +21,7 @@ export async function openProfile() {
     <h4 class="px-h">Segurança</h4>
     <div class="sec-row"><div><b>Verificação em duas etapas</b><p class="help" style="margin:2px 0 0">${factors.length ? 'Ativa. Pedimos o código do app autenticador a cada login.' : 'Protege sua conta mesmo se a senha vazar. Recomendado pra quem vê dados de leads.'}</p></div>
       ${factors.length ? '<button class="b b-danger b-sm" data-mfa-off>Desativar</button>' : '<button class="b b-sm" data-mfa-on>Ativar</button>'}</div>
+    <div class="sec-row"><div><b>E-mail de acesso</b><p class="help" style="margin:2px 0 0">${esc(me.email || '')}</p></div><button class="b b-sm" data-email>Alterar e-mail</button></div>
     <div class="sec-row"><div><b>Senha</b><p class="help" style="margin:2px 0 0">Troque se suspeitar que alguém sabe a sua.</p></div><button class="b b-sm" data-pass>Trocar senha</button></div>
     <div class="modal-foot"><button class="b" data-close>Fechar</button></div>`, (c, close) => {
     c.querySelector('[data-save]').addEventListener('click', async () => {
@@ -30,10 +31,38 @@ export async function openProfile() {
       try { S.me = { ...S.me, ...(await DB.updateMyProfile(v)) }; toast('Perfil salvo'); close(); } catch (e) { fail(e); }
     });
     c.querySelector('[data-pass]').addEventListener('click', () => { close(); changePassword(); });
+    c.querySelector('[data-email]').addEventListener('click', () => { close(); changeEmail(); });
     c.querySelector('[data-mfa-on]')?.addEventListener('click', () => { close(); enrollMfa(); });
     c.querySelector('[data-mfa-off]')?.addEventListener('click', async () => {
       if (!confirm('Desativar a verificação em duas etapas?')) return;
       try { for (const f of factors) await DB.mfaUnenroll(f.id); toast('Verificação em duas etapas desativada'); close(); } catch (e) { fail(e); }
+    });
+  });
+}
+
+function changeEmail() {
+  modal(`<h3>Alterar e-mail</h3>
+    <p class="help" style="margin-top:-4px">E-mail atual: <b>${esc(S.me?.email || '')}</b></p>
+    <div class="row"><label class="lbl">Novo e-mail</label><input class="inp" type="email" data-e1 autocomplete="email"></div>
+    <div class="row"><label class="lbl">Confirmar novo e-mail</label><input class="inp" type="email" data-e2 autocomplete="off"></div>
+    <p class="help">Por segurança, enviamos um link de confirmação para o novo e-mail e para o atual. A troca vale depois que os dois forem confirmados.</p>
+    <div class="modal-foot"><button class="b" data-close>Cancelar</button><button class="b b-primary" data-ok>Enviar confirmação</button></div>`, (c, close) => {
+    c.querySelector('[data-e2]').addEventListener('paste', (e) => e.preventDefault());
+    c.querySelector('[data-ok]').addEventListener('click', async (e) => {
+      const btn = e.currentTarget;
+      const e1 = c.querySelector('[data-e1]').value.trim().toLowerCase(); const e2 = c.querySelector('[data-e2]').value.trim().toLowerCase();
+      if (!/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(e1)) return toast('E-mail inválido', true);
+      if (e1 !== e2) return toast('Os e-mails não conferem', true);
+      if (e1 === (S.me?.email || '').toLowerCase()) return toast('Esse já é o seu e-mail', true);
+      btn.disabled = true;
+      try {
+        await DB.updateEmail(e1);
+        close();
+        modal(`<h3>Confira sua caixa de entrada</h3><p class="help">Enviamos os links de confirmação para <b>${esc(e1)}</b> e para <b>${esc(S.me?.email || '')}</b>. Abra os dois e clique no link. Até lá, continue entrando com o e-mail atual.</p><div class="modal-foot"><button class="b b-primary" data-close>Entendi</button></div>`);
+      } catch (err) {
+        btn.disabled = false;
+        toast(/already|registered|exists/i.test(err.message) ? 'Esse e-mail já está em uso' : /rate|many/i.test(err.message) ? 'Muitas tentativas. Aguarde alguns minutos.' : 'Não foi possível alterar o e-mail agora', true);
+      }
     });
   });
 }
