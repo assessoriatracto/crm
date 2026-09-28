@@ -575,6 +575,11 @@ create table if not exists public.ad_insights (
   unique (account_ref, date, ad_id)
 );
 create index if not exists ad_insights_date_idx on public.ad_insights (date);
+-- métricas extras vindas da própria Meta
+alter table public.ad_insights add column if not exists link_clicks bigint not null default 0;
+alter table public.ad_insights add column if not exists landing_views int not null default 0;
+alter table public.ad_insights add column if not exists messages int not null default 0;
+alter table public.ad_insights add column if not exists actions jsonb;
 
 alter table public.ad_accounts add column if not exists connected_via text not null default 'token';
 alter table public.ad_accounts add column if not exists token_expires_at timestamptz;
@@ -616,6 +621,9 @@ create table if not exists public.finance_entries (
   created_by  uuid references public.profiles(id) on delete set null
 );
 create index if not exists finance_entries_date_idx on public.finance_entries (date);
+-- venda manual: meses de contrato e mensalidade (amount = total arrecadado)
+alter table public.finance_entries add column if not exists months int check (months between 1 and 120);
+alter table public.finance_entries add column if not exists monthly_amount numeric(12,2) check (monthly_amount >= 0);
 
 
 -- ============================================================
@@ -701,8 +709,8 @@ create or replace function public.pushcut_body(p_event text, p_data jsonb) retur
 language sql stable security definer set search_path = public as $$
   select jsonb_strip_nulls(jsonb_build_object(
     'title', case p_event
-      when 'lead.created' then '🔥 Novo lead: ' when 'lead.stage_changed' then 'Lead avançou: ' when 'lead.won' then '💰 Venda: '
-      when 'lead.lost' then 'Lead perdido: ' when 'lead.assigned' then 'Lead atribuído: ' when 'lead.abandoned' then '⏸️ Formulário abandonado: '
+      when 'lead.created' then 'Novo lead: ' when 'lead.stage_changed' then 'Lead avançou: ' when 'lead.won' then 'Venda: '
+      when 'lead.lost' then 'Lead perdido: ' when 'lead.assigned' then 'Lead atribuído: ' when 'lead.abandoned' then 'Formulário abandonado: '
       when 'lead.recovered' then 'Lead recuperado: ' when 'note.created' then 'Nova nota: ' else 'Tracto: ' end
       || coalesce(p_data#>>'{lead,nome}', p_data#>>'{formulario_incompleto,nome}', 'sem nome'),
     'text', concat_ws(' · ',
@@ -745,7 +753,7 @@ begin
   select pushcut_url into v_url from profiles where id = l.assigned_to and ativo;
   if v_url is null then return; end if;
   perform http_post_json(v_url, jsonb_build_object(
-    'title', '🔥 Lead pra você: ' || l.nome,
+    'title', 'Lead pra você: ' || l.nome,
     'text', concat_ws(' · ', l.faturamento, l.whatsapp, coalesce(l.form_name, l.form_id)),
     'defaultAction', jsonb_build_object('url', (select crm_url from app_settings where id = 1) || '/leads')));
 end $$;
@@ -1334,7 +1342,7 @@ begin
       execute 'select net.http_get(url := $1, params := $2, timeout_milliseconds := 20000)' into v_req using
         'https://graph.facebook.com/' || v_ver || '/' || a.account_id || '/insights',
         jsonb_build_object('access_token', a.access_token, 'level', 'ad', 'time_increment', '1', 'limit', '500',
-          'fields', 'campaign_id,campaign_name,adset_id,adset_name,ad_id,ad_name,spend,impressions,clicks,reach,actions',
+          'fields', 'campaign_id,campaign_name,adset_id,adset_name,ad_id,ad_name,spend,impressions,clicks,inline_link_clicks,reach,actions',
           'time_range', jsonb_build_object('since', to_char(current_date - greatest(p_days, 1) + 1, 'YYYY-MM-DD'), 'until', to_char(current_date, 'YYYY-MM-DD'))::text);
       insert into ad_sync_jobs (account_ref, request_id) values (a.id, v_req);
       n := n + 1;
@@ -1344,6 +1352,12 @@ begin
   end loop;
   return n;
 end $$;
+
+-- quantidade de uma ação no "actions" dos insights da Meta (null se não vier)
+create or replace function public.action_count(p_actions jsonb, p_type text) returns int
+language sql immutable as $$
+  select sum((a->>'value')::numeric)::int from jsonb_array_elements(coalesce(p_actions, '[]'::jsonb)) a where a->>'action_type' = p_type;
+$$;
 
 create or replace function public.ads_sync_process() returns int
 language plpgsql security definer set search_path = public as $$
@@ -1358,15 +1372,22 @@ begin
       v_body := nullif(j.content, '')::jsonb;
       if coalesce(j.status_code, 0) between 200 and 299 and v_body ? 'data' then
         for r in select * from jsonb_array_elements(v_body->'data') loop
-          insert into ad_insights (account_ref, date, campaign_id, campaign_name, adset_id, adset_name, ad_id, ad_name, spend, impressions, clicks, reach, meta_leads, updated_at)
+          insert into ad_insights (account_ref, date, campaign_id, campaign_name, adset_id, adset_name, ad_id, ad_name, spend, impressions, clicks, reach, meta_leads,
+                                   link_clicks, landing_views, messages, actions, updated_at)
           values (j.account_ref, (r->>'date_start')::date, r->>'campaign_id', r->>'campaign_name', r->>'adset_id', r->>'adset_name', r->>'ad_id', r->>'ad_name',
             coalesce((r->>'spend')::numeric, 0), coalesce((r->>'impressions')::bigint, 0), coalesce((r->>'clicks')::bigint, 0), (r->>'reach')::bigint,
-            coalesce((select sum((a->>'value')::numeric)::int from jsonb_array_elements(coalesce(r->'actions', '[]'::jsonb)) a
-                      where a->>'action_type' in ('lead', 'onsite_conversion.lead_grouped', 'offsite_conversion.fb_pixel_lead')), 0), now())
+            -- "lead" já é o total de leads da Meta; os tipos específicos só entram se ele não vier (evita contar em dobro)
+            coalesce(action_count(r->'actions', 'lead'),
+                     coalesce(action_count(r->'actions', 'onsite_conversion.lead_grouped'), 0) + coalesce(action_count(r->'actions', 'offsite_conversion.fb_pixel_lead'), 0)),
+            coalesce((r->>'inline_link_clicks')::bigint, action_count(r->'actions', 'link_click'), 0),
+            coalesce(action_count(r->'actions', 'landing_page_view'), 0),
+            coalesce(action_count(r->'actions', 'onsite_conversion.messaging_conversation_started_7d'), 0),
+            r->'actions', now())
           on conflict (account_ref, date, ad_id) do update set
             campaign_id = excluded.campaign_id, campaign_name = excluded.campaign_name, adset_id = excluded.adset_id, adset_name = excluded.adset_name,
             ad_name = excluded.ad_name, spend = excluded.spend, impressions = excluded.impressions, clicks = excluded.clicks,
-            reach = excluded.reach, meta_leads = excluded.meta_leads, updated_at = now();
+            reach = excluded.reach, meta_leads = excluded.meta_leads, link_clicks = excluded.link_clicks, landing_views = excluded.landing_views,
+            messages = excluded.messages, actions = excluded.actions, updated_at = now();
           n := n + 1;
         end loop;
         -- próxima página
