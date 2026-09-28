@@ -1,7 +1,8 @@
 // Construtor de formulários (estilo Typeform): lista, editor de etapas, lógica, tema e prévia ao vivo
 import { DB } from '@shared/db.js';
 import { FORMS, formPath } from '@shared/forms.js';
-import { S, $, $$, esc, ICON, num, pct, toast, fail, modal, confirmBox, menu, popover, closePop } from './util.js?v=2609281224';
+import { S, $, $$, esc, ICON, num, pct, toast, fail, modal, confirmBox, menu, popover, closePop } from './util.js?v=2609281234';
+import { BTN_ICONS } from '@shared/form-engine.js';
 
 const SITE = window.TRACTO_CONFIG?.siteUrl || 'https://assessoriatracto.com.br';
 const B = { forms: [], editing: null, sel: null, tab: 'conteudo', device: 'desktop', dirty: false, saveT: null, frameReady: false };
@@ -344,6 +345,12 @@ function renderProps() {
   const inp = (k, label, v, extra = '') => `<div class="row"><label class="lbl">${label}</label><input class="inp" data-k="${k}" value="${esc(v ?? '')}" ${extra}></div>`;
   const area = (k, label, v, rows = 2, help = '') => `<div class="row"><div class="rte-head"><label class="lbl">${label}</label><div class="rte-bar"><button type="button" data-cmd="bold" title="Negrito"><b>N</b></button><button type="button" data-cmd="italic" title="Itálico (destaque dourado)"><i>I</i></button><button type="button" class="rte-ins" data-ins data-pop-anchor title="Inserir resposta">+ Resposta</button></div></div>
     <div class="inp rte" contenteditable="true" role="textbox" aria-multiline="true" data-rk="${k}" style="min-height:${rows * 22 + 18}px">${withTokens(sanitizeRich(String(v ?? '').replace(/\n/g, '<br>')), f.fields)}</div>${help ? `<p class="help">${help}</p>` : ''}</div>`;
+  // seletor visual de ícone do botão
+  const iconPick = (k, cur, auto) => `<div class="row"><label class="lbl">Ícone do botão</label><div class="icon-pick" role="radiogroup">
+    ${auto ? `<button type="button" class="ip ${!cur ? 'on' : ''}" data-icon-k="${k}" data-icon="" role="radio" aria-checked="${!cur}" title="Automático"><span class="ip-auto">Auto</span></button>` : ''}
+    <button type="button" class="ip ${cur === 'none' ? 'on' : ''}" data-icon-k="${k}" data-icon="none" role="radio" aria-checked="${cur === 'none'}" title="Sem ícone"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="8"/><path d="M6.5 17.5l11-11"/></svg></button>
+    ${Object.entries(BTN_ICONS).map(([ik, [n, svg]]) => `<button type="button" class="ip ${cur === ik ? 'on' : ''}" data-icon-k="${k}" data-icon="${ik}" role="radio" aria-checked="${cur === ik}" title="${n}">${svg}</button>`).join('')}
+  </div>${auto ? '<p class="help">Automático: ícone do WhatsApp em links do WhatsApp e seta nos demais.</p>' : ''}</div>`;
   const tog = (k, label, v) => `<label class="bld-tog"><span>${label}</span><button type="button" class="switch ${v ? 'on' : ''}" data-tog="${k}"></button></label>`;
   let html = '';
   if (B.tab === 'conteudo') {
@@ -352,7 +359,7 @@ function renderProps() {
         `<div class="row"><label class="lbl">Estrelas</label><select class="inp" data-k="rating">${[0, 1, 2, 3, 4, 5].map((n) => `<option value="${n}" ${+x.rating === n ? 'selected' : ''}>${n ? n + (n === 1 ? ' estrela' : ' estrelas') : 'Sem estrelas'}</option>`).join('')}</select></div>`
       : area('title', 'Título', x.title, 2, 'Use "+ Resposta" pra chamar a pessoa pelo nome ou repetir uma resposta anterior.') + area('desc', 'Descrição', x.desc, 2);
     if (x.type !== 'thankyou') html += imageRow('image', 'Imagem (opcional)', x.image);
-    if (x.type === 'welcome' || x.type === 'statement' || x.type === 'testimonial') html += inp('button', 'Texto do botão', x.button);
+    if (x.type === 'welcome' || x.type === 'statement' || x.type === 'testimonial') html += inp('button', 'Texto do botão', x.button) + iconPick('icon', x.icon || (x.type === 'welcome' ? 'arrow' : 'none'));
     if (isQ) html += tog('required', 'Obrigatória', x.required);
     if (['short_text', 'long_text', 'email', 'number', 'url'].includes(x.type)) html += inp('placeholder', 'Texto de exemplo (placeholder)', x.placeholder, 'placeholder="Sua resposta..."');
     if (x.type === 'short_text') html += tog('instagram', 'É um @ do Instagram (limpa @, espaços e link)', x.transform === 'instagram');
@@ -366,7 +373,7 @@ function renderProps() {
     if (x.type === 'file') html += inp('accept', 'Tipos aceitos', x.accept, 'placeholder=".pdf,.png,.jpg ou image/*"') + inp('maxMb', 'Tamanho máximo (MB, até 50)', x.maxMb, 'type="number" min="1" max="50"');
     if (x.type === 'calendly') html += inp('url', 'Link do Calendly', x.url, 'placeholder="https://calendly.com/sua-conta/reuniao"') + '<p class="help">Nome e e-mail já respondidos entram preenchidos no agendamento. Quando a pessoa agenda, o formulário avança sozinho.</p>';
     if (x.type === 'thankyou') {
-      html += `<h4 class="px-h" style="margin-top:14px">Botão</h4><div class="grid2">${inp('cta_label', 'Texto', x.cta?.label)}${inp('cta_href', 'Link', x.cta?.href, 'placeholder="https://wa.me/55…"')}</div>
+      html += `<h4 class="px-h" style="margin-top:14px">Botão</h4><div class="grid2">${inp('cta_label', 'Texto', x.cta?.label)}${inp('cta_href', 'Link', x.cta?.href, 'placeholder="https://wa.me/55…"')}</div>${iconPick('cta_icon', x.cta?.icon || '', true)}
         <h4 class="px-h" style="margin-top:14px">Redirecionar ao final</h4>${inp('redir_url', 'Link', x.redirect?.url, 'placeholder="https://… (deixe vazio pra não redirecionar)"')}${inp('redir_delay', 'Depois de quantos segundos', x.redirect?.delay ?? 5, 'type="number" min="0" max="60"')}`;
     }
     if (isQ && x.type !== 'file' && x.type !== 'calendly') html += `<div class="row"><label class="lbl">Salvar no CRM como</label><select class="inp" data-k="map">${MAPS.map(([k, n]) => `<option value="${k}" ${(x.map || '') === k ? 'selected' : ''}>${n}</option>`).join('')}</select><p class="help">Nome, WhatsApp e e-mail alimentam o lead e a correspondência dos pixels.</p></div>`;
@@ -452,6 +459,13 @@ function bindProps(box, x) {
     } }
   ]));
 
+  // ícone dos botões
+  box.querySelectorAll('[data-icon-k]').forEach((b) => b.addEventListener('click', () => {
+    const k = b.dataset.iconK; const v = b.dataset.icon;
+    if (k === 'cta_icon') { x.cta = x.cta || {}; if (v) x.cta.icon = v; else delete x.cta.icon; } else x.icon = v;
+    b.parentElement.querySelectorAll('.ip').forEach((o) => { o.classList.toggle('on', o === b); o.setAttribute('aria-checked', o === b); });
+    changed();
+  }));
   // conteúdo
   box.querySelectorAll('[data-k]').forEach((i) => i.addEventListener('input', () => {
     const k = i.dataset.k; let v = i.value;
