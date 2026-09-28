@@ -3,15 +3,16 @@ import {
   go, routeName, S, $, $$, esc, ICON, FAT, COLORS, initials, isHot, stageOf, profileOf, labelOf, isInactive, isDue, fatShort, brl, pct, num,
   fmtPhone, fullDate, longDate, addedAt, ago, sourceLabel, formName, waLink, toast, fail, popover, closePop, menu, multiSelect,
   modal, confirmBox, downloadCSV, dateRange, datePicker, dateBtn
-} from './util.js?v=2609281753';
-import { renderDashboard } from './dashboard.js?v=2609281753';
-import { renderSettings } from './admin.js?v=2609281753';
-import { renderIntegrations, renderPixel, leadMetaEvents, statusPill } from './integrations.js?v=2609281753';
-import { renderRecovery, loadPartials } from './recovery.js?v=2609281753';
-import { showSignIn, showSignUp, showForgot, showReset, showMfa, showPending, watchIdle, AUTH_ROUTES } from './auth.js?v=2609281753';
-import { openProfile } from './profile.js?v=2609281753';
-import { renderBuilder } from './builder.js?v=2609281753';
-import { renderFinance } from './finance.js?v=2609281753';
+} from './util.js?v=2609281931';
+import { importModal } from './import.js?v=2609281931';
+import { renderDashboard } from './dashboard.js?v=2609281931';
+import { renderSettings } from './admin.js?v=2609281931';
+import { renderIntegrations, renderPixel, leadMetaEvents, statusPill } from './integrations.js?v=2609281931';
+import { renderRecovery, loadPartials } from './recovery.js?v=2609281931';
+import { showSignIn, showSignUp, showForgot, showReset, showMfa, showPending, watchIdle, AUTH_ROUTES } from './auth.js?v=2609281931';
+import { openProfile } from './profile.js?v=2609281931';
+import { renderBuilder } from './builder.js?v=2609281931';
+import { renderFinance } from './finance.js?v=2609281931';
 
 // ============================================================
 // preferências locais (por navegador)
@@ -59,7 +60,7 @@ let started = false;
 
 async function boot() {
   const r = hashRoute();
-  const enter = () => { go('leads', { replace: true }); boot(); };
+  const enter = () => { go('dashboard', { replace: true }); boot(); };
   if (!CONFIGURED) return showSignIn(enter, 'O CRM está em manutenção. Tente de novo em alguns minutos.');
   // no modo demo as telas de acesso podem ser abertas pelo endereço, pra conferir o visual
   if (!LIVE && ['entrar', 'cadastro', 'esqueci', 'redefinir'].includes(r)) {
@@ -76,7 +77,7 @@ async function boot() {
   if (aal && aal.nextLevel === 'aal2' && aal.currentLevel !== 'aal2') return showMfa(enter);
   try { S.me = await DB.me(); } catch (e) { S.me = null; }
   if (!S.me?.ativo) return showPending(S.me);
-  if (AUTH_ROUTES.includes(r)) history.replaceState(null, '', '/leads');
+  if (AUTH_ROUTES.includes(r)) history.replaceState(null, '', '/dashboard');
   if (started) return route();
   started = true;
   $('#login').hidden = true;
@@ -115,7 +116,7 @@ function applyRole() {
   if (av) { av.textContent = (S.me?.nome || '?').split(/\s+/).slice(0, 2).map((w) => w[0]).join('').toUpperCase(); av.title = `${S.me?.nome} · ${({ admin: 'Admin', gestor: 'Gestor', sdr: 'SDR' })[S.me?.role] || ''}`; }
 }
 // mobile: barra inferior só com o essencial; o resto fica em "Mais"
-const M_PRIMARY = ['leads', 'recuperacao', 'dashboard', 'financeiro'];
+const M_PRIMARY = ['dashboard', 'financeiro', 'leads', 'recuperacao'];
 const M_LABEL = { leads: 'Leads', recuperacao: 'Recuperar', dashboard: 'Dashboard', financeiro: 'Financeiro', formularios: 'Formulários', integracoes: 'Integrações', pixel: 'Pixel', ajustes: 'Ajustes' };
 $$('.side a[data-route]').forEach((a) => { a.dataset.m = M_LABEL[a.dataset.route] || ''; a.classList.toggle('m-sec', !M_PRIMARY.includes(a.dataset.route)); });
 $('[data-more]').dataset.m = 'Mais';
@@ -171,7 +172,7 @@ let lastRoute = null;
 function route() {
   closePop();
   let r = hashRoute();
-  if (!can(r)) { r = 'leads'; history.replaceState(null, '', '/leads'); }
+  if (!can(r)) { r = 'dashboard'; history.replaceState(null, '', '/dashboard'); }
   // animação grande só quando a página muda (refiltrar/atualizar não anima)
   const key = location.pathname + (location.search.includes('id=') ? '#editor' : '');
   if (key !== lastRoute) {
@@ -249,6 +250,7 @@ function renderLeads() {
 
   view.innerHTML = `
     <div class="topline"><h1>Central de <em>leads</em></h1><div class="grow"></div>
+      ${['admin', 'gestor'].includes(S.me?.role) ? `<button class="b b-ic" data-act="import">${ICON.upload}<span>Importar</span></button>` : ''}
       <button class="b b-primary" data-act="new-lead">+ Novo lead</button></div>
     <section class="panel toolbar">
       <div class="tb-row">
@@ -458,8 +460,9 @@ view.addEventListener('click', async (e) => {
   if (act === 'f') { openFilter(a, a.dataset.k); return; }
   if (act === 'clear') { V.f = { q: '', period: 'tudo', from: '', to: '', campaigns: [], forms: [], stages: [], sources: [], assignees: [], labels: [] }; renderLeads(); return; }
   if (act === 'new-lead') { newLeadModal(); return; }
+  if (act === 'import') { importModal(async () => { await loadAll(false); route(); }); return; }
   if (act === 'add-stage') { stageModal(); return; }
-  if (act === 'more') { const mob = matchMedia('(max-width:760px)').matches; menu(a, [...(mob ? [{ label: 'Adicionar estágio personalizado', action: () => stageModal() }, { label: V.bulkMode ? 'Sair da edição em massa' : 'Edição em massa', action: () => { V.bulkMode = !V.bulkMode; V.sel.clear(); renderLeads(); } }] : []), { label: 'Exportar leads filtrados (CSV)', action: () => exportCSV(filtered()) }, { label: 'Gerenciar estágios e rótulos', action: () => { go('ajustes'); } }]); return; }
+  if (act === 'more') { const mob = matchMedia('(max-width:760px)').matches; menu(a, [...(mob ? [{ label: 'Adicionar estágio personalizado', action: () => stageModal() }, { label: V.bulkMode ? 'Sair da edição em massa' : 'Edição em massa', action: () => { V.bulkMode = !V.bulkMode; V.sel.clear(); renderLeads(); } }] : []), ...(['admin', 'gestor'].includes(S.me?.role) ? [{ label: 'Importar leads (planilha)', action: () => importModal(async () => { await loadAll(false); route(); }) }] : []), { label: 'Exportar leads filtrados (CSV)', action: () => exportCSV(filtered()) }, { label: 'Gerenciar estágios e rótulos', action: () => { go('ajustes'); } }]); return; }
   if (act === 'sort') { const k = a.dataset.k; V.sort = { key: k, dir: V.sort.key === k ? -V.sort.dir : (k === 'created_at' ? -1 : 1) }; renderLeads(); return; }
   if (act === 'sel-all') { const list = filtered(); const all = list.every((l) => V.sel.has(l.id)); list.forEach((l) => (all ? V.sel.delete(l.id) : V.sel.add(l.id))); renderLeads(); return; }
   if (act === 'sel' && row) { toggleSel(row.dataset.id); return; }

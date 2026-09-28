@@ -1,6 +1,7 @@
 // Dashboard de leads e do formulário
 import { DB } from '@shared/db.js';
-import { dateRange, datePicker, dateBtn, S, $, $$, esc, FAT, stageOf, profileOf, isHot, isInactive, isDue, brl, pct, num, formName, sourceLabel, fail } from './util.js?v=2609281753';
+import { businessSummary } from './finance.js?v=2609281931';
+import { dateRange, datePicker, dateBtn, S, $, $$, esc, FAT, stageOf, profileOf, isHot, isInactive, isDue, brl, pct, num, formName, sourceLabel, fail } from './util.js?v=2609281931';
 
 const D = { period: '30', from: '', to: '', form: '' };
 const QTYPES = ['short_text', 'long_text', 'email', 'phone', 'number', 'url', 'date', 'choice', 'multi', 'dropdown', 'yes_no', 'rating', 'scale', 'consent'];
@@ -18,11 +19,15 @@ export async function renderDashboard(el) {
   const lost = leads.filter((l) => stageOf(l)?.kind === 'lost');
   const receita = won.reduce((a, l) => a + Number(l.valor || 0), 0);
 
+  const canMoney = ['admin', 'gestor'].includes(S.me?.role);
   el.innerHTML = `
     <div class="topline"><h1>Dashboard</h1><div class="grow"></div>
       ${dateBtn(D)}
       <select class="inp" data-form style="width:auto"><option value="">Todos os formulários</option>${formIds.map((id) => `<option value="${id}" ${D.form === id ? 'selected' : ''}>${esc(S.forms[id]?.name || (id === 'manual' ? 'Cadastro manual' : id))}</option>`).join('')}</select>
     </div>
+    ${canMoney ? `<h2 class="dash-h">Resumo do negócio</h2>
+    <div class="dash-grid" data-biz><div class="loading span-all" style="padding:40px 0">Carregando…</div></div>
+    <h2 class="dash-h">Leads e funil</h2>` : ''}
     <div class="dash-grid">
       ${tile('Leads', num(leads.length), `${num(leads.filter((l) => l.source === 'pago').length)} de anúncios pagos`, true)}
       ${tile('Taxa do formulário', '<span data-formrate>…</span>', '<span data-formrate-sub>visitas que viraram lead</span>')}
@@ -67,6 +72,30 @@ export async function renderDashboard(el) {
   hbars($('[data-chart="forms"]', el), formIds.map((id) => { const n = leads.filter((l) => l.form_id === id).length; return { name: S.forms[id]?.name || (id === 'manual' ? 'Cadastro manual' : id), value: n, note: pct(n, leads.length) }; }).filter((r) => r.value).sort((a, b) => b.value - a.value));
   groupTable($('[data-chart="camp"]', el), leads, (l) => l.utm_campaign || 'Sem campanha', 'Campanha');
   groupTable($('[data-chart="team"]', el), leads, (l) => profileOf(l.assigned_to)?.nome || 'Não atribuído', 'Pessoa');
+
+  // resumo do negócio: financeiro, anúncios e recuperação
+  if (canMoney) {
+    try {
+      const b = await businessSummary(dateRange(D));
+      const host = el.querySelector('[data-biz]'); if (!host) return;
+      const money = (v) => (v == null ? '—' : brl(v));
+      const x2 = (v) => (v == null ? '—' : v.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + 'x');
+      host.innerHTML = `
+        ${tile('Faturamento', brl(b.revenue), `${num(b.nSales)} venda${b.nSales === 1 ? '' : 's'} · ${brl(b.revContract)} em contratos`, true)}
+        ${tile('Investimento em anúncios', brl(b.spend), b.hasAds ? 'Meta Ads no período' : 'conecte as contas no Financeiro')}
+        ${tile('Lucro', `<span class="${b.profit < 0 ? 'neg' : 'pos'}">${brl(b.profit)}</span>`, `despesas totais ${brl(b.expenses)}`)}
+        ${tile('ROAS', x2(b.roas), 'faturamento de vendas ÷ anúncios')}
+        ${tile('Leads', num(b.leadsN), b.hasAds ? `resultados da Meta · ${num(b.crmLeads)} no CRM` : 'no CRM')}
+        ${tile('Custo por lead', money(b.cpl), 'anúncios ÷ leads')}
+        ${tile('Vendas', num(b.nSales), `ticket ${money(b.ticket)} · conversão ${b.conv == null ? '—' : (b.conv * 100).toLocaleString('pt-BR', { maximumFractionDigits: 1 }) + '%'}`)}
+        ${tile('Para recuperar', num(b.recover), '<a class="link" href="/recuperacao">formulários incompletos com contato</a>')}
+        <section class="panel chart-card span-12 dash-top"><div class="int-h"><div><h3>Campanhas com mais investimento</h3><p class="sub">Resultados da Meta no período</p></div><a class="b b-sm" href="/financeiro">Ver todas</a></div>
+          ${b.top.length ? `<div class="table-wrap"><table class="int-table"><thead><tr><th>Campanha</th><th class="num">Investimento</th><th class="num">Leads</th><th class="num">Custo por lead</th></tr></thead><tbody>
+            ${b.top.map((c) => `<tr><td><div class="adt-n"><span class="adt-dot ${c.on ? 'on' : 'off'}"></span><b class="ellip-1" title="${esc(c.name)}">${esc(c.name)}</b></div></td><td class="num">${brl(c.spend)}</td><td class="num">${num(c.leads)}</td><td class="num">${money(c.cpl)}</td></tr>`).join('')}
+          </tbody></table></div>` : '<p class="muted empty-line">Sem campanhas no período.</p>'}
+        </section>`;
+    } catch (e) { fail(e); }
+  }
 
   // eventos do formulário (abandono) — carregados à parte
   try {

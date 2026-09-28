@@ -28,7 +28,7 @@ export const BRAND = {
   gtm: '<svg width="20" height="20" viewBox="0 0 24 24" aria-hidden="true"><path fill="#8AB4F8" d="m14.1 23.3-4.2-4.1 9-9.3 4.3 4.2z"/><path fill="#4285F4" d="M14.2 5 10 .7 1 9.7a2.4 2.4 0 0 0 0 3.4l9 9.1 4.1-4.2L7.3 11.4z"/><path fill="#8AB4F8" d="M23 9.7 14.1.8a2.4 2.4 0 0 0-3.4 0 2.4 2.4 0 0 0 0 3.4l8.9 8.9a2.4 2.4 0 0 0 3.4 0 2.4 2.4 0 0 0 0-3.4z"/><circle fill="#246FDB" cx="12" cy="21.3" r="2.6"/></svg>'
 };
 // ---------- navegação sem # (caminhos reais: /leads, /financeiro…) ----------
-export const routeName = () => (location.pathname.replace(/^\/+|\/+$/g, '').split('/')[0] || 'leads');
+export const routeName = () => (location.pathname.replace(/^\/+|\/+$/g, '').split('/')[0] || 'dashboard');
 export function go(to, { replace = false } = {}) {
   const url = '/' + String(to).replace(/^[#/]+/, '');
   if (url === location.pathname + location.search) return;
@@ -46,6 +46,7 @@ document.addEventListener('click', (e) => {
 if (location.hash.startsWith('#/')) history.replaceState(null, '', '/' + location.hash.slice(2));
 
 export const ICON = {
+  upload: '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 16V4M7 9l5-5 5 5M4 16v3a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-3"/></svg>',
   user: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="8" r="4"/><path d="M4 21c1.2-4 4.3-6 8-6s6.8 2 8 6"/></svg>',
   up: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 19V5M6 11l6-6 6 6"/></svg>',
   down: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 5v14M6 13l6 6 6-6"/></svg>',

@@ -1,6 +1,6 @@
 // Financeiro (estilo UTMify): gasto da Meta Ads × leads e vendas do CRM × receitas e despesas lançadas
 import { DB } from '@shared/db.js';
-import { BRAND, dateRange, datePicker, dateBtn, S, $, $$, esc, ICON, brl, num, pct, fullDate, ago, toast, fail, modal, confirmBox } from './util.js?v=2609281753';
+import { BRAND, dateRange, datePicker, dateBtn, S, $, $$, esc, ICON, brl, num, pct, fullDate, ago, toast, fail, modal, confirmBox } from './util.js?v=2609281931';
 
 const F = { period: '30', from: '', to: '', level: 'campaign', revenue: 'mensal', sort: 'spend', tab: 'geral' };
 const GRAPH = 'v21.0';
@@ -142,7 +142,7 @@ export async function renderFinance(el, swap = false) {
       <section class="panel int-card">
         <div class="int-h"><div><h3>Lançamentos</h3><p class="help">Vendas feitas por fora do CRM, outras receitas e despesas: ferramentas, equipe, impostos…</p></div></div>
         ${entries.length ? `<div class="table-wrap"><table class="int-table"><thead><tr><th>Data</th><th>Tipo</th><th>Categoria</th><th>Descrição</th><th class="num">Valor</th><th></th></tr></thead><tbody>
-          ${entries.map((e) => `<tr data-id="${e.id}"><td class="nowrap">${new Date(e.date + 'T12:00').toLocaleDateString('pt-BR')}</td><td><span class="pill ${e.kind === 'receita' ? 'good' : 'bad'}">${e.kind === 'receita' ? 'Receita' : 'Despesa'}</span></td><td>${esc(e.category)}</td><td>${esc(e.description || '')}${e.months ? `<br><small class="muted">${e.months} × ${brl(e.monthly_amount || 0)}</small>` : ''}</td><td class="num">${brl(e.amount)}</td><td style="text-align:right"><button class="b b-sm b-ghost" data-edel aria-label="Excluir">${ICON.x}</button></td></tr>`).join('')}
+          ${entries.map((e) => `<tr data-id="${e.id}" class="row-click" title="Clique para editar"><td class="nowrap">${new Date(e.date + 'T12:00').toLocaleDateString('pt-BR')}</td><td><span class="pill ${e.kind === 'receita' ? 'good' : 'bad'}">${e.kind === 'receita' ? 'Receita' : 'Despesa'}</span></td><td>${esc(e.category)}</td><td>${esc(e.description || '')}${e.months ? `<br><small class="muted">${e.months} × ${brl(e.monthly_amount || 0)}</small>` : ''}</td><td class="num">${brl(e.amount)}</td><td style="text-align:right"><span class="row-acts"><button class="b b-sm b-ghost" data-eedit aria-label="Editar">${ICON.edit}</button><button class="b b-sm b-ghost" data-edel aria-label="Excluir">${ICON.x}</button></span></td></tr>`).join('')}
         </tbody></table></div>` : '<p class="muted empty-line">Nenhum lançamento no período.</p>'}
       </section>
       <section class="panel int-card">
@@ -164,9 +164,20 @@ export async function renderFinance(el, swap = false) {
   el.querySelector('[data-go-acc]').addEventListener('click', () => { F.tab = 'contas'; renderFinance(el, true); });
   el.querySelector('[data-date]').addEventListener('click', (e) => datePicker(e.currentTarget, F, (st) => { Object.assign(F, st); reload(); }));
   el.querySelectorAll('[data-rev]').forEach((b) => b.addEventListener('click', () => { F.revenue = b.dataset.rev; reload(); }));
-  el.querySelectorAll('[data-level]').forEach((b) => b.addEventListener('click', () => { F.level = b.dataset.level; reload(); }));
+  el.querySelectorAll('[data-level]').forEach((b) => b.addEventListener('click', () => {
+    if (F.level === b.dataset.level) return;
+    F.level = b.dataset.level;
+    el.querySelectorAll('[data-level]').forEach((x) => { x.classList.toggle('on', x === b); x.setAttribute('aria-selected', x === b); });
+    const host = el.querySelector('[data-table]');
+    renderTable(host, ins, leads, sales, saleValue);
+    host.classList.remove('swap-in'); void host.offsetWidth; host.classList.add('swap-in');
+  }));
   el.querySelector('[data-copy-utm]').addEventListener('click', async () => { try { await navigator.clipboard.writeText(UTM_TEMPLATE); toast('Parâmetros copiados'); } catch (e) { toast('Não consegui copiar', true); } });
   el.querySelector('[data-entry]').addEventListener('click', () => entryModal(reload));
+  el.querySelectorAll('tr[data-id]').forEach((tr) => tr.addEventListener('click', (e) => {
+    if (e.target.closest('[data-edel]')) return;
+    const entry = entries.find((x) => x.id === tr.dataset.id); if (entry) entryModal(reload, entry);
+  }));
   el.querySelectorAll('tr[data-id] [data-edel]').forEach((b) => b.addEventListener('click', async () => {
     if (!(await confirmBox('Excluir este lançamento?', 'Excluir'))) return;
     try { await DB.deleteFinance(b.closest('tr').dataset.id); reload(); } catch (e) { fail(e); }
@@ -225,9 +236,9 @@ const ACC_STATUS = { 1: 'Ativa', 2: 'Desativada', 3: 'Pagamento pendente', 7: 'E
 async function renderAccounts(el, swap) {
   el.innerHTML = '<div class="loading">Carregando…</div>';
   const isAdmin = S.me?.role === 'admin';
-  let accounts = [], ins30 = [], settings = null;
+  let accounts = [], ins30 = [], settings = null, mls = null;
   const today = iso(new Date()); const since = iso(new Date(Date.now() - 29 * 86400000));
-  try { [accounts, ins30, settings] = await Promise.all([DB.listAdAccounts(), DB.listInsights(since, today).catch(() => []), DB.getTracking().catch(() => null)]); } catch (e) { fail(e); }
+  try { [accounts, ins30, settings] = await Promise.all([DB.listAdAccounts(), DB.listInsights(since, today).catch(() => []), DB.getTracking().catch(() => null), DB.metaLeadsStatus().catch(() => null)]).then((r) => { mls = r[3]; return r.slice(0, 3); }); } catch (e) { fail(e); }
   if (!el.isConnected) return;
   const appId = window.TRACTO_CONFIG?.metaAppId || '';
   const hasApp = /^\d{8,20}$/.test(appId);
@@ -260,11 +271,13 @@ async function renderAccounts(el, swap) {
           ${isAdmin ? `<button class="switch ${a.enabled ? 'on' : ''}" data-acc-toggle aria-label="${a.enabled ? 'Pausar' : 'Ativar'} conta"></button>${a.connected_via === 'facebook' ? '' : '<button class="b b-sm" data-acc-edit>Editar</button>'}<button class="b b-sm b-danger" data-acc-del aria-label="Desconectar">×</button>` : (a.enabled ? '<span class="pill good">Ativa</span>' : '<span class="pill">Pausada</span>')}</div>`).join('')
         : `<div class="empty-mini"><p class="muted">${isAdmin ? 'Nenhuma conta ativa ainda. Conecte o Facebook acima e escolha as contas.' : 'Peça pra um admin conectar o Facebook.'}</p></div>`}
     </section>
+    ${metaLeadsCard(mls, accounts.length > 0)}
     ${leadActionsCard(ins30, settings, isAdmin || S.me?.role === 'gestor')}
     </div>`;
 
   const reload = () => renderAccounts(el);
   bindLeadActions(el, reload);
+  bindMetaLeads(el, reload);
   bindTabs(el);
   if (swap) el.querySelector('.tab-body').classList.add('swap-in');
 
@@ -275,7 +288,7 @@ async function renderAccounts(el, swap) {
       const FB = await loadFbSdk(appId);
       // app do tipo Empresa usa a configuração do Login para Empresas; sem ela, pede as permissões direto
       const cfgId = window.TRACTO_CONFIG?.metaLoginConfigId;
-      const opts = cfgId ? { config_id: cfgId, return_scopes: true } : { scope: 'ads_read,business_management', return_scopes: true, auth_type: 'rerequest' };
+      const opts = cfgId ? { config_id: cfgId, return_scopes: true } : { scope: 'ads_read,business_management,leads_retrieval,pages_show_list,pages_read_engagement,pages_manage_ads', return_scopes: true, auth_type: 'rerequest' };
       const auth = await new Promise((ok) => FB.login((r) => ok(r.authResponse), opts));
       if (!auth) { done(); return toast('Login cancelado', true); }
       if (auth.grantedScopes && !String(auth.grantedScopes).includes('ads_read')) { done(); return toast('Autorize a permissão de ler anúncios (ads_read) pra continuar', true); }
@@ -314,6 +327,46 @@ async function renderAccounts(el, swap) {
 }
 
 // escolhe quais contas do perfil ficam ativas no CRM
+// leads dos formulários de cadastro da Meta (puxados a cada 15 minutos)
+const PERM_ERR = /(leads_retrieval|pages_|permission|permiss|#10\b|#200\b|#190\b|OAuth)/i;
+function metaLeadsCard(st, connected) {
+  if (!st) return '';
+  const forms = Array.isArray(st.forms) ? st.forms : [];
+  const needPerm = st.last_error && PERM_ERR.test(st.last_error);
+  const when = st.last_run ? (ago(st.last_run) === 'agora' ? 'agora' : 'há ' + ago(st.last_run)) : 'ainda não buscou';
+  return `<section class="panel int-card" style="margin-top:12px" data-meta-leads>
+    <div class="int-h"><div><h3>Leads dos formulários da Meta</h3><p class="help">O CRM puxa sozinho todos os leads dos formulários de cadastro das suas páginas (histórico completo e os novos a cada 15 minutos), com campanha, conjunto e anúncio de cada um.</p></div>
+      ${connected ? `<button class="b b-refresh" data-ml-sync>${ICON.refresh}Buscar agora</button>` : ''}</div>
+    <div class="ml-stats">
+      <div><span>Leads trazidos da Meta</span><b>${num(st.total_leads || 0)}</b></div>
+      <div><span>Páginas</span><b>${num(st.pages || 0)}</b></div>
+      <div><span>Formulários</span><b>${num(forms.length)}</b></div>
+      <div><span>Última busca</span><b class="ml-when">${esc(when)}</b></div>
+    </div>
+    ${needPerm ? `<div class="ml-alert"><b>Falta liberar a leitura de leads no Facebook</b>
+      <ol class="steps"><li>Em developers.facebook.com &gt; CRM Tracto &gt; Login do Facebook para Empresas &gt; Configurações, edite a configuração "Leitura de anúncios" e adicione as permissões <b>leads_retrieval</b>, <b>pages_show_list</b>, <b>pages_read_engagement</b> e <b>pages_manage_ads</b>.</li>
+      <li>Volte aqui e clique em <b>Reconectar ou adicionar contas</b> (lá em cima), autorizando as páginas da Tracto.</li>
+      <li>Clique em <b>Buscar agora</b>.</li></ol></div>` : ''}
+    ${forms.length ? `<div class="table-wrap"><table class="int-table"><thead><tr><th>Formulário</th><th>Status</th><th class="num">Leads na Meta</th><th>Atualizado</th></tr></thead><tbody>
+      ${forms.map((f) => `<tr><td><b>${esc(f.name || '')}</b></td><td>${f.status === 'ACTIVE' ? '<span class="pill good">Ativo</span>' : `<span class="pill">${f.status === 'ARCHIVED' ? 'Arquivado' : 'Inativo'}</span>`}</td><td class="num">${num(f.leads || 0)}</td><td class="nowrap muted">${f.synced_at ? (ago(f.synced_at) === 'agora' ? 'agora' : 'há ' + ago(f.synced_at)) : '—'}</td></tr>`).join('')}
+    </tbody></table></div>` : `<p class="muted empty-line">${connected ? (needPerm ? 'Assim que a permissão for liberada, os formulários aparecem aqui.' : 'Clique em Buscar agora pra trazer os formulários e os leads.') : 'Conecte o Facebook acima pra trazer os leads.'}</p>`}
+  </section>`;
+}
+function bindMetaLeads(el, reload) {
+  el.querySelector('[data-ml-sync]')?.addEventListener('click', async (e) => {
+    const btn = e.currentTarget; btn.disabled = true; btn.classList.add('is-spinning');
+    try {
+      await DB.metaLeadsSync();
+      let got = 0;
+      // páginas → formulários → leads (cada etapa espera a resposta da Meta)
+      for (const wait of [2500, 3000, 3500, 4000, 5000, 6000]) { await new Promise((ok) => setTimeout(ok, wait)); got += Number(await DB.metaLeadsProcess()) || 0; }
+      toast(got ? `${num(got)} lead${got === 1 ? '' : 's'} novo${got === 1 ? '' : 's'} da Meta` : 'Busca concluída. Leads grandes continuam chegando nos próximos minutos.');
+      window.dispatchEvent(new Event('tracto:reload-leads'));
+      reload();
+    } catch (err) { btn.disabled = false; btn.classList.remove('is-spinning'); fail(err); }
+  });
+}
+
 // escolher quais ações da Meta contam como lead (igual à coluna "Resultados" do Gerenciador)
 function leadActionsCard(ins, settings, canEdit) {
   const tot = new Map();
@@ -349,6 +402,40 @@ function bindLeadActions(el, reload) {
   };
   card.querySelector('[data-la-save]')?.addEventListener('click', (e) => save([...card.querySelectorAll('.acc-opt')].filter((l) => l.querySelector('input').checked).map((l) => l.dataset.t), e.currentTarget));
   card.querySelector('[data-la-auto]')?.addEventListener('click', (e) => save([], e.currentTarget));
+}
+
+// ---------- resumo do negócio (usado no Dashboard) ----------
+export async function businessSummary([from, to]) {
+  const a = from ? iso(from) : '2020-01-01'; const b = iso(to || new Date());
+  const inR = (d) => { const x = iso(new Date(d)); return x >= a && x <= b; };
+  const [ins, entries, settings, partials] = await Promise.all([DB.listInsights(a, b).catch(() => []), DB.listFinance(a, b).catch(() => []), DB.getTracking().catch(() => null), DB.listPartials().catch(() => [])]);
+  LEAD_TYPES = Array.isArray(settings?.meta_lead_actions) && settings.meta_lead_actions.length ? settings.meta_lead_actions : null;
+  const leads = S.leads.filter((l) => inR(l.created_at));
+  const sales = S.leads.filter((l) => l.won_at && inR(l.won_at));
+  const manual = entries.filter(isSaleEntry);
+  const monthly = (e) => Number(e.monthly_amount || e.amount);
+  const revSales = sales.reduce((x, l) => x + Number(l.valor || 0), 0) + manual.reduce((x, e) => x + monthly(e), 0);
+  const revContract = sales.reduce((x, l) => x + Number(l.valor || 0) * (settings?.contract_months || 12), 0) + manual.reduce((x, e) => x + Number(e.amount), 0);
+  const other = entries.filter((e) => e.kind === 'receita' && !isSaleEntry(e)).reduce((x, e) => x + Number(e.amount), 0);
+  const exp = entries.filter((e) => e.kind === 'despesa').reduce((x, e) => x + Number(e.amount), 0);
+  const spend = ins.reduce((x, r) => x + Number(r.spend), 0);
+  const metaLeads = ins.reduce((x, r) => x + rowLeads(r), 0);
+  const nSales = sales.length + manual.length;
+  const camps = new Map();
+  ins.forEach((r) => {
+    const k = r.campaign_id || r.campaign_name; const c = camps.get(k) || { name: r.campaign_name || '(sem nome)', spend: 0, leads: 0, last: '' };
+    c.spend += Number(r.spend); c.leads += rowLeads(r); if (Number(r.spend) > 0 && r.date > c.last) c.last = r.date; camps.set(k, c);
+  });
+  const lastDay = ins.reduce((x, r) => (r.date > x ? r.date : x), '');
+  const open = partials.filter((p) => ['em_andamento', 'abandonado'].includes(p.status) && (p.whatsapp || p.email) && inR(p.updated_at || p.created_at));
+  return {
+    hasAds: ins.length > 0, spend, metaLeads, crmLeads: leads.length, leadsN: ins.length ? metaLeads : leads.length,
+    revenue: revSales + other, revContract: revContract + other, other, expenses: spend + exp, profit: revSales + other - spend - exp,
+    roas: spend ? revSales / spend : null, cpl: (ins.length ? metaLeads : leads.length) ? spend / (ins.length ? metaLeads : leads.length) : null,
+    nSales, ticket: nSales ? revSales / nSales : null, conv: (ins.length ? metaLeads : leads.length) ? nSales / (ins.length ? metaLeads : leads.length) : null,
+    recover: open.length,
+    top: [...camps.values()].sort((x, y) => y.spend - x.spend).slice(0, 6).map((c) => ({ ...c, cpl: c.leads ? c.spend / c.leads : null, on: c.last && c.last >= lastDay }))
+  };
 }
 
 function pickAccounts(conn, fbName, list, current, done) {
@@ -548,26 +635,35 @@ function dailyChart(host, r, ins, sales, entries, saleValue) {
   svg.addEventListener('mouseleave', () => { tip.hidden = true; host.querySelectorAll('.bar').forEach((b) => b.classList.remove('dim')); });
 }
 
-function entryModal(done) {
-  let kind = 'receita';
-  let totalTouched = false;
+function entryModal(done, entry = null) {
+  let kind = entry?.kind || 'receita';
+  let totalTouched = !!(entry && entry.months && entry.monthly_amount && Math.abs(entry.months * entry.monthly_amount - entry.amount) > 0.009);
   const cats = () => CATS[kind].map((c) => `<option>${c}</option>`).join('');
-  modal(`<h3>Novo lançamento</h3>
-    <div class="row"><div class="seg"><button type="button" class="b on" data-k="receita">Receita</button><button type="button" class="b" data-k="despesa">Despesa</button></div></div>
+  const fmt0 = (n) => (Number(n) > 0 ? Number(n).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '');
+  modal(`<h3>${entry ? (SALE_CATS.includes(entry.category) ? 'Editar venda' : 'Editar lançamento') : 'Novo lançamento'}</h3>
+    <div class="row"><div class="seg"><button type="button" class="b ${kind === 'receita' ? 'on' : ''}" data-k="receita">Receita</button><button type="button" class="b ${kind === 'despesa' ? 'on' : ''}" data-k="despesa">Despesa</button></div></div>
     <div class="grid2"><div class="row"><label class="lbl">Categoria</label><select class="inp" data-cat>${cats()}</select></div>
-      <div class="row"><label class="lbl">Data</label><input class="inp" type="date" data-date value="${iso(new Date())}"></div></div>
+      <div class="row"><label class="lbl">Data</label><input class="inp" type="date" data-date value="${entry?.date || iso(new Date())}"></div></div>
     <div data-sale>
       <div class="grid3">
-        <div class="row"><label class="lbl">Meses de contrato</label><input class="inp" data-months inputmode="numeric" value="12"></div>
-        <div class="row"><label class="lbl">Valor mensal (R$)</label><input class="inp" data-monthly inputmode="decimal" placeholder="0,00"></div>
-        <div class="row"><label class="lbl">Valor total (R$)</label><input class="inp" data-total inputmode="decimal" placeholder="0,00"></div>
+        <div class="row"><label class="lbl">Meses de contrato</label><input class="inp" data-months inputmode="numeric" value="${entry?.months || 12}"></div>
+        <div class="row"><label class="lbl">Valor mensal (R$)</label><input class="inp" data-monthly inputmode="decimal" placeholder="0,00" value="${fmt0(entry?.monthly_amount)}"></div>
+        <div class="row"><label class="lbl">Valor total (R$)</label><input class="inp" data-total inputmode="decimal" placeholder="0,00" value="${entry && SALE_CATS.includes(entry.category) ? fmt0(entry.amount) : ''}"></div>
       </div>
       <p class="help" style="margin-top:-4px">O total é calculado sozinho (mensal × meses). Se o valor arrecadado for outro, é só editar.</p>
     </div>
-    <div class="row" data-simple hidden><label class="lbl">Valor (R$)</label><input class="inp" data-amount inputmode="decimal" placeholder="0,00"></div>
-    <div class="row"><label class="lbl" data-desc-l>Cliente</label><input class="inp" data-desc maxlength="200" placeholder="Ex: Ferragista Silva"></div>
-    <div class="modal-foot"><button class="b" data-close>Cancelar</button><button class="b b-primary" data-ok>Salvar</button></div>`, (c, close) => {
+    <div class="row" data-simple hidden><label class="lbl">Valor (R$)</label><input class="inp" data-amount inputmode="decimal" placeholder="0,00" value="${entry && !SALE_CATS.includes(entry.category) ? fmt0(entry.amount) : ''}"></div>
+    <div class="row"><label class="lbl" data-desc-l>Cliente</label><input class="inp" data-desc maxlength="200" placeholder="Ex: Ferragista Silva" value="${esc(entry?.description || '')}"></div>
+    <div class="modal-foot">${entry ? '<button class="b b-danger" data-del style="margin-right:auto">Excluir</button>' : ''}<button class="b" data-close>Cancelar</button><button class="b b-primary" data-ok>Salvar</button></div>`, (c, close) => {
     const $c = (sel) => c.querySelector(sel);
+    if (entry) {
+      const opt = [...$c('[data-cat]').options].find((o) => o.value === entry.category || (SALE_CATS.includes(entry.category) && SALE_CATS.includes(o.value)));
+      if (opt) $c('[data-cat]').value = opt.value; else $c('[data-cat]').insertAdjacentHTML('afterbegin', `<option selected>${esc(entry.category)}</option>`);
+      $c('[data-del]').addEventListener('click', async () => {
+        if (!(await confirmBox('Excluir este lançamento?', 'Excluir'))) return;
+        try { await DB.deleteFinance(entry.id); close(); toast('Lançamento excluído'); done(); } catch (err) { fail(err); }
+      });
+    }
     const fmt = (n) => (n > 0 ? n.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '');
     const isSale = () => kind === 'receita' && SALE_CATS.includes($c('[data-cat]').value);
     const layout = () => {
@@ -593,7 +689,7 @@ function entryModal(done) {
     layout();
     $c('[data-ok]').addEventListener('click', async (e) => {
       const btn = e.currentTarget;
-      const base = { kind, date: $c('[data-date]').value, category: $c('[data-cat]').value, description: $c('[data-desc]').value.trim() || null, created_by: S.me?.id?.startsWith('demo') ? null : S.me?.id };
+      const base = { ...(entry ? { id: entry.id } : {}), kind, date: $c('[data-date]').value, category: $c('[data-cat]').value, description: $c('[data-desc]').value.trim() || null, ...(entry ? {} : { created_by: S.me?.id?.startsWith('demo') ? null : S.me?.id }) };
       let row;
       if (isSale()) {
         const months = Math.round(parseMoney($c('[data-months]').value)); const monthly = parseMoney($c('[data-monthly]').value); const total = parseMoney($c('[data-total]').value);
@@ -604,10 +700,10 @@ function entryModal(done) {
       } else {
         const amount = parseMoney($c('[data-amount]').value);
         if (!(amount > 0)) return toast('Informe um valor', true);
-        row = { ...base, amount };
+        row = { ...base, amount, months: null, monthly_amount: null };
       }
       btn.disabled = true;
-      try { await DB.saveFinance(row); close(); toast(isSale() ? 'Venda lançada' : 'Lançamento salvo'); done(); } catch (err) { btn.disabled = false; fail(err); }
+      try { await DB.saveFinance(row); close(); toast(entry ? 'Lançamento atualizado' : isSale() ? 'Venda lançada' : 'Lançamento salvo'); done(); } catch (err) { btn.disabled = false; fail(err); }
     });
   });
 }
