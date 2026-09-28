@@ -1,7 +1,7 @@
 // "Meu perfil": dados pessoais, Pushcut, senha e verificação em duas etapas
 import { DB, LIVE } from '@shared/db.js';
-import { S, esc, toast, fail, modal } from './util.js?v=2609281242';
-import { passwordCheck } from './auth.js?v=2609281242';
+import { S, esc, toast, fail, modal } from './util.js?v=2609281253';
+import { passwordCheck } from './auth.js?v=2609281253';
 
 const ROLE = { admin: 'Admin', gestor: 'Gestor', sdr: 'SDR' };
 
