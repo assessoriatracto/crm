@@ -436,6 +436,8 @@ create table if not exists public.tracking_settings (
   updated_at      timestamptz not null default now()
 );
 insert into public.tracking_settings (id) values (1) on conflict (id) do nothing;
+-- quais ações da Meta contam como lead no financeiro (null = automático: "lead" da Meta)
+alter table public.tracking_settings add column if not exists meta_lead_actions jsonb;
 
 -- ajustes gerais do CRM
 create table if not exists public.app_settings (

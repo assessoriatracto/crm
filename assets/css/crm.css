@@ -954,3 +954,6 @@ th.col-sel .cbx,td.col-sel .cbx{display:grid;}
 .table-wrap .td-lead b,.table-wrap .td-lead small{white-space:nowrap;max-width:220px;overflow:hidden;text-overflow:ellipsis;}
 .table-wrap td.ellip{max-width:200px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
 .table-wrap td.nowrap small.muted{display:inline;}
+.la-n{font-variant-numeric:tabular-nums;font-weight:600;min-width:56px;text-align:right;}
+.la-foot{display:flex;align-items:center;gap:8px;margin-top:12px;}
+.la-foot .grow{flex:1;}

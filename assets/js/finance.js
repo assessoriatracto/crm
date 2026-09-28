@@ -1,6 +1,6 @@
 // Financeiro (estilo UTMify): gasto da Meta Ads × leads e vendas do CRM × receitas e despesas lançadas
 import { DB } from '@shared/db.js';
-import { BRAND, dateRange, datePicker, dateBtn, S, $, $$, esc, ICON, brl, num, pct, fullDate, ago, toast, fail, modal, confirmBox } from './util.js?v=2609281634';
+import { BRAND, dateRange, datePicker, dateBtn, S, $, $$, esc, ICON, brl, num, pct, fullDate, ago, toast, fail, modal, confirmBox } from './util.js?v=2609281638';
 
 const F = { period: '30', from: '', to: '', level: 'campaign', revenue: 'mensal', sort: 'spend', tab: 'geral' };
 const GRAPH = 'v21.0';
@@ -10,6 +10,31 @@ const isSaleEntry = (e) => e.kind === 'receita' && SALE_CATS.includes(e.category
 // venda manual: na visão "1ª mensalidade" conta a mensalidade; na visão contrato, o total arrecadado
 const entrySale = (e) => (F.revenue === 'mensal' && e.monthly_amount ? Number(e.monthly_amount) : Number(e.amount));
 const entryRev = (e) => (isSaleEntry(e) ? entrySale(e) : Number(e.amount));
+// ações que a Meta devolve nos insights (o que pode contar como lead)
+const ACTION_NAMES = {
+  lead: 'Leads (total da Meta)',
+  'offsite_conversion.fb_pixel_lead': 'Lead no site (pixel)',
+  'onsite_conversion.lead_grouped': 'Formulário instantâneo da Meta',
+  'onsite_conversion.lead': 'Formulário instantâneo (envio)',
+  'offsite_conversion.fb_pixel_complete_registration': 'Cadastro concluído (pixel)',
+  complete_registration: 'Cadastro concluído',
+  'offsite_conversion.fb_pixel_submit_application': 'Inscrição enviada (pixel)',
+  submit_application: 'Inscrição enviada',
+  'offsite_conversion.fb_pixel_contact': 'Contato (pixel)',
+  contact: 'Contato',
+  'offsite_conversion.fb_pixel_schedule': 'Agendamento (pixel)',
+  'offsite_conversion.fb_pixel_custom': 'Eventos personalizados do pixel',
+  'onsite_conversion.messaging_conversation_started_7d': 'Conversas iniciadas no WhatsApp/Direct',
+  'onsite_conversion.messaging_first_reply': 'Primeira resposta em conversa'
+};
+// só ações com cara de lead aparecem pra escolher (cliques, curtidas e visualizações ficam de fora)
+const LEADISH = /lead|registration|application|contact|schedule|custom|messaging_conversation_started|messaging_first_reply/;
+const actionName = (t) => ACTION_NAMES[t] || (t.startsWith('offsite_conversion.custom.') ? 'Conversão personalizada ' + t.split('.').pop() : t.replace(/^(offsite|onsite)_conversion\./, '').replace(/_/g, ' '));
+let LEAD_TYPES = null; // null = automático
+const rowLeads = (x) => {
+  if (!LEAD_TYPES?.length || !Array.isArray(x.actions)) return Number(x.meta_leads || 0);
+  return x.actions.reduce((a, it) => a + (LEAD_TYPES.includes(it.action_type) ? Number(it.value || 0) : 0), 0);
+};
 const parseMoney = (v) => Number(String(v || '').replace(/[^\d,.-]/g, '').replace(/\./g, '').replace(',', '.'));
 const UTM_TEMPLATE = 'utm_source=facebook&utm_medium=paid_social&utm_campaign={{campaign.name}}&utm_term={{adset.name}}&utm_content={{ad.name}}&utm_id={{campaign.id}}';
 const iso = (d) => new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 10);
@@ -42,6 +67,7 @@ export async function renderFinance(el, swap = false) {
   if (!el.isConnected) return;
   const months = settings?.contract_months || 12;
   const isAdmin = S.me?.role === 'admin';
+  LEAD_TYPES = Array.isArray(settings?.meta_lead_actions) && settings.meta_lead_actions.length ? settings.meta_lead_actions : null;
 
   // ---------- números ----------
   const leads = S.leads.filter((l) => inRange(l.created_at, r));
@@ -57,7 +83,7 @@ export async function renderFinance(el, swap = false) {
   const imp = ins.reduce((a, x) => a + Number(x.impressions), 0);
   const clicks = ins.reduce((a, x) => a + Number(x.clicks), 0);
   const linkClicks = ins.reduce((a, x) => a + Number(x.link_clicks || 0), 0);
-  const metaLeads = ins.reduce((a, x) => a + Number(x.meta_leads || 0), 0);
+  const metaLeads = ins.reduce((a, x) => a + rowLeads(x), 0);
   const hasMeta = ins.length > 0;
   const leadsN = hasMeta ? metaLeads : leads.length; // leads pela própria Meta quando há campanhas
   const faturamento = revSales + revManual;
@@ -195,8 +221,9 @@ const ACC_STATUS = { 1: 'Ativa', 2: 'Desativada', 3: 'Pagamento pendente', 7: 'E
 async function renderAccounts(el, swap) {
   el.innerHTML = '<div class="loading">Carregando…</div>';
   const isAdmin = S.me?.role === 'admin';
-  let accounts = [];
-  try { accounts = await DB.listAdAccounts(); } catch (e) { fail(e); }
+  let accounts = [], ins30 = [], settings = null;
+  const today = iso(new Date()); const since = iso(new Date(Date.now() - 29 * 86400000));
+  try { [accounts, ins30, settings] = await Promise.all([DB.listAdAccounts(), DB.listInsights(since, today).catch(() => []), DB.getTracking().catch(() => null)]); } catch (e) { fail(e); }
   if (!el.isConnected) return;
   const appId = window.TRACTO_CONFIG?.metaAppId || '';
   const hasApp = /^\d{8,20}$/.test(appId);
@@ -229,10 +256,11 @@ async function renderAccounts(el, swap) {
           ${isAdmin ? `<button class="switch ${a.enabled ? 'on' : ''}" data-acc-toggle aria-label="${a.enabled ? 'Pausar' : 'Ativar'} conta"></button>${a.connected_via === 'facebook' ? '' : '<button class="b b-sm" data-acc-edit>Editar</button>'}<button class="b b-sm b-danger" data-acc-del aria-label="Desconectar">×</button>` : (a.enabled ? '<span class="pill good">Ativa</span>' : '<span class="pill">Pausada</span>')}</div>`).join('')
         : `<div class="empty-mini"><p class="muted">${isAdmin ? 'Nenhuma conta ativa ainda. Conecte o Facebook acima e escolha as contas.' : 'Peça pra um admin conectar o Facebook.'}</p></div>`}
     </section>
-
+    ${leadActionsCard(ins30, settings, isAdmin || S.me?.role === 'gestor')}
     </div>`;
 
   const reload = () => renderAccounts(el);
+  bindLeadActions(el, reload);
   bindTabs(el);
   if (swap) el.querySelector('.tab-body').classList.add('swap-in');
 
@@ -282,6 +310,43 @@ async function renderAccounts(el, swap) {
 }
 
 // escolhe quais contas do perfil ficam ativas no CRM
+// escolher quais ações da Meta contam como lead (igual à coluna "Resultados" do Gerenciador)
+function leadActionsCard(ins, settings, canEdit) {
+  const tot = new Map();
+  ins.forEach((x) => (Array.isArray(x.actions) ? x.actions : []).forEach((a) => {
+    if (LEADISH.test(a.action_type)) tot.set(a.action_type, (tot.get(a.action_type) || 0) + Number(a.value || 0));
+  }));
+  const chosen = Array.isArray(settings?.meta_lead_actions) ? settings.meta_lead_actions : [];
+  const list = [...tot.entries()].sort((a, b) => b[1] - a[1]);
+  const autoN = ins.reduce((a, x) => a + Number(x.meta_leads || 0), 0);
+  return `<section class="panel int-card" style="margin-top:12px" data-lead-actions>
+    <div class="int-h"><div><h3>O que conta como lead</h3><p class="help">Escolha as mesmas ações da coluna "Resultados" das suas campanhas no Gerenciador de Anúncios. Números dos últimos 30 dias, somando as contas ativas.</p></div></div>
+    ${list.length ? `<div class="acc-pick">${list.map(([t, n]) => `<label class="acc-opt ${chosen.includes(t) ? 'on' : ''}" data-t="${esc(t)}">
+        <span class="grow acc-info"><b>${esc(actionName(t))}</b><small class="muted">${esc(t)}</small></span>
+        <span class="la-n">${num(n)}</span>
+        <input type="checkbox" class="ios-switch" role="switch" aria-label="Contar ${esc(actionName(t))}" ${chosen.includes(t) ? 'checked' : ''} ${canEdit ? '' : 'disabled'}></label>`).join('')}</div>
+      <div class="la-foot"><span class="muted" data-la-sum></span><div class="grow"></div>${canEdit ? '<button class="b" data-la-auto>Usar automático</button><button class="b b-primary" data-la-save>Salvar</button>' : ''}</div>`
+      : `<p class="muted empty-line">${ins.length ? 'As campanhas ainda não trouxeram detalhes das ações. Clique em Sincronizar agora e aguarde alguns segundos.' : 'Sem dados de campanha nos últimos 30 dias.'}</p>`}
+    <input type="hidden" data-la-auto-n value="${autoN}">
+  </section>`;
+}
+function bindLeadActions(el, reload) {
+  const card = el.querySelector('[data-lead-actions]'); if (!card || !card.querySelector('.acc-pick')) return;
+  const sum = () => {
+    const on = [...card.querySelectorAll('.acc-opt')].filter((l) => l.querySelector('input').checked);
+    card.querySelectorAll('.acc-opt').forEach((l) => l.classList.toggle('on', l.querySelector('input').checked));
+    const n = on.reduce((a, l) => a + Number(l.querySelector('.la-n').textContent.replace(/\D/g, '')), 0);
+    card.querySelector('[data-la-sum]').textContent = on.length ? `${num(n)} leads com a seleção` : `Automático: ${num(Number(card.querySelector('[data-la-auto-n]').value))} leads`;
+  };
+  card.querySelector('.acc-pick').addEventListener('change', sum); sum();
+  const save = async (types, btn) => {
+    btn.disabled = true;
+    try { await DB.saveTracking({ meta_lead_actions: types.length ? types : null }); toast('Contagem de leads atualizada'); reload(); } catch (e) { btn.disabled = false; fail(e); }
+  };
+  card.querySelector('[data-la-save]')?.addEventListener('click', (e) => save([...card.querySelectorAll('.acc-opt')].filter((l) => l.querySelector('input').checked).map((l) => l.dataset.t), e.currentTarget));
+  card.querySelector('[data-la-auto]')?.addEventListener('click', (e) => save([], e.currentTarget));
+}
+
 function pickAccounts(conn, fbName, list, current, done) {
   const cur = new Map(current.map((a) => [a.account_id, a]));
   const rows = list.map((a) => ({ id: a.id, name: a.name, currency: a.currency, status: a.account_status, biz: a.business?.name }))
@@ -331,7 +396,7 @@ function renderTable(host, ins, leads, sales, saleValue) {
   ins.forEach((x) => {
     const k = x[key[0]] || x[key[1]];
     const r = rows.get(k) || { id: x[key[0]], name: x[key[1]] || '(sem nome)', campaign: x.campaign_name, spend: 0, imp: 0, clicks: 0, metaLeads: 0 };
-    r.spend += Number(x.spend); r.imp += Number(x.impressions); r.clicks += Number(x.clicks); r.metaLeads += Number(x.meta_leads || 0);
+    r.spend += Number(x.spend); r.imp += Number(x.impressions); r.clicks += Number(x.clicks); r.metaLeads += rowLeads(x);
     rows.set(k, r);
   });
   // liga leads e vendas às linhas pela UTM (ou pelo id da campanha em utm_id)
