@@ -1,7 +1,7 @@
 // Dashboard: visão executiva e enxuta da saúde do negócio.
 // O detalhe (campanhas, lançamentos, gráficos por dia) fica no Financeiro e na Central de leads.
 import { DB } from '@shared/db.js';
-import { dateRange, datePicker, dateBtn, S, $, $$, esc, ICON, brl, num, isDue, isInactive, fail } from './util.js?v=2609282010';
+import { dateRange, datePicker, dateBtn, S, $, $$, esc, ICON, brl, num, isDue, isInactive, fail } from './util.js?v=2609282017';
 
 const D = { period: '30', from: '', to: '' };
 const DAY = 86400000;
@@ -9,21 +9,28 @@ const iso = (d) => new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOSt
 const SALE_CATS = ['Venda (contrato)', 'Contrato'];
 
 // ---------- contratos (clientes): vendas do CRM + vendas lançadas no Financeiro ----------
-function contracts(entries, months) {
+// contratos (clientes): vendas do CRM + vendas lançadas no Financeiro. Usado também na aba Clientes do Financeiro.
+export function contracts(entries, months) {
   const out = [];
+  const org = (x) => ({ utm_campaign: x?.utm_campaign || null, utm_term: x?.utm_term || null, utm_content: x?.utm_content || null, utm_id: x?.utm_id || null });
   S.leads.filter((l) => l.won_at && Number(l.valor) > 0).forEach((l) => out.push({
-    id: l.id, name: l.nome, start: new Date(l.won_at), monthly: Number(l.valor), months,
-    canceled: l.canceled_at ? new Date(l.canceled_at + 'T12:00') : null, lead: l.id
+    id: l.id, kind: 'lead', lead: l, name: l.nome, start: new Date(l.won_at), monthly: Number(l.valor), months,
+    canceled: l.canceled_at ? new Date(l.canceled_at + 'T12:00') : null, reason: l.cancel_reason || '', origin: org(l), sent: true
   }));
-  entries.filter((e) => e.kind === 'receita' && SALE_CATS.includes(e.category)).forEach((e) => out.push({
-    id: e.id, name: e.description || 'Venda lançada', start: new Date(e.date + 'T12:00'),
-    monthly: Number(e.monthly_amount || (e.months ? e.amount / e.months : e.amount)), months: Number(e.months || months),
-    canceled: e.canceled_at ? new Date(e.canceled_at + 'T12:00') : null
-  }));
+  entries.filter((e) => e.kind === 'receita' && SALE_CATS.includes(e.category)).forEach((e) => {
+    const l = e.lead_id ? S.leads.find((x) => x.id === e.lead_id) : null;
+    const o = org(e); const lo = org(l);
+    out.push({
+      id: e.id, kind: 'entry', entry: e, lead: l, name: e.description || l?.nome || 'Venda lançada', start: new Date(e.date + 'T12:00'),
+      monthly: Number(e.monthly_amount || (e.months ? e.amount / e.months : e.amount)), months: Number(e.months || months),
+      canceled: e.canceled_at ? new Date(e.canceled_at + 'T12:00') : null, reason: e.cancel_reason || '',
+      origin: o.utm_campaign || o.utm_id ? o : lo, sent: !!e.meta_sent_at
+    });
+  });
   out.forEach((c) => { c.end = new Date(c.start.getTime() + c.months * 30.44 * DAY); });
   return out;
 }
-const activeAt = (c, t) => c.start <= t && c.end > t && (!c.canceled || c.canceled > t);
+export const activeAt = (c, t) => c.start <= t && c.end > t && (!c.canceled || c.canceled > t);
 
 function metrics(ins, leads, a, b, contractsList, useMeta) {
   const inR = (d) => d >= a && d <= b;
@@ -126,7 +133,7 @@ export async function renderDashboard(el) {
   el.innerHTML = `
     <div class="topline"><h1>Dashboard</h1><div class="grow"></div>${dateBtn(D)}</div>
     ${canMoney ? `
-    <h2 class="dash-h">Receita recorrente <span>hoje</span></h2>
+    <h2 class="dash-h">Receita recorrente <span>no período</span></h2>
     <div class="kx-grid kx-4">
       ${kpi('Receita mensal (MRR)', brl(cur.mrr), `${cur.newMrr ? '+' + brl(cur.newMrr) + ' em novos contratos' : 'sem contratos novos'}${cur.churnMrr ? ` · −${brl(cur.churnMrr)} cancelados` : ''}`, delta(cur.mrr, prev.mrr), 'accent')}
       ${kpi('Clientes ativos', num(cur.active), `${cur.newClients ? '+' + num(cur.newClients) + ' novo' + (cur.newClients === 1 ? '' : 's') : 'nenhum cliente novo'}${cur.churnN ? ` · −${num(cur.churnN)} cancelado${cur.churnN === 1 ? '' : 's'}` : ''}`, delta(cur.active, prev.active))}
@@ -149,7 +156,8 @@ export async function renderDashboard(el) {
           <div class="fz-shape">
             <svg viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true">
               <defs><linearGradient id="fzGrad" x1="0" y1="0" x2="0" y2="1"><stop offset="0" class="fz-s1"/><stop offset="1" class="fz-s2"/></linearGradient></defs>
-              <path d="M2.5 0 H97.5 Q100 0 98.9 2.3 L53.2 95.5 Q50 101.5 46.8 95.5 L1.1 2.3 Q0 0 2.5 0 Z" fill="url(#fzGrad)"/>
+              <clipPath id="fzClip"><path d="M2.5 0 H97.5 Q100 0 98.9 2.3 L53.2 95.5 Q50 101.5 46.8 95.5 L1.1 2.3 Q0 0 2.5 0 Z"/></clipPath>
+              <g clip-path="url(#fzClip)">${funnel.map((_, k) => `<rect x="0" y="${(k / funnel.length) * 100}" width="100" height="${100 / funnel.length + 0.4}" class="fz-b fz-b${Math.min(k, 5)}" style="--t:${funnel.length > 1 ? k / (funnel.length - 1) : 0}"/>`).join('')}</g>
               ${funnel.slice(1).map((_, k) => `<line x1="0" x2="100" y1="${((k + 1) / funnel.length) * 100}" y2="${((k + 1) / funnel.length) * 100}" class="fz-gap" vector-effect="non-scaling-stroke"/>`).join('')}
             </svg>
             ${funnel.map(([, v], k) => `<b class="fz-num" style="top:${((k + 0.46) / funnel.length) * 100}%">${num(v)}</b>`).join('')}
@@ -165,10 +173,11 @@ export async function renderDashboard(el) {
         <div class="dcard-h"><h3>Contratos a vencer</h3><span class="muted">próximos 45 dias</span></div>
         ${soon.length ? `<div class="soon">${soon.map((c) => `<div class="soon-row"><span class="soon-d">${fmtDate(c.end)}</span><span class="soon-t"><b title="${esc(c.name)}">${esc(c.name)}</b><small>${brl(c.monthly)}/mês</small></span></div>`).join('')}</div>`
           : '<p class="muted empty-line">Nenhum contrato vence nos próximos 45 dias.</p>'}
-        <p class="help" style="margin:10px 0 0">Registre cancelamentos no lead (Contrato cancelado em) ou no lançamento da venda, pra o churn ficar certo.</p>
+        <p class="help" style="margin:10px 0 0">Cancelamentos e origem das vendas ficam em <a class="link" href="/financeiro" data-go-clients>Financeiro › Clientes</a>.</p>
       </section>` : ''}
     </div>`;
   el.querySelector('[data-date]').addEventListener('click', (e) => datePicker(e.currentTarget, D, (st) => { Object.assign(D, st); renderDashboard(el); }));
+  el.querySelector('[data-go-clients]')?.addEventListener('click', () => { try { sessionStorage.setItem('tracto_fin_tab', 'clientes'); } catch (e) {} });
 }
 
 // barras horizontais (usadas também em Integrações)

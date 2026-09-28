@@ -1226,3 +1226,22 @@ tr.row-click:hover td{background:var(--c-hover);}
 .side a .nbadge[hidden]{display:none;}
 @media (min-width:761px){ .side a .nbadge{top:2px;right:1px;} :root.side-open .side a .nbadge{height:20px;min-width:20px;padding:0 6px;} }
 @media (max-width:760px){ .side a .nbadge{top:2px;right:calc(50% - 22px);} }
+/* funil: cada etapa num tom (âmbar claro → âmbar profundo) */
+.fz-b{fill:color-mix(in srgb,#FFCB5C calc(100% - var(--t) * 100%),#C77F00);}
+:root[data-theme="light"] .fz-b{fill:color-mix(in srgb,#F7B32B calc(100% - var(--t) * 100%),#A86A00);}
+/* Financeiro > Clientes */
+.cl-kpis{margin-bottom:12px;}
+.cl-card{padding:0;overflow:hidden;}
+.cl-head{display:flex;align-items:center;gap:12px;padding:12px 16px;border-bottom:1px solid var(--border);flex-wrap:wrap;}
+.cl-head .adt-search{margin:0 0 0 auto;}
+.cl-seg{flex-wrap:wrap;}
+.cl-n{margin-left:6px;padding:0 6px;border-radius:99px;background:var(--c-hover);font-size:11px;font-variant-numeric:tabular-nums;}
+.cl-seg .on .cl-n{background:rgba(255,173,0,.2);}
+.cl-table td{vertical-align:middle;}
+.cl-table td > small{display:block;font-size:12px;margin-top:2px;}
+.cl-why{display:block;margin-top:4px;font-size:11.5px;}
+.cl-origin{display:inline-block;max-width:320px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-size:13px;}
+.cl-act{text-align:right;width:44px;}
+.cl-card .empty-line{margin:0;padding:18px 16px;border-top:0;}
+@media (max-width:760px){ .cl-head{padding:10px;} .cl-head .adt-search{margin:0;width:100%;} }
+.cl-table td > small{white-space:nowrap;}

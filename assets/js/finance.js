@@ -1,6 +1,7 @@
 // Financeiro (estilo UTMify): gasto da Meta Ads × leads e vendas do CRM × receitas e despesas lançadas
 import { DB } from '@shared/db.js';
-import { BRAND, dateRange, datePicker, dateBtn, S, $, $$, esc, ICON, brl, num, pct, fullDate, ago, toast, fail, modal, confirmBox } from './util.js?v=2609282010';
+import { renderClients } from './clients.js?v=2609282017';
+import { BRAND, dateRange, datePicker, dateBtn, S, $, $$, esc, ICON, brl, num, pct, fullDate, ago, toast, fail, modal, confirmBox } from './util.js?v=2609282017';
 
 const F = { period: '30', from: '', to: '', level: 'campaign', revenue: 'mensal', sort: 'spend', tab: 'geral' };
 const GRAPH = 'v21.0';
@@ -46,7 +47,7 @@ function range() {
 }
 const inRange = (dateIso, [a, b]) => { const d = iso(new Date(dateIso)); return d >= a && d <= b; };
 
-const TABS = [['geral', 'Visão geral'], ['contas', 'Contas de anúncio']];
+const TABS = [['geral', 'Visão geral'], ['clientes', 'Clientes'], ['contas', 'Contas de anúncio']];
 const tabBar = () => `<nav class="ptabs" role="tablist">${TABS.map(([k, n]) => `<button role="tab" class="ptab ${F.tab === k ? 'on' : ''}" aria-selected="${F.tab === k}" data-tab="${k}">${n}</button>`).join('')}</nav>`;
 function bindTabs(el) {
   el.querySelectorAll('[data-tab]').forEach((b) => b.addEventListener('click', () => {
@@ -56,7 +57,14 @@ function bindTabs(el) {
 }
 
 export async function renderFinance(el, swap = false) {
+  try { const t = sessionStorage.getItem('tracto_fin_tab'); if (t) { F.tab = t; sessionStorage.removeItem('tracto_fin_tab'); } } catch (e) {}
   if (F.tab === 'contas') return renderAccounts(el, swap);
+  if (F.tab === 'clientes') {
+    el.innerHTML = `<div class="topline"><h1>Financeiro</h1><div class="grow"></div>${dateBtn(F)}</div>${tabBar()}<div class="tab-body ${swap ? 'swap-in' : ''}" data-clients></div>`;
+    bindTabs(el);
+    el.querySelector('[data-date]').addEventListener('click', (e) => datePicker(e.currentTarget, F, (st) => { Object.assign(F, st); renderFinance(el); }));
+    return renderClients(el.querySelector('[data-clients]'), F, () => renderFinance(el));
+  }
   el.innerHTML = '<div class="loading">Carregando…</div>';
   const r = range();
   let ins = [], entries = [], accounts = [], settings = null;
@@ -75,6 +83,12 @@ export async function renderFinance(el, swap = false) {
   const sales = S.leads.filter((l) => l.won_at && inRange(l.won_at, r));
   const saleValue = (l) => Number(l.valor || 0) * (F.revenue === 'contrato' ? months : 1);
   const manualSales = entries.filter(isSaleEntry);
+  const tblSales = [...sales, ...manualSales.map((e) => {
+    const l = e.lead_id ? S.leads.find((x) => x.id === e.lead_id) : null;
+    const own = e.utm_campaign || e.utm_id;
+    return { utm_campaign: own ? e.utm_campaign : l?.utm_campaign, utm_term: own ? e.utm_term : l?.utm_term, utm_content: own ? e.utm_content : l?.utm_content, utm_id: own ? e.utm_id : l?.utm_id, __entry: e };
+  })];
+  const tblValue = (x) => (x.__entry ? entrySale(x.__entry) : saleValue(x));
   const nSales = sales.length + manualSales.length;
   const revSales = sales.reduce((a, l) => a + saleValue(l), 0) + manualSales.reduce((a, e) => a + entrySale(e), 0);
   const revManual = entries.filter((e) => e.kind === 'receita' && !isSaleEntry(e)).reduce((a, e) => a + Number(e.amount), 0);
@@ -154,8 +168,8 @@ export async function renderFinance(el, swap = false) {
     </div>`;
 
   // tabela por nível
-  renderTable(el.querySelector('[data-table]'), ins, leads, sales, saleValue);
-  let qT; el.querySelector('[data-adt-q]').addEventListener('input', (e) => { clearTimeout(qT); qT = setTimeout(() => { F.q = e.target.value; renderTable(el.querySelector('[data-table]'), ins, leads, sales, saleValue); }, 150); });
+  renderTable(el.querySelector('[data-table]'), ins, leads, tblSales, tblValue);
+  let qT; el.querySelector('[data-adt-q]').addEventListener('input', (e) => { clearTimeout(qT); qT = setTimeout(() => { F.q = e.target.value; renderTable(el.querySelector('[data-table]'), ins, leads, tblSales, tblValue); }, 150); });
   dailyChart(el.querySelector('[data-chart]'), r, ins, sales, entries, saleValue);
 
   const reload = () => renderFinance(el);
@@ -169,7 +183,7 @@ export async function renderFinance(el, swap = false) {
     F.level = b.dataset.level;
     el.querySelectorAll('[data-level]').forEach((x) => { x.classList.toggle('on', x === b); x.setAttribute('aria-selected', x === b); });
     const host = el.querySelector('[data-table]');
-    renderTable(host, ins, leads, sales, saleValue);
+    renderTable(host, ins, leads, tblSales, tblValue);
     host.classList.remove('swap-in'); void host.offsetWidth; host.classList.add('swap-in');
   }));
   el.querySelector('[data-copy-utm]').addEventListener('click', async () => { try { await navigator.clipboard.writeText(UTM_TEMPLATE); toast('Parâmetros copiados'); } catch (e) { toast('Não consegui copiar', true); } });
