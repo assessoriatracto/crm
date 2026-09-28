@@ -1343,7 +1343,8 @@ begin
     begin
       execute 'select net.http_get(url := $1, params := $2, timeout_milliseconds := 20000)' into v_req using
         'https://graph.facebook.com/' || v_ver || '/' || a.account_id || '/insights',
-        jsonb_build_object('access_token', a.access_token, 'level', 'ad', 'time_increment', '1', 'limit', '500',
+        -- use_unified_attribution_setting: mesma janela de atribuição do Gerenciador de Anúncios (coluna Resultados)
+        jsonb_build_object('access_token', a.access_token, 'level', 'ad', 'time_increment', '1', 'limit', '500', 'use_unified_attribution_setting', 'true',
           'fields', 'campaign_id,campaign_name,adset_id,adset_name,ad_id,ad_name,spend,impressions,clicks,inline_link_clicks,reach,actions',
           'time_range', jsonb_build_object('since', to_char(current_date - greatest(p_days, 1) + 1, 'YYYY-MM-DD'), 'until', to_char(current_date, 'YYYY-MM-DD'))::text);
       insert into ad_sync_jobs (account_ref, request_id) values (a.id, v_req);
