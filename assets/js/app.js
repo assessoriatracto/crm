@@ -3,16 +3,16 @@ import {
   go, routeName, S, $, $$, esc, ICON, FAT, COLORS, initials, isHot, stageOf, profileOf, labelOf, isInactive, isDue, fatShort, brl, pct, num,
   fmtPhone, fullDate, longDate, addedAt, ago, sourceLabel, formName, waLink, toast, fail, popover, closePop, menu, multiSelect,
   modal, confirmBox, downloadCSV, dateRange, datePicker, dateBtn
-} from './util.js?v=2609281931';
-import { importModal } from './import.js?v=2609281931';
-import { renderDashboard } from './dashboard.js?v=2609281931';
-import { renderSettings } from './admin.js?v=2609281931';
-import { renderIntegrations, renderPixel, leadMetaEvents, statusPill } from './integrations.js?v=2609281931';
-import { renderRecovery, loadPartials } from './recovery.js?v=2609281931';
-import { showSignIn, showSignUp, showForgot, showReset, showMfa, showPending, watchIdle, AUTH_ROUTES } from './auth.js?v=2609281931';
-import { openProfile } from './profile.js?v=2609281931';
-import { renderBuilder } from './builder.js?v=2609281931';
-import { renderFinance } from './finance.js?v=2609281931';
+} from './util.js?v=2609281943';
+import { importModal } from './import.js?v=2609281943';
+import { renderDashboard } from './dashboard.js?v=2609281943';
+import { renderSettings } from './admin.js?v=2609281943';
+import { renderIntegrations, renderPixel, leadMetaEvents, statusPill } from './integrations.js?v=2609281943';
+import { renderRecovery, loadPartials } from './recovery.js?v=2609281943';
+import { showSignIn, showSignUp, showForgot, showReset, showMfa, showPending, watchIdle, AUTH_ROUTES } from './auth.js?v=2609281943';
+import { openProfile } from './profile.js?v=2609281943';
+import { renderBuilder } from './builder.js?v=2609281943';
+import { renderFinance } from './finance.js?v=2609281943';
 
 // ============================================================
 // preferências locais (por navegador)
@@ -113,8 +113,40 @@ export const can = (routeName) => !ROLE_ROUTES[S.me?.role || 'sdr'] || ROLE_ROUT
 function applyRole() {
   $$('.side a[data-route]').forEach((a) => { a.hidden = !can(a.dataset.route); });
   const av = $('#meBtn');
-  if (av) { av.textContent = (S.me?.nome || '?').split(/\s+/).slice(0, 2).map((w) => w[0]).join('').toUpperCase(); av.title = `${S.me?.nome} · ${({ admin: 'Admin', gestor: 'Gestor', sdr: 'SDR' })[S.me?.role] || ''}`; }
+  if (av) {
+    const role = ({ admin: 'Admin', gestor: 'Gestor', sdr: 'SDR' })[S.me?.role] || '';
+    av.querySelector('.me-av').textContent = (S.me?.nome || '?').split(/\s+/).slice(0, 2).map((w) => w[0]).join('').toUpperCase();
+    av.querySelector('[data-me-name]').textContent = S.me?.nome || '';
+    av.querySelector('[data-me-role]').textContent = role;
+    av.title = `${S.me?.nome} · ${role}`;
+  }
 }
+// menu lateral (computador): recolhido só com ícones ou aberto com os nomes. Lembra a escolha; atalho "["
+const sideBtn = $('[data-side-toggle]');
+const syncSide = () => {
+  const open = document.documentElement.classList.contains('side-open');
+  sideBtn.setAttribute('aria-expanded', open);
+  sideBtn.setAttribute('aria-label', open ? 'Recolher menu' : 'Expandir menu');
+  sideBtn.querySelector('.tip').innerHTML = `${open ? 'Recolher' : 'Expandir'} menu <kbd>[</kbd>`;
+  const dark = document.documentElement.dataset.theme !== 'light';
+  $('.lbl-theme').textContent = dark ? 'Modo claro' : 'Modo escuro';
+};
+const toggleSide = () => {
+  const open = document.documentElement.classList.toggle('side-open');
+  try { localStorage.setItem('tracto_side', open ? 'open' : 'closed'); } catch (e) {}
+  syncSide();
+  // gráficos e tabelas se ajustam à nova largura depois da animação
+  setTimeout(() => window.dispatchEvent(new Event('resize')), 320);
+};
+sideBtn.addEventListener('click', toggleSide);
+document.addEventListener('keydown', (e) => {
+  if (e.key !== '[' || e.metaKey || e.ctrlKey || e.altKey) return;
+  const t = e.target; if (t.closest?.('input, textarea, select, [contenteditable="true"], .modal')) return;
+  e.preventDefault(); toggleSide();
+});
+new MutationObserver(syncSide).observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
+syncSide();
+
 // mobile: barra inferior só com o essencial; o resto fica em "Mais"
 const M_PRIMARY = ['dashboard', 'financeiro', 'leads', 'recuperacao'];
 const M_LABEL = { leads: 'Leads', recuperacao: 'Recuperar', dashboard: 'Dashboard', financeiro: 'Financeiro', formularios: 'Formulários', integracoes: 'Integrações', pixel: 'Pixel', ajustes: 'Ajustes' };
@@ -127,7 +159,7 @@ function openMore() {
   const sh = document.createElement('div');
   sh.className = 'msheet-wrap';
   sh.innerHTML = `<div class="msheet" role="dialog" aria-label="Mais opções"><span class="msheet-grab"></span>
-    <div class="msheet-me"><span class="me-btn">${esc($('#meBtn').textContent)}</span><div class="grow"><b>${esc(S.me?.nome || '')}</b><small>${esc(S.me?.email || '')}</small></div></div>
+    <div class="msheet-me"><span class="me-btn">${esc($('#meBtn .me-av').textContent)}</span><div class="grow"><b>${esc(S.me?.nome || '')}</b><small>${esc(S.me?.email || '')}</small></div></div>
     <nav class="msheet-grid">${items.map((a) => `<a href="${a.getAttribute('href')}" class="${a.classList.contains('on') ? 'on' : ''}">${icon(a)}<span>${esc(a.dataset.m)}</span></a>`).join('')}</nav>
     <div class="msheet-list">
       <button data-ms="me">${ICON.user}<span>Meu perfil</span></button>
