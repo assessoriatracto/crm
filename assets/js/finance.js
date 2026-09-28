@@ -1,6 +1,6 @@
 // Financeiro (estilo UTMify): gasto da Meta Ads × leads e vendas do CRM × receitas e despesas lançadas
 import { DB } from '@shared/db.js';
-import { dateRange, datePicker, dateBtn, S, $, $$, esc, ICON, brl, num, pct, fullDate, ago, toast, fail, modal, confirmBox } from './util.js?v=2609261618';
+import { dateRange, datePicker, dateBtn, S, $, $$, esc, ICON, brl, num, pct, fullDate, ago, toast, fail, modal, confirmBox } from './util.js?v=2609280024';
 
 const F = { period: '30', from: '', to: '', level: 'campaign', revenue: 'mensal', sort: 'spend', tab: 'geral' };
 const GRAPH = 'v21.0';
@@ -65,7 +65,7 @@ export async function renderFinance(el, swap = false) {
     ['CAC', money(ratio(spend, sales.length)), `com todas as despesas: ${money(ratio(despesas, sales.length))}`],
     ['Leads', num(leads.length), `${num(paidLeads.length)} de anúncios`],
     ['CPL', money(ratio(spend, paidLeads.length || leads.length)), 'gasto ÷ leads de anúncio'],
-    ['Conversão', pct(sales.length, leads.length), 'leads → vendas'],
+    ['Conversão', pct(sales.length, leads.length), 'de leads em vendas'],
     ['CTR', imp ? pct(clicks, imp) : '—', `CPC ${money(ratio(spend, clicks))}`],
     ['CPM', money(imp ? (spend / imp) * 1000 : null), `${num(clicks)} cliques`]
   ];
@@ -182,11 +182,11 @@ const ACC_STATUS = { 1: 'Ativa', 2: 'Desativada', 3: 'Pagamento pendente', 7: 'E
 async function renderAccounts(el, swap) {
   el.innerHTML = '<div class="loading">Carregando…</div>';
   const isAdmin = S.me?.role === 'admin';
-  let accounts = [], app = {};
-  try { [accounts, app] = await Promise.all([DB.listAdAccounts(), isAdmin ? DB.getAppSettings().catch(() => ({})) : {}]); } catch (e) { fail(e); }
+  let accounts = [];
+  try { accounts = await DB.listAdAccounts(); } catch (e) { fail(e); }
   if (!el.isConnected) return;
-  app = app || {};
-  const hasApp = !!app.meta_app_id;
+  const appId = window.TRACTO_CONFIG?.metaAppId || '';
+  const hasApp = /^\d{8,20}$/.test(appId);
   const profiles = [...new Set(accounts.filter((a) => a.fb_user_name).map((a) => a.fb_user_name))];
   const soonest = accounts.filter((a) => a.connected_via === 'facebook' && a.token_expires_at).map((a) => daysLeft(a.token_expires_at)).sort((a, b) => a - b)[0];
 
@@ -203,9 +203,8 @@ async function renderAccounts(el, swap) {
             ? `${esc(profiles.join(', '))} · ${soonest == null ? '' : soonest > 0 ? `acesso válido por mais ${soonest} dia${soonest === 1 ? '' : 's'}` : 'acesso expirado'}`
             : 'Entre com o Facebook, escolha as contas de anúncio e o CRM passa a puxar gasto, impressões, cliques e leads de cada campanha, conjunto e anúncio.'}</p>
         </div>
-        ${isAdmin ? `<button class="b b-fb" data-fb ${hasApp ? '' : 'disabled'}>${FB_ICON}${profiles.length ? 'Reconectar / adicionar contas' : 'Entrar com o Facebook'}</button>` : ''}
+        ${isAdmin ? `<button class="b b-fb" data-fb ${hasApp ? '' : 'disabled'}>${FB_ICON}${!hasApp ? 'Disponível em breve' : profiles.length ? 'Reconectar ou adicionar contas' : 'Continuar com o Facebook'}</button>` : ''}
       </div>
-      ${isAdmin && !hasApp ? `<p class="fb-note">Antes do primeiro login, configure o app da Meta logo abaixo (é feito uma vez só).</p>` : ''}
       ${isAdmin && soonest != null && soonest <= 10 ? `<p class="fb-note warn">O Facebook libera o acesso por 60 dias. Clique em Reconectar pra renovar sem perder o histórico.</p>` : ''}
     </section>
 
@@ -215,47 +214,20 @@ async function renderAccounts(el, swap) {
       ${accounts.length ? accounts.map((a) => `<div class="srow" data-id="${a.id}">${META_ICON}
           <div class="grow"><b>${esc(a.name)}</b><div class="muted" style="font-size:12px">${esc(a.account_id)}${a.currency ? ' · ' + esc(a.currency) : ''}${a.connected_via === 'facebook' ? ' · via Facebook' : ' · token manual'} · ${accStatus(a)}</div></div>
           ${isAdmin ? `<button class="switch ${a.enabled ? 'on' : ''}" data-acc-toggle aria-label="${a.enabled ? 'Pausar' : 'Ativar'} conta"></button>${a.connected_via === 'facebook' ? '' : '<button class="b b-sm" data-acc-edit>Editar</button>'}<button class="b b-sm b-danger" data-acc-del aria-label="Desconectar">×</button>` : (a.enabled ? '<span class="pill good">Ativa</span>' : '<span class="pill">Pausada</span>')}</div>`).join('')
-        : `<div class="empty-mini"><p class="muted">${isAdmin ? 'Nenhuma conta ativa ainda. Use "Entrar com o Facebook" acima.' : 'Peça pra um admin conectar o Facebook.'}</p></div>`}
-      ${isAdmin ? '<p class="help" style="margin-top:10px">Prefere um token de usuário do sistema (não expira)? <a href="#" class="link" data-add-acc>Adicionar conta com token</a></p>' : ''}
+        : `<div class="empty-mini"><p class="muted">${isAdmin ? 'Nenhuma conta ativa ainda. Conecte o Facebook acima e escolha as contas.' : 'Peça pra um admin conectar o Facebook.'}</p></div>`}
     </section>
 
-    ${isAdmin ? `<section class="panel int-card" style="margin-top:12px">
-      <details class="docs" ${hasApp ? '' : 'open'}><summary>App da Meta ${hasApp ? `<span class="pill good" style="margin-left:6px">configurado</span>` : '<span class="pill wait" style="margin-left:6px">pendente</span>'}</summary>
-        <ol class="steps">
-          <li>Acesse <a class="link" href="https://developers.facebook.com/apps/" target="_blank" rel="noopener">developers.facebook.com/apps</a> e clique em <b>Criar app</b>. Caso de uso: <b>Outro</b> e tipo <b>Empresa</b>, vinculado ao portfólio da Tracto.</li>
-          <li>Adicione o produto <b>Login do Facebook para Empresas</b> (ou Login do Facebook). Em Configurações, coloque <b>${esc(location.origin)}</b> em "Domínios permitidos para o SDK do JavaScript" e em "URIs de redirecionamento do OAuth válidos".</li>
-          <li>Em Configurações do app &gt; Básico: domínio <b>${esc(location.hostname)}</b>, URL da política de privacidade <b>https://assessoriatracto.com.br/privacidade/</b>. Copie o <b>ID do app</b> e a <b>Chave secreta</b>.</li>
-          <li>Em Casos de uso &gt; Permissões, adicione <b>ads_read</b> e <b>business_management</b>. Enquanto o app estiver em desenvolvimento, só administradores do app conseguem conectar (é o suficiente pra uso interno).</li>
-        </ol>
-        <div class="grid2">
-          <div class="row"><label class="lbl" for="mApp">ID do app</label><input class="inp" id="mApp" inputmode="numeric" value="${esc(app.meta_app_id || '')}" placeholder="Ex: 1234567890123456"></div>
-          <div class="row"><label class="lbl" for="mSecret">Chave secreta do app</label><input class="inp" id="mSecret" type="password" autocomplete="off" spellcheck="false" placeholder="${hasApp ? '•••••••• salva · cole outra pra trocar' : 'cole a chave secreta'}"></div>
-        </div>
-        <p class="help">A chave secreta fica só no servidor: é usada pra transformar o login em acesso de 60 dias e nunca volta pro navegador.</p>
-        <div style="display:flex;justify-content:flex-end;margin-top:8px"><button class="b b-primary" data-save-app>Salvar app</button></div>
-      </details>
-    </section>` : ''}
     </div>`;
 
   const reload = () => renderAccounts(el);
   bindTabs(el);
   if (swap) el.querySelector('.tab-body').classList.add('swap-in');
 
-  el.querySelector('[data-save-app]')?.addEventListener('click', async (e) => {
-    const btn = e.currentTarget;
-    const id = el.querySelector('#mApp').value.trim(); const secret = el.querySelector('#mSecret').value.trim();
-    if (!/^\d{8,20}$/.test(id)) return toast('O ID do app tem só números', true);
-    if (!hasApp && !/^[a-f0-9]{32}$/i.test(secret)) return toast('Cole a chave secreta (32 caracteres)', true);
-    if (secret && !/^[a-f0-9]{32}$/i.test(secret)) return toast('A chave secreta tem 32 caracteres', true);
-    btn.disabled = true;
-    try { await DB.saveAppSettings({ meta_app_id: id, ...(secret ? { meta_app_secret: secret } : {}) }); sdk = null; toast('App da Meta salvo'); reload(); } catch (err) { btn.disabled = false; fail(err); }
-  });
-
   el.querySelector('[data-fb]')?.addEventListener('click', async (e) => {
     const btn = e.currentTarget; btn.disabled = true; btn.classList.add('is-busy');
     const done = () => { btn.disabled = false; btn.classList.remove('is-busy'); };
     try {
-      const FB = await loadFbSdk(app.meta_app_id);
+      const FB = await loadFbSdk(appId);
       const auth = await new Promise((ok) => FB.login((r) => ok(r.authResponse), { scope: 'ads_read,business_management', return_scopes: true, auth_type: 'rerequest' }));
       if (!auth) { done(); return toast('Login cancelado', true); }
       if (!String(auth.grantedScopes || '').includes('ads_read')) { done(); return toast('Autorize a permissão de ler anúncios (ads_read) pra continuar', true); }
@@ -269,7 +241,7 @@ async function renderAccounts(el, swap) {
         if (st.status !== 'pending') break;
       }
       done();
-      if (st?.status !== 'ok') return toast(st?.error ? 'O Facebook recusou: ' + st.error : 'O Facebook não respondeu. Tente de novo.', true);
+      if (st?.status !== 'ok') return toast('O Facebook não confirmou a conexão. Tente de novo em instantes.', true);
       pickAccounts(conn, me.name, list, accounts, reload);
     } catch (err) { done(); fail(err); }
   });
@@ -282,7 +254,6 @@ async function renderAccounts(el, swap) {
       toast('Gasto da Meta atualizado'); reload();
     } catch (err) { fail(err); btn.disabled = false; btn.classList.remove('is-spinning'); }
   });
-  el.querySelector('[data-add-acc]')?.addEventListener('click', (e) => { e.preventDefault(); accountModal(null, reload); });
   el.querySelectorAll('.srow[data-id]').forEach((row) => {
     const a = accounts.find((x) => x.id === row.dataset.id); if (!a) return;
     row.querySelector('[data-acc-toggle]')?.addEventListener('click', async () => { try { await DB.saveAdAccount({ id: a.id, enabled: !a.enabled }); toast(a.enabled ? 'Conta pausada' : 'Conta ativada'); reload(); } catch (e) { fail(e); } });

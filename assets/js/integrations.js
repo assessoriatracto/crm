@@ -1,7 +1,7 @@
 // Abas "Integrações" (API + webhooks) e "Pixel" (Meta Pixel + Conversions API)
 import { DB, LIVE } from '@shared/db.js';
-import { S, $, $$, esc, FAT, ICON, num, pct, brl, fullDate, ago, toast, fail, modal, confirmBox, menu } from './util.js?v=2609261618';
-import { hbars } from './dashboard.js?v=2609261618';
+import { S, $, $$, esc, FAT, ICON, num, pct, brl, fullDate, ago, toast, fail, modal, confirmBox, menu } from './util.js?v=2609280024';
+import { hbars } from './dashboard.js?v=2609280024';
 import { PIXEL_EVENTS_RECOMMENDED } from '@shared/db.js';
 
 const EVENTS = [
@@ -285,7 +285,7 @@ export async function renderPixel(el, { quiet = false } = {}) {
     <div class="int-grid" style="margin-top:12px">
       <section class="panel int-card">
         <div class="score-card">
-          <span class="score-badge">↗ ${score == null ? '—' : score.toFixed(1)}</span>
+          <span class="score-badge">${ICON.trend}${score == null ? '—' : score.toFixed(1)}</span>
           <div><b>Nota de correspondência estimada${score == null ? '' : score >= 8.5 ? ': excelente' : score >= 7 ? ': boa' : ': pode melhorar'}</b>
           <p class="help" style="margin:4px 0 0">Calculada pelos identificadores que os leads dos últimos 30 dias trazem${bestPx?.access_token ? ' e pelo envio via servidor' : '. Cole o token da API de Conversão pra somar IP, navegador e clique no anúncio'}. A nota oficial aparece no Gerenciador de Eventos em até 48 horas.</p></div>
         </div>
@@ -448,13 +448,13 @@ function pixelDrawer(px, formLeads, done) {
       const s = estScore();
       const rows = eventsFor(st.platform);
       body = `
-        <div class="score-card big"><span class="score-badge">↗ ${s == null ? '—' : s.toFixed(1)}</span><div><b>Nota de correspondência estimada${s == null ? '' : s >= 8.5 ? ': excelente' : s >= 7 ? ': boa' : ''}</b>
+        <div class="score-card big"><span class="score-badge">${ICON.trend}${s == null ? '—' : s.toFixed(1)}</span><div><b>Nota de correspondência estimada${s == null ? '' : s >= 8.5 ? ': excelente' : s >= 7 ? ': boa' : ''}</b>
           <p class="help" style="margin:4px 0 0">${willServer() ? 'O CRM envia os eventos com dados completos pelo navegador e pelo servidor. Isso faz o anúncio reconhecer quem converteu e aprender a mostrar pra pessoas parecidas, gastando menos.' : 'Sem o token, só o navegador envia. Bloqueadores de anúncio e iOS derrubam parte dos eventos. Volte e cole o token pra nota subir.'}</p></div></div>
         <h4 class="px-h">O que vamos rastrear</h4><p class="help">Use a recomendação da Tracto ou personalize do seu jeito.</p>
         <label class="mode-card ${st.mode === 'recommended' ? 'on' : ''}"><input type="radio" name="mode" value="recommended" ${st.mode === 'recommended' ? 'checked' : ''}>
           <div><b>Recomendação da Tracto</b> <span class="pill good">Converte mais</span>
           <p class="help" style="margin:4px 0 10px">Rastreamos cada etapa no momento certo pro algoritmo entender quem tem intenção real. Só o formulário concluído conta como conversão.</p>
-          <ul class="ev-check">${rows.filter(([k]) => PIXEL_EVENTS_RECOMMENDED[k]).map(([, n, names, d, conv]) => `<li>✓ <span><b>${n}</b> <span class="muted">(${esc(names[st.platform] || '')})</span>${conv ? ' <span class="pill good">Conversão</span>' : ''}<br><small>${esc(d)}</small></span></li>`).join('')}</ul></div></label>
+          <ul class="ev-check">${rows.filter(([k]) => PIXEL_EVENTS_RECOMMENDED[k]).map(([, n, names, d, conv]) => `<li>${ICON.check}<span><b>${n}</b> <span class="muted">(${esc(names[st.platform] || '')})</span>${conv ? ' <span class="pill good">Conversão</span>' : ''}<br><small>${esc(d)}</small></span></li>`).join('')}</ul></div></label>
         <label class="mode-card ${st.mode === 'custom' ? 'on' : ''}"><input type="radio" name="mode" value="custom" ${st.mode === 'custom' ? 'checked' : ''}>
           <div><b>Personalizado</b><p class="help" style="margin:4px 0 0">Escolha cada evento. Ideal pra quem já tem uma estratégia de tráfego definida.</p>
           ${st.mode === 'custom' ? `<div class="ev-list" style="margin-top:10px">${rows.map(([k, n, names, d, conv]) => `<label class="ev"><input type="checkbox" data-ev="${k}" ${st.events[k] ? 'checked' : ''}><span><b>${n}</b> <code>${esc(names[st.platform] || '')}</code>${conv ? ' <span class="pill good">Conversão</span>' : ''}<small>${esc(d)}</small></span></label>`).join('')}</div>` : ''}</div></label>`;

@@ -1,8 +1,8 @@
 // Página "Ajustes": estágios, rótulos, equipe, times e auditoria
 import { DB, LIVE } from '@shared/db.js';
-import { S, $, $$, esc, COLORS, num, pct, ago, toast, fail, confirmBox } from './util.js?v=2609261618';
-import { openProfile } from './profile.js?v=2609261618';
-import { stageModal, moveStage, deleteStageFlow } from './app.js?v=2609261618';
+import { S, $, $$, esc, ICON, COLORS, num, pct, ago, toast, fail, confirmBox } from './util.js?v=2609280024';
+import { openProfile } from './profile.js?v=2609280024';
+import { stageModal, moveStage, deleteStageFlow } from './app.js?v=2609280024';
 
 // ============================================================
 // AJUSTES
@@ -29,8 +29,8 @@ export async function renderSettings(el, reload) {
             <input type="color" value="${s.color}" data-sf="color" aria-label="Cor">
             <input class="inp grow" value="${esc(s.name)}" maxlength="40" data-sf="name" aria-label="Nome">
             <select class="inp" data-sf="kind" style="width:auto"><option value="open" ${s.kind === 'open' ? 'selected' : ''}>Andamento</option><option value="won" ${s.kind === 'won' ? 'selected' : ''}>Ganho</option><option value="lost" ${s.kind === 'lost' ? 'selected' : ''}>Perdido</option></select>
-            <button class="b b-sm b-ghost" data-mv="-1" ${i ? '' : 'disabled'} aria-label="Subir">↑</button>
-            <button class="b b-sm b-ghost" data-mv="1" ${i < S.stages.length - 1 ? '' : 'disabled'} aria-label="Descer">↓</button>
+            <button class="b b-sm b-ghost" data-mv="-1" ${i ? '' : 'disabled'} aria-label="Subir">${ICON.up}</button>
+            <button class="b b-sm b-ghost" data-mv="1" ${i < S.stages.length - 1 ? '' : 'disabled'} aria-label="Descer">${ICON.down}</button>
             <button class="b b-sm b-danger" data-del aria-label="Excluir">×</button>
           </div>`).join('')}</div>
         <button class="b" style="margin-top:12px" data-add-stage>+ Adicionar estágio</button>

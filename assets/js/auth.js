@@ -2,7 +2,7 @@
 // Boas práticas: senha forte + checagem de senhas vazadas (k-anonimato), mensagens genéricas,
 // bloqueio temporário após tentativas, 2FA (TOTP), sessão encerrada por inatividade e consentimento LGPD registrado.
 import { DB, LIVE } from '@shared/db.js';
-import { $, esc, toast } from './util.js?v=2609261618';
+import { $, esc, toast, ICON } from './util.js?v=2609280024';
 
 export const PRIVACY_VERSION = '2026-09';
 const SITE = window.TRACTO_CONFIG?.siteUrl || 'https://assessoriatracto.com.br';
@@ -212,7 +212,7 @@ export function showSignUp() {
 }
 
 function showCheckEmail(email) {
-  screen(`<div class="auth-icon">✉️</div><h1>Confirme seu <em>e-mail</em></h1>
+  screen(`<div class="auth-icon">${ICON.mailOpen}</div><h1>Confirme seu <em>e-mail</em></h1>
     <p class="auth-sub">Se o endereço <b>${esc(email)}</b> puder ser usado, enviamos um link de confirmação. Abra o e-mail e clique no link pra ativar a conta. Depois disso, um administrador libera seu acesso.</p>
     <button class="btn btn-pill auth-btn" data-resend type="button">REENVIAR E-MAIL</button>
     <p class="auth-alt"><a href="#/entrar" class="link">Voltar pro login</a></p>`, (el) => {
@@ -239,7 +239,7 @@ export function showForgot() {
       if (!/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(email)) return err(el, 'E-mail inválido.');
       const btn = el.querySelector('.auth-btn'); setBusy(btn, true);
       try { await DB.resetPassword(email); } catch (ex) { /* resposta igual pra não revelar contas */ }
-      screen(`<div class="auth-icon">✉️</div><h1>Confira seu <em>e-mail</em></h1><p class="auth-sub">Se existir uma conta com <b>${esc(email)}</b>, você vai receber um link pra redefinir a senha. O link vale por 1 hora.</p><p class="auth-alt"><a href="#/entrar" class="link">Voltar pro login</a></p>`);
+      screen(`<div class="auth-icon">${ICON.mailOpen}</div><h1>Confira seu <em>e-mail</em></h1><p class="auth-sub">Se existir uma conta com <b>${esc(email)}</b>, você vai receber um link pra redefinir a senha. O link vale por 1 hora.</p><p class="auth-alt"><a href="#/entrar" class="link">Voltar pro login</a></p>`);
     });
   });
 }
@@ -270,7 +270,7 @@ export function showReset(onDone) {
 }
 
 export function showPending(profile) {
-  screen(`<div class="auth-icon">⏳</div><h1>Aguardando <em>liberação</em></h1>
+  screen(`<div class="auth-icon">${ICON.hourglass}</div><h1>Aguardando <em>liberação</em></h1>
     <p class="auth-sub">Olá, ${esc((profile?.nome || '').split(' ')[0] || 'tudo bem')}! Seu e-mail foi confirmado. Agora um administrador precisa liberar seu acesso em Ajustes &gt; Equipe. Assim que for liberado, é só entrar de novo.</p>
     <button class="btn btn-pill auth-btn" data-retry type="button">JÁ FUI LIBERADO</button>
     <p class="auth-alt"><a href="#" class="link" data-out>Sair</a></p>`, (el) => {

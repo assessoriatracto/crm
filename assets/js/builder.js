@@ -1,22 +1,54 @@
 // Construtor de formulários (estilo Typeform): lista, editor de etapas, lógica, tema e prévia ao vivo
 import { DB } from '@shared/db.js';
 import { FORMS, formPath } from '@shared/forms.js';
-import { S, $, $$, esc, ICON, num, pct, toast, fail, modal, confirmBox, menu, popover, closePop } from './util.js?v=2609261618';
+import { S, $, $$, esc, ICON, num, pct, toast, fail, modal, confirmBox, menu, popover, closePop } from './util.js?v=2609280024';
 
 const SITE = window.TRACTO_CONFIG?.siteUrl || 'https://assessoriatracto.com.br';
 const B = { forms: [], editing: null, sel: null, tab: 'conteudo', device: 'desktop', dirty: false, saveT: null, frameReady: false };
 
 // ---------- catálogo de tipos ----------
-const TYPES = {
-  welcome: ['Boas-vindas', 'Conteúdo', '👋'], statement: ['Mensagem', 'Conteúdo', '💬'], testimonial: ['Depoimento', 'Conteúdo', '⭐'],
-  short_text: ['Texto curto', 'Contato', 'Aa'], email: ['E-mail', 'Contato', '@'], phone: ['WhatsApp', 'Contato', '📱'],
-  cpf: ['CPF', 'Contato', '🪪'], cnpj: ['CNPJ', 'Contato', '🏢'], cep: ['CEP (busca endereço)', 'Contato', '📍'],
-  choice: ['Escolha única', 'Escolha', '◉'], multi: ['Múltipla escolha', 'Escolha', '☑'], dropdown: ['Lista suspensa', 'Escolha', '▾'],
-  yes_no: ['Sim ou não', 'Escolha', '⇄'], scale: ['Escala 0 a 10', 'Escolha', '📊'], rating: ['Estrelas', 'Escolha', '★'],
-  long_text: ['Texto longo', 'Texto', '¶'], number: ['Número', 'Texto', '#'], date: ['Data', 'Texto', '📅'], url: ['Link', 'Texto', '🔗'],
-  file: ['Arquivo', 'Integrações', '📎'], calendly: ['Agendamento (Calendly)', 'Integrações', '🗓'], consent: ['Consentimento', 'Integrações', '✔'],
-  thankyou: ['Tela final', 'Final', '🏁']
+const sv = (d) => `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${d}</svg>`;
+const TI = {
+  welcome: sv('<path d="M3 11h18M5 11V6a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2v5M7 15h10M9 19h6"/>'),
+  statement: sv('<path d="M21 15a2 2 0 0 1-2 2H8l-4 4V5a2 2 0 0 1 2-2h13a2 2 0 0 1 2 2z"/>'),
+  testimonial: sv('<path d="m12 3 2.7 5.6 6.1.9-4.4 4.3 1 6.1L12 17l-5.4 2.9 1-6.1-4.4-4.3 6.1-.9z"/>'),
+  short_text: sv('<path d="M4 7V5h16v2M12 5v14M9 19h6"/>'),
+  email: sv('<rect x="3" y="5" width="18" height="14" rx="2"/><path d="m3 7 9 6 9-6"/>'),
+  phone: sv('<rect x="6" y="2" width="12" height="20" rx="2.5"/><path d="M11 18h2"/>'),
+  cpf: sv('<rect x="3" y="5" width="18" height="14" rx="2"/><circle cx="9" cy="11" r="2"/><path d="M6 16c.5-1.5 1.6-2 3-2s2.5.5 3 2M15 10h3M15 13h3"/>'),
+  cnpj: sv('<path d="M4 21V5a1 1 0 0 1 1-1h9a1 1 0 0 1 1 1v16M15 9h4a1 1 0 0 1 1 1v11M3 21h18M8 8h3M8 12h3M8 16h3"/>'),
+  cep: sv('<path d="M12 21s-7-6.2-7-11.5a7 7 0 0 1 14 0C19 14.8 12 21 12 21z"/><circle cx="12" cy="9.5" r="2.5"/>'),
+  choice: sv('<circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="3.5" fill="currentColor"/>'),
+  multi: sv('<rect x="3" y="3" width="18" height="18" rx="3"/><path d="m8 12 3 3 5-6"/>'),
+  dropdown: sv('<rect x="3" y="6" width="18" height="12" rx="2"/><path d="m14 11 2 2 2-2"/>'),
+  yes_no: sv('<path d="M7 7h13l-3-3M17 17H4l3 3"/>'),
+  scale: sv('<path d="M4 20V14M9 20V10M14 20V6M19 20V3"/>'),
+  rating: sv('<path d="m12 3 2.7 5.6 6.1.9-4.4 4.3 1 6.1L12 17l-5.4 2.9 1-6.1-4.4-4.3 6.1-.9z"/>'),
+  long_text: sv('<path d="M4 6h16M4 10h16M4 14h16M4 18h10"/>'),
+  number: sv('<path d="M5 9h14M5 15h14M10 4 8 20M16 4l-2 16"/>'),
+  date: sv('<rect x="3" y="4" width="18" height="17" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/>'),
+  url: sv('<path d="M10 13a5 5 0 0 0 7.5.5l3-3a5 5 0 0 0-7-7l-1.7 1.7"/><path d="M14 11a5 5 0 0 0-7.5-.5l-3 3a5 5 0 0 0 7 7l1.7-1.7"/>'),
+  file: sv('<path d="m21 11-8.5 8.5a5 5 0 0 1-7-7L14 4a3.5 3.5 0 0 1 5 5l-8.5 8.5a2 2 0 0 1-3-3L15 7"/>'),
+  calendly: sv('<rect x="3" y="4" width="18" height="17" rx="2"/><path d="M16 2v4M8 2v4M3 10h18M9 15l2 2 4-4"/>'),
+  consent: sv('<path d="M12 3 4 6v6c0 5 3.5 8 8 9 4.5-1 8-4 8-9V6z"/><path d="m9 12 2 2 4-4"/>'),
+  thankyou: sv('<path d="M5 21V4M5 4h11l-2 4 2 4H5"/>'),
+  gear: sv('<circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/>'),
+  external: sv('<path d="M14 4h6v6M20 4l-9 9M18 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h5"/>'),
+  desktop: sv('<rect x="2" y="4" width="20" height="13" rx="2"/><path d="M8 21h8M12 17v4"/>'),
+  check: sv('<path d="M20 6 9 17l-5-5"/>'),
+  plus: sv('<path d="M12 5v14M5 12h14"/>')
 };
+const TYPES = {
+  welcome: ['Boas-vindas', 'Conteúdo'], statement: ['Mensagem', 'Conteúdo'], testimonial: ['Depoimento', 'Conteúdo'],
+  short_text: ['Texto curto', 'Contato'], email: ['E-mail', 'Contato'], phone: ['WhatsApp', 'Contato'],
+  cpf: ['CPF', 'Contato'], cnpj: ['CNPJ', 'Contato'], cep: ['CEP (busca endereço)', 'Contato'],
+  choice: ['Escolha única', 'Escolha'], multi: ['Múltipla escolha', 'Escolha'], dropdown: ['Lista suspensa', 'Escolha'],
+  yes_no: ['Sim ou não', 'Escolha'], scale: ['Escala 0 a 10', 'Escolha'], rating: ['Estrelas', 'Escolha'],
+  long_text: ['Texto longo', 'Texto'], number: ['Número', 'Texto'], date: ['Data', 'Texto'], url: ['Link', 'Texto'],
+  file: ['Arquivo', 'Integrações'], calendly: ['Agendamento (Calendly)', 'Integrações'], consent: ['Consentimento', 'Integrações'],
+  thankyou: ['Tela final', 'Final']
+};
+Object.keys(TYPES).forEach((k) => TYPES[k].push(TI[k]));
 const QUESTION = ['short_text', 'long_text', 'email', 'phone', 'number', 'url', 'date', 'choice', 'multi', 'dropdown', 'yes_no', 'rating', 'scale', 'consent', 'cep', 'cpf', 'cnpj', 'file', 'calendly'];
 const MAPS = [['', 'Não salvar em coluna'], ['nome', 'Nome'], ['whatsapp', 'WhatsApp'], ['email', 'E-mail'], ['instagram', 'Instagram'], ['faturamento', 'Faturamento'], ['estado', 'Estado (UF)'], ['cidade', 'Cidade']];
 const OPS = [['is', 'é igual a'], ['is_not', 'é diferente de'], ['in', 'é uma destas'], ['includes', 'inclui'], ['gte', 'é maior ou igual a'], ['lte', 'é menor ou igual a'], ['filled', 'foi respondida'], ['empty', 'não foi respondida']];
@@ -172,19 +204,19 @@ function openEditor(el, form) {
   el.innerHTML = `
     <div class="bld">
       <header class="bld-top">
-        <a class="b b-ghost" href="#/formularios" data-back>← Formulários</a>
+        <a class="b b-ghost" href="#/formularios" data-back>${ICON.back}Formulários</a>
         <input class="bld-name" data-fname value="${esc(form.name)}" maxlength="120" aria-label="Nome do formulário">
         <span class="bld-status" data-status>${form.published ? '<span class="pill good">Publicado</span>' : '<span class="pill">Rascunho</span>'}</span>
         <div class="grow"></div>
         <span class="bld-saved muted" data-saved>Salvo</span>
-        <button class="b" data-settings>⚙︎ Configurações</button>
-        <a class="b" href="${esc(formUrl(form))}" target="_blank" rel="noopener" data-open>Abrir ↗</a>
+        <button class="b b-ic" data-settings>${TI.gear}Configurações</button>
+        <a class="b" href="${esc(formUrl(form))}" target="_blank" rel="noopener" data-open>${TI.external}Abrir</a>
         <button class="b b-primary" data-publish>${form.published ? 'Salvar' : 'Publicar'}</button>
       </header>
       <div class="bld-body">
         <aside class="bld-steps"><div class="bld-steps-h"><b>Etapas</b><button class="b b-sm b-primary" data-add data-pop-anchor>+ Adicionar</button></div><ol data-list></ol></aside>
         <section class="bld-preview">
-          <div class="bld-dev"><button class="b b-sm ${B.device === 'desktop' ? 'on' : ''}" data-dev="desktop">🖥 Computador</button><button class="b b-sm ${B.device === 'mobile' ? 'on' : ''}" data-dev="mobile">📱 Celular</button></div>
+          <div class="bld-dev"><button class="b b-sm ${B.device === 'desktop' ? 'on' : ''}" data-dev="desktop">${TI.desktop}Computador</button><button class="b b-sm ${B.device === 'mobile' ? 'on' : ''}" data-dev="mobile">${TI.phone}Celular</button></div>
           <div class="bld-frame ${B.device}"><iframe title="Prévia do formulário" src="${esc(new URL('/aplicar/?preview=1', SITE).toString())}" data-frame></iframe></div>
         </section>
         <aside class="bld-props" data-props></aside>
@@ -231,7 +263,7 @@ async function save(explicit = false) {
   try {
     await DB.saveForm({ id: f.id, slug: f.slug, name: f.name.trim() || 'Sem nome', fields: f.fields, settings: f.settings, published: f.published });
     B.dirty = false;
-    const s = $('[data-saved]'); if (s) { s.textContent = 'Salvo ✓'; s.classList.remove('ok'); void s.offsetWidth; s.classList.add('ok'); }
+    const s = $('[data-saved]'); if (s) { s.innerHTML = `${TI.check}Salvo`; s.classList.remove('ok'); void s.offsetWidth; s.classList.add('ok'); }
     if (explicit) toast(f.published ? 'Formulário publicado' : 'Salvo');
   } catch (e) { const s = $('[data-saved]'); if (s) s.textContent = 'Erro ao salvar'; fail(e); }
 }
@@ -254,8 +286,8 @@ function renderSteps() {
   let n = 0;
   list.innerHTML = f.fields.map((x, i) => {
     const isQ = QUESTION.includes(x.type); if (isQ) n++;
-    const t = TYPES[x.type] || [x.type, '', '?'];
-    const flags = [x.showIf ? '<span title="Aparece só sob condição">⑂</span>' : '', x.logic?.length || x.next ? '<span title="Tem regra de salto">↪</span>' : '', x.required ? '<span title="Obrigatória">*</span>' : ''].join('');
+    const t = TYPES[x.type] || [x.type, '', TI.statement];
+    const flags = [x.showIf ? `<span title="Aparece só sob condição">${ICON.branch}</span>` : '', x.logic?.length || x.next ? `<span title="Tem regra de salto">${ICON.jump}</span>` : '', x.required ? '<span title="Obrigatória">*</span>' : ''].join('');
     return `<li class="bld-step ${x.id === B.sel ? 'on' : ''} t-${x.type}" draggable="true" data-id="${x.id}">
       <span class="bs-ic">${t[2]}</span><span class="bs-n">${isQ ? n : ''}</span>
       <span class="bs-t">${esc(strip(x.title || x.quote || t[0]).slice(0, 60) || t[0])}</span><span class="bs-f">${flags}</span></li>`;
@@ -317,7 +349,7 @@ function renderProps() {
   if (B.tab === 'conteudo') {
     html += x.type === 'testimonial'
       ? inp('title', 'Chamada (opcional)', x.title) + area('quote', 'Depoimento', x.quote, 3) + inp('author', 'Nome', x.author) + inp('role', 'Cargo, empresa ou cidade', x.role) + imageRow('photo', 'Foto', x.photo) +
-        `<div class="row"><label class="lbl">Estrelas</label><select class="inp" data-k="rating">${[0, 1, 2, 3, 4, 5].map((n) => `<option value="${n}" ${+x.rating === n ? 'selected' : ''}>${n ? '★'.repeat(n) : 'Sem estrelas'}</option>`).join('')}</select></div>`
+        `<div class="row"><label class="lbl">Estrelas</label><select class="inp" data-k="rating">${[0, 1, 2, 3, 4, 5].map((n) => `<option value="${n}" ${+x.rating === n ? 'selected' : ''}>${n ? n + (n === 1 ? ' estrela' : ' estrelas') : 'Sem estrelas'}</option>`).join('')}</select></div>`
       : area('title', 'Título', x.title, 2, 'Use "+ Resposta" pra chamar a pessoa pelo nome ou repetir uma resposta anterior.') + area('desc', 'Descrição', x.desc, 2);
     if (x.type !== 'thankyou') html += imageRow('image', 'Imagem (opcional)', x.image);
     if (x.type === 'welcome' || x.type === 'statement' || x.type === 'testimonial') html += inp('button', 'Texto do botão', x.button);
@@ -352,7 +384,7 @@ function renderProps() {
   const pk = B.sel + '|' + B.tab;
   if (renderProps._k !== pk) { renderProps._k = pk; box.classList.remove('swap-in'); void box.offsetWidth; box.classList.add('swap-in'); }
   box.innerHTML = `
-    <div class="bp-h"><span class="bs-ic">${t[2] || '?'}</span><b>${esc(t[0])}</b><div class="grow"></div>
+    <div class="bp-h"><span class="bs-ic">${t[2] || TI.statement}</span><b>${esc(t[0])}</b><div class="grow"></div>
       <button class="card-menu" data-step-more data-pop-anchor aria-label="Ações da etapa">${ICON.dotsH}</button></div>
     ${tabs.length > 1 ? `<div class="bp-tabs">${tabs.map((k) => `<button class="${B.tab === k ? 'on' : ''}" data-tab="${k}">${k === 'conteudo' ? 'Conteúdo' : 'Lógica'}</button>`).join('')}</div>` : ''}
     <div class="bp-body">${html}</div>`;
@@ -363,7 +395,7 @@ function imageRow(k, label, v) {
   return `<div class="row"><label class="lbl">${label}</label><div class="img-row">${v ? `<img src="${esc(v)}" alt="">` : ''}<input class="inp" data-k="${k}" value="${esc(v && !String(v).startsWith('data:') ? v : '')}" placeholder="${v?.startsWith?.('data:') ? 'Imagem enviada' : 'https://… ou envie'}"><label class="b b-sm">Enviar<input type="file" accept="image/*" data-up="${k}" hidden></label>${v ? `<button class="b b-sm b-ghost" data-clear="${k}" aria-label="Remover">×</button>` : ''}</div></div>`;
 }
 function optionsEditor(x) {
-  return `<div class="row"><label class="lbl">Opções</label><div class="opts" data-opts>${(x.options || []).map((o, i) => `<div class="opt"><span class="opt-k">${String.fromCharCode(65 + i)}</span><input class="inp" data-opt="${i}" value="${esc(o)}"><button class="b b-sm b-ghost" data-opt-up="${i}" ${i ? '' : 'disabled'} aria-label="Subir">↑</button><button class="b b-sm b-ghost" data-opt-rm="${i}" aria-label="Remover">×</button></div>`).join('')}</div>
+  return `<div class="row"><label class="lbl">Opções</label><div class="opts" data-opts>${(x.options || []).map((o, i) => `<div class="opt"><span class="opt-k">${String.fromCharCode(65 + i)}</span><input class="inp" data-opt="${i}" value="${esc(o)}"><button class="b b-sm b-ghost" data-opt-up="${i}" ${i ? '' : 'disabled'} aria-label="Subir">${ICON.up}</button><button class="b b-sm b-ghost" data-opt-rm="${i}" aria-label="Remover">×</button></div>`).join('')}</div>
     <button class="b b-sm" data-opt-add>+ Opção</button>${x.type === 'choice' ? `<label class="bld-tog" style="margin-top:10px"><span>Opção "Outro" com texto livre</span><button type="button" class="switch ${x.other ? 'on' : ''}" data-tog="other"></button></label>` : ''}</div>`;
 }
 function condEditor(cond, fields, key) {

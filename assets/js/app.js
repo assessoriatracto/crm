@@ -3,15 +3,15 @@ import {
   S, $, $$, esc, ICON, FAT, COLORS, initials, isHot, stageOf, profileOf, labelOf, isInactive, isDue, fatShort, brl, pct, num,
   fmtPhone, fullDate, longDate, addedAt, ago, sourceLabel, formName, waLink, toast, fail, popover, closePop, menu, multiSelect,
   modal, confirmBox, downloadCSV, dateRange, datePicker, dateBtn
-} from './util.js?v=2609261618';
-import { renderDashboard } from './dashboard.js?v=2609261618';
-import { renderSettings } from './admin.js?v=2609261618';
-import { renderIntegrations, renderPixel, leadMetaEvents, statusPill } from './integrations.js?v=2609261618';
-import { renderRecovery, loadPartials } from './recovery.js?v=2609261618';
-import { showSignIn, showSignUp, showForgot, showReset, showMfa, showPending, watchIdle, AUTH_ROUTES } from './auth.js?v=2609261618';
-import { openProfile } from './profile.js?v=2609261618';
-import { renderBuilder } from './builder.js?v=2609261618';
-import { renderFinance } from './finance.js?v=2609261618';
+} from './util.js?v=2609280024';
+import { renderDashboard } from './dashboard.js?v=2609280024';
+import { renderSettings } from './admin.js?v=2609280024';
+import { renderIntegrations, renderPixel, leadMetaEvents, statusPill } from './integrations.js?v=2609280024';
+import { renderRecovery, loadPartials } from './recovery.js?v=2609280024';
+import { showSignIn, showSignUp, showForgot, showReset, showMfa, showPending, watchIdle, AUTH_ROUTES } from './auth.js?v=2609280024';
+import { openProfile } from './profile.js?v=2609280024';
+import { renderBuilder } from './builder.js?v=2609280024';
+import { renderFinance } from './finance.js?v=2609280024';
 
 // ============================================================
 // preferências locais (por navegador)
@@ -112,6 +112,39 @@ function applyRole() {
   const av = $('#meBtn');
   if (av) { av.textContent = (S.me?.nome || '?').split(/\s+/).slice(0, 2).map((w) => w[0]).join('').toUpperCase(); av.title = `${S.me?.nome} · ${({ admin: 'Admin', gestor: 'Gestor', sdr: 'SDR' })[S.me?.role] || ''}`; }
 }
+// mobile: barra inferior só com o essencial; o resto fica em "Mais"
+const M_PRIMARY = ['leads', 'recuperacao', 'dashboard', 'financeiro'];
+const M_LABEL = { leads: 'Leads', recuperacao: 'Recuperar', dashboard: 'Dashboard', financeiro: 'Financeiro', formularios: 'Formulários', integracoes: 'Integrações', pixel: 'Pixel', ajustes: 'Ajustes' };
+$$('.side a[data-route]').forEach((a) => { a.dataset.m = M_LABEL[a.dataset.route] || ''; a.classList.toggle('m-sec', !M_PRIMARY.includes(a.dataset.route)); });
+$('[data-more]').dataset.m = 'Mais';
+function openMore() {
+  const items = $$('.side a.m-sec[data-route]').filter((a) => !a.hidden);
+  const icon = (a) => a.querySelector('svg').outerHTML;
+  const dark = document.documentElement.dataset.theme !== 'light';
+  const sh = document.createElement('div');
+  sh.className = 'msheet-wrap';
+  sh.innerHTML = `<div class="msheet" role="dialog" aria-label="Mais opções"><span class="msheet-grab"></span>
+    <div class="msheet-me"><span class="me-btn">${esc($('#meBtn').textContent)}</span><div class="grow"><b>${esc(S.me?.nome || '')}</b><small>${esc(S.me?.email || '')}</small></div></div>
+    <nav class="msheet-grid">${items.map((a) => `<a href="${a.getAttribute('href')}" class="${a.classList.contains('on') ? 'on' : ''}">${icon(a)}<span>${esc(a.dataset.m)}</span></a>`).join('')}</nav>
+    <div class="msheet-list">
+      <button data-ms="me">${ICON.user}<span>Meu perfil</span></button>
+      <button data-ms="theme">${dark ? $('.theme-btn .i-sun').outerHTML : $('.theme-btn .i-moon').outerHTML}<span>${dark ? 'Modo claro' : 'Modo escuro'}</span></button>
+      ${LIVE ? `<button data-ms="out" class="danger">${$('#logoutBtn svg').outerHTML}<span>Sair</span></button>` : ''}
+    </div></div>`;
+  document.body.appendChild(sh);
+  requestAnimationFrame(() => sh.classList.add('open'));
+  const close = () => { sh.classList.remove('open'); sh.addEventListener('transitionend', () => sh.remove(), { once: true }); setTimeout(() => sh.remove(), 400); };
+  sh.addEventListener('click', (e) => {
+    if (e.target === sh || e.target.closest('.msheet-grid a')) return close();
+    const b = e.target.closest('[data-ms]'); if (!b) return;
+    close();
+    if (b.dataset.ms === 'me') openProfile();
+    if (b.dataset.ms === 'theme') $('[data-theme-toggle]').click();
+    if (b.dataset.ms === 'out') $('#logoutBtn').click();
+  });
+}
+$('[data-more]').addEventListener('click', (e) => { e.preventDefault(); openMore(); });
+
 $('#logoutBtn').addEventListener('click', async (e) => { e.preventDefault(); await DB.signOut(); location.hash = '#/entrar'; location.reload(); });
 $('#meBtn')?.addEventListener('click', (e) => { e.preventDefault(); openProfile(); });
 
@@ -312,7 +345,7 @@ function tableHtml(list) {
   const all = rows.every((l) => V.sel.has(l.id));
   return `<div class="panel table-wrap"><table><thead><tr>
       <th style="width:36px"><button class="cbx ${all ? 'on' : ''}" data-act="sel-all" aria-label="Selecionar todos" style="background:${all ? 'var(--amber)' : 'transparent'}">${all ? ICON.check : ''}</button></th>
-      ${COLS.map(([k, n]) => `<th class="sortable" data-act="sort" data-k="${k}">${n}${key === k ? (dir > 0 ? ' ↑' : ' ↓') : ''}</th>`).join('')}
+      ${COLS.map(([k, n]) => `<th class="sortable" data-act="sort" data-k="${k}">${n}${key === k ? (dir > 0 ? ICON.up : ICON.down) : ''}</th>`).join('')}
     </tr></thead><tbody>
     ${rows.map((l) => {
       const s = stageOf(l); const p = profileOf(l.assigned_to); const sel = V.sel.has(l.id);
@@ -649,7 +682,7 @@ function renderDrawer() {
       <div class="sec" id="answersSec">
         <h4>Respostas do formulário</h4>
         <div class="form-meta">${esc(formName(l))}<br>Identificação do lead ${esc(l.id.slice(0, 8).toUpperCase())}<br>Enviado em ${esc(longDate(l.created_at))}.</div>
-        ${(l.answers || []).length ? `<div class="answers">${l.answers.map((a) => `<div><div class="q">${esc(a.label)}</div><div class="a">${a.type === 'file' || /^respostas\//.test(a.value) ? `<button class="b b-sm" data-d="file" data-path="${esc(a.value)}">📎 ${esc(a.file_name || a.value.split('/').pop().replace(/^[\w-]{36}-/, ''))}</button>` : esc(a.value)}</div></div>`).join('')}</div>` : '<p class="muted">Lead cadastrado manualmente, sem respostas de formulário.</p>'}
+        ${(l.answers || []).length ? `<div class="answers">${l.answers.map((a) => `<div><div class="q">${esc(a.label)}</div><div class="a">${a.type === 'file' || /^respostas\//.test(a.value) ? `<button class="b b-sm" data-d="file" data-path="${esc(a.value)}">${ICON.clip}${esc(a.file_name || a.value.split('/').pop().replace(/^[\w-]{36}-/, ''))}</button>` : esc(a.value)}</div></div>`).join('')}</div>` : '<p class="muted">Lead cadastrado manualmente, sem respostas de formulário.</p>'}
       </div>
       <div class="sec" id="metaSec" hidden><h4>Eventos enviados (Meta e Google)</h4><div class="meta-evs"></div></div>
       ${tracking.length ? `<div class="sec"><h4>Rastreamento</h4><dl class="kv" style="margin:10px 0 0">${tracking.map(([k, n]) => `<dt>${n}</dt><dd>${esc(l[k])}</dd>`).join('')}<dt>Fonte</dt><dd>${sourceLabel(l.source)}</dd></dl></div>` : ''}
