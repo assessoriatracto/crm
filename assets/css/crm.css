@@ -841,9 +841,7 @@ textarea.inp,.rte{min-height:auto;}
 .acc-pick{display:grid;gap:6px;max-height:52vh;overflow:auto;margin:10px 0;}
 .acc-opt{display:flex;align-items:center;gap:12px;padding:10px 12px;border:1px solid var(--border);border-radius:12px;cursor:pointer;transition:border-color var(--dur-small) var(--ease-out),background var(--dur-small) var(--ease-out);}
 .acc-opt:hover{border-color:var(--amber);}
-.acc-opt:has(input:checked){border-color:var(--amber);background:color-mix(in srgb,var(--amber) 7%,transparent);}
 .acc-opt small{display:block;font-size:12px;}
-.acc-opt input{accent-color:var(--amber);width:16px;height:16px;}
 @media (max-width:600px){ .fb-hero .b-fb{width:100%;justify-content:center;} }
 
 .b svg{flex:none;}
@@ -919,3 +917,17 @@ th.sortable svg{width:12px;height:12px;vertical-align:-1px;margin-left:4px;color
 .pop[data-align="right"]{transform-origin:top right;}
 .pop[data-side="top"]{transform-origin:bottom left;}
 .pop[data-side="top"][data-align="right"]{transform-origin:bottom right;}
+
+/* interruptor estilo iPhone */
+.ios-switch{appearance:none;-webkit-appearance:none;flex:none;position:relative;width:51px;height:31px;margin:0;border-radius:31px;background:var(--c-line-strong);cursor:pointer;transition:background-color var(--dur-medium) var(--ease-out);}
+.ios-switch::after{content:"";position:absolute;top:2px;left:2px;width:27px;height:27px;border-radius:50%;background:#fff;box-shadow:0 3px 8px rgba(0,0,0,.15),0 1px 1px rgba(0,0,0,.16);transition:transform var(--dur-medium) cubic-bezier(.3,1.35,.5,1),width var(--dur-small) var(--ease-out);}
+.ios-switch:checked{background:#34C759;}
+.ios-switch:checked::after{transform:translateX(20px);}
+.ios-switch:active::after{width:31px;}
+.ios-switch:checked:active::after{transform:translateX(16px);}
+.ios-switch:focus-visible{outline:2px solid var(--amber);outline-offset:2px;}
+.acc-pick-h{display:flex;align-items:center;gap:6px;margin:4px 0 2px;font-size:13px;}
+.acc-opt{min-height:64px;}
+.acc-opt.on{border-color:var(--c-line-strong);background:var(--c-sunken);}
+.acc-opt .acc-info{min-width:0;}
+.acc-opt .acc-info b{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}

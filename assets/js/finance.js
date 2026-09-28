@@ -1,6 +1,6 @@
 // Financeiro (estilo UTMify): gasto da Meta Ads × leads e vendas do CRM × receitas e despesas lançadas
 import { DB } from '@shared/db.js';
-import { BRAND, dateRange, datePicker, dateBtn, S, $, $$, esc, ICON, brl, num, pct, fullDate, ago, toast, fail, modal, confirmBox } from './util.js?v=2609281455';
+import { BRAND, dateRange, datePicker, dateBtn, S, $, $$, esc, ICON, brl, num, pct, fullDate, ago, toast, fail, modal, confirmBox } from './util.js?v=2609281459';
 
 const F = { period: '30', from: '', to: '', level: 'campaign', revenue: 'mensal', sort: 'spend', tab: 'geral' };
 const GRAPH = 'v21.0';
@@ -271,24 +271,41 @@ async function renderAccounts(el, swap) {
 
 // escolhe quais contas do perfil ficam ativas no CRM
 function pickAccounts(conn, fbName, list, current, done) {
-  const active = new Set(current.map((a) => a.account_id));
+  const cur = new Map(current.map((a) => [a.account_id, a]));
   const rows = list.map((a) => ({ id: a.id, name: a.name, currency: a.currency, status: a.account_status, biz: a.business?.name }))
-    .sort((a, b) => (a.status === 1 ? 0 : 1) - (b.status === 1 ? 0 : 1) || a.name.localeCompare(b.name));
-  modal(`<h3>Ativar contas de anúncio</h3>
-    <p class="help" style="margin-top:-4px">Conectado como <b>${esc(fbName)}</b>. Marque as contas que o financeiro deve acompanhar.</p>
-    <div class="acc-pick">${rows.map((a) => `<label class="acc-opt"><input type="checkbox" value="${esc(a.id)}" ${active.has(a.id) || (!current.length && a.status === 1) ? 'checked' : ''}>
-      <span class="grow"><b>${esc(a.name)}</b><small class="muted">${esc(a.id)}${a.biz ? ' · ' + esc(a.biz) : ''} · ${esc(a.currency || '')}</small></span>
-      <span class="pill ${a.status === 1 ? 'good' : 'wait'}">${ACC_STATUS[a.status] || 'Status ' + a.status}</span></label>`).join('')}</div>
-    <div class="modal-foot"><button class="b" data-close>Cancelar</button><button class="b b-primary" data-ok>Ativar selecionadas</button></div>`, (c, close) => {
+    .sort((a, b) => (cur.get(b.id)?.enabled ? 1 : 0) - (cur.get(a.id)?.enabled ? 1 : 0) || (a.status === 1 ? 0 : 1) - (b.status === 1 ? 0 : 1) || a.name.localeCompare(b.name));
+  // começa ligado só o que já é acompanhado: evita misturar contas de clientes no financeiro da Tracto
+  const on = new Set(rows.filter((r) => cur.get(r.id)?.enabled).map((r) => r.id));
+  modal(`<h3>Contas de anúncio</h3>
+    <p class="help" style="margin-top:-4px">Conectado como <b>${esc(fbName)}</b>. Ligue as contas que o financeiro deve acompanhar.</p>
+    <div class="acc-pick-h"><span class="muted" data-count></span><div class="grow"></div><button type="button" class="b b-sm b-ghost" data-all>Selecionar todas</button><button type="button" class="b b-sm b-ghost" data-none>Desmarcar todas</button></div>
+    <div class="acc-pick">${rows.map((a) => `<label class="acc-opt ${on.has(a.id) ? 'on' : ''}" data-id="${esc(a.id)}">
+      <span class="grow acc-info"><b>${esc(a.name)}</b><small class="muted">${esc(a.id)}${a.biz ? ' · ' + esc(a.biz) : ''} · ${esc(a.currency || '')}</small></span>
+      ${a.status === 1 ? '' : `<span class="pill wait">${ACC_STATUS[a.status] || 'Status ' + a.status}</span>`}
+      <input type="checkbox" class="ios-switch" role="switch" aria-label="Acompanhar ${esc(a.name)}" ${on.has(a.id) ? 'checked' : ''}></label>`).join('')}</div>
+    <div class="modal-foot"><button class="b" data-close>Cancelar</button><button class="b b-primary" data-ok>Salvar</button></div>`, (c, close) => {
+    const sync = () => {
+      c.querySelectorAll('.acc-opt').forEach((l) => l.classList.toggle('on', l.querySelector('input').checked));
+      const n = c.querySelectorAll('.acc-opt input:checked').length;
+      c.querySelector('[data-count]').textContent = `${n} de ${rows.length} ligada${n === 1 ? '' : 's'}`;
+    };
+    c.querySelector('.acc-pick').addEventListener('change', sync);
+    c.querySelector('[data-all]').addEventListener('click', () => { c.querySelectorAll('.acc-opt input').forEach((i) => { i.checked = true; }); sync(); });
+    c.querySelector('[data-none]').addEventListener('click', () => { c.querySelectorAll('.acc-opt input').forEach((i) => { i.checked = false; }); sync(); });
+    sync();
     c.querySelector('[data-ok]').addEventListener('click', async (e) => {
       const btn = e.currentTarget;
-      const pick = [...c.querySelectorAll('input:checked')].map((i) => rows.find((r) => r.id === i.value)).map((r) => ({ id: r.id, name: r.name, currency: r.currency }));
-      if (!pick.length) return toast('Marque pelo menos uma conta', true);
+      const ids = new Set([...c.querySelectorAll('.acc-opt')].filter((l) => l.querySelector('input').checked).map((l) => l.dataset.id));
+      const pick = rows.filter((r) => ids.has(r.id)).map((r) => ({ id: r.id, name: r.name, currency: r.currency }));
+      const off = current.filter((a) => a.enabled && rows.some((r) => r.id === a.account_id) && !ids.has(a.account_id));
+      if (!pick.length && !off.length) return toast('Ligue pelo menos uma conta', true);
       btn.disabled = true;
       try {
-        const n = await DB.metaActivate(conn, pick);
-        close(); toast(`${n} conta${n === 1 ? '' : 's'} ativada${n === 1 ? '' : 's'}. Buscando os últimos 30 dias…`);
-        for (const wait of [3000, 4000, 6000]) { await new Promise((ok) => setTimeout(ok, wait)); await DB.processAds(); }
+        await Promise.all(off.map((a) => DB.saveAdAccount({ id: a.id, enabled: false })));
+        const n = pick.length ? await DB.metaActivate(conn, pick) : 0;
+        close();
+        toast(n ? `${n} conta${n === 1 ? '' : 's'} ligada${n === 1 ? '' : 's'}. Buscando os últimos 30 dias…` : 'Contas atualizadas');
+        if (n) for (const wait of [3000, 4000, 6000]) { await new Promise((ok) => setTimeout(ok, wait)); await DB.processAds(); }
         done();
       } catch (err) { btn.disabled = false; fail(err); }
     });
