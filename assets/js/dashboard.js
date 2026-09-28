@@ -1,146 +1,172 @@
-// Dashboard de leads e do formulário
+// Dashboard: visão executiva e enxuta da saúde do negócio.
+// O detalhe (campanhas, lançamentos, gráficos por dia) fica no Financeiro e na Central de leads.
 import { DB } from '@shared/db.js';
-import { businessSummary } from './finance.js?v=2609281959';
-import { dateRange, datePicker, dateBtn, S, $, $$, esc, FAT, stageOf, profileOf, isHot, isInactive, isDue, brl, pct, num, formName, sourceLabel, fail } from './util.js?v=2609281959';
+import { dateRange, datePicker, dateBtn, S, $, $$, esc, ICON, brl, num, isDue, isInactive, fail } from './util.js?v=2609282004';
 
-const D = { period: '30', from: '', to: '', form: '' };
-const QTYPES = ['short_text', 'long_text', 'email', 'phone', 'number', 'url', 'date', 'choice', 'multi', 'dropdown', 'yes_no', 'rating', 'scale', 'consent'];
+const D = { period: '30', from: '', to: '' };
+const DAY = 86400000;
+const iso = (d) => new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 10);
+const SALE_CATS = ['Venda (contrato)', 'Contrato'];
 
-const since = () => dateRange(D)[0];
-const until = () => dateRange(D)[1] || new Date();
-const inPeriod = (iso) => { const [a, b] = dateRange(D); const d = new Date(iso); return (!a || d >= a) && (!b || d <= b); };
+// ---------- contratos (clientes): vendas do CRM + vendas lançadas no Financeiro ----------
+function contracts(entries, months) {
+  const out = [];
+  S.leads.filter((l) => l.won_at && Number(l.valor) > 0).forEach((l) => out.push({
+    id: l.id, name: l.nome, start: new Date(l.won_at), monthly: Number(l.valor), months,
+    canceled: l.canceled_at ? new Date(l.canceled_at + 'T12:00') : null, lead: l.id
+  }));
+  entries.filter((e) => e.kind === 'receita' && SALE_CATS.includes(e.category)).forEach((e) => out.push({
+    id: e.id, name: e.description || 'Venda lançada', start: new Date(e.date + 'T12:00'),
+    monthly: Number(e.monthly_amount || (e.months ? e.amount / e.months : e.amount)), months: Number(e.months || months),
+    canceled: e.canceled_at ? new Date(e.canceled_at + 'T12:00') : null
+  }));
+  out.forEach((c) => { c.end = new Date(c.start.getTime() + c.months * 30.44 * DAY); });
+  return out;
+}
+const activeAt = (c, t) => c.start <= t && c.end > t && (!c.canceled || c.canceled > t);
+
+function metrics(ins, leads, a, b, contractsList, useMeta) {
+  const inR = (d) => d >= a && d <= b;
+  const insR = ins.filter((x) => { const d = new Date(x.date + 'T12:00'); return inR(d); });
+  const spend = insR.reduce((s, x) => s + Number(x.spend), 0);
+  const metaLeads = insR.reduce((s, x) => s + Number(x.meta_leads || 0), 0);
+  const crmLeads = leads.filter((l) => inR(new Date(l.created_at))).length;
+  const nLeads = useMeta ? metaLeads : crmLeads; // mesma fonte nos dois períodos (comparação justa)
+  const news = contractsList.filter((c) => inR(c.start));
+  const newValue = news.reduce((s, c) => s + c.monthly * c.months, 0);
+  const activeStart = contractsList.filter((c) => activeAt(c, a));
+  const canceled = contractsList.filter((c) => c.canceled && inR(c.canceled));
+  const activeEnd = contractsList.filter((c) => activeAt(c, b));
+  const mrr = activeEnd.reduce((s, c) => s + c.monthly, 0);
+  return {
+    spend, nLeads, crmLeads, hasAds: insR.length > 0,
+    cpl: nLeads ? spend / nLeads : null,
+    newClients: news.length, newMrr: news.reduce((s, c) => s + c.monthly, 0), newValue,
+    cac: news.length && spend ? spend / news.length : null,
+    roas: spend ? newValue / spend : null,
+    conv: nLeads ? news.length / nLeads : null,
+    active: activeEnd.length, mrr, ticket: activeEnd.length ? mrr / activeEnd.length : null,
+    churnN: canceled.length, churn: activeStart.length ? canceled.length / activeStart.length : null,
+    churnMrr: canceled.reduce((s, c) => s + c.monthly, 0)
+  };
+}
+
+// variação contra o período anterior (good: 'up' = subir é bom, 'down' = cair é bom, null = neutro)
+const ARROW = {
+  up: '<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 19V5M6 11l6-6 6 6"/></svg>',
+  down: '<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 5v14M6 13l6 6 6-6"/></svg>'
+};
+function delta(cur, prev, good = 'up', pp = false) {
+  if (cur == null || prev == null) return '';
+  const diff = pp ? (cur - prev) * 100 : prev ? ((cur - prev) / Math.abs(prev)) * 100 : null;
+  if (diff == null || !Number.isFinite(diff)) return ''; // sem base de comparação
+  if (Math.abs(diff) < 0.5) return '<span class="dl">estável</span>';
+  const upDir = diff > 0;
+  const cls = good == null ? '' : (upDir === (good === 'up') ? 'good' : 'bad');
+  return `<span class="dl ${cls}" title="Comparado ao período anterior">${upDir ? ARROW.up : ARROW.down}${Math.abs(diff).toLocaleString('pt-BR', { maximumFractionDigits: 1 })}${pp ? ' p.p.' : '%'}</span>`;
+}
+const pctTxt = (v) => (v == null ? '—' : (v * 100).toLocaleString('pt-BR', { maximumFractionDigits: 1 }) + '%');
+const money = (v) => (v == null ? '—' : brl(v));
+const kpi = (label, value, sub, dl = '', cls = '') => `<section class="panel kx ${cls}"><span class="kx-l" title="${label}">${label}</span><div class="kx-vr"><span class="kx-v">${value}</span>${dl}</div><div class="kx-s">${sub}</div></section>`;
 
 export async function renderDashboard(el) {
-  const from = since();
-  const leads = S.leads.filter((l) => inPeriod(l.created_at) && (!D.form || l.form_id === D.form));
-  const formIds = [...new Set([...Object.keys(S.forms), ...S.leads.map((l) => l.form_id)])];
-
-  const won = leads.filter((l) => stageOf(l)?.kind === 'won');
-  const lost = leads.filter((l) => stageOf(l)?.kind === 'lost');
-  const receita = won.reduce((a, l) => a + Number(l.valor || 0), 0);
-
   const canMoney = ['admin', 'gestor'].includes(S.me?.role);
-  el.innerHTML = `
-    <div class="topline"><h1>Dashboard</h1><div class="grow"></div>
-      ${dateBtn(D)}
-      <select class="inp" data-form style="width:auto"><option value="">Todos os formulários</option>${formIds.map((id) => `<option value="${id}" ${D.form === id ? 'selected' : ''}>${esc(S.forms[id]?.name || (id === 'manual' ? 'Cadastro manual' : id))}</option>`).join('')}</select>
-    </div>
-    ${canMoney ? `<h2 class="dash-h">Resumo do negócio</h2>
-    <div class="dash-grid" data-biz><div class="loading span-all" style="padding:40px 0">Carregando…</div></div>
-    <h2 class="dash-h">Leads e funil</h2>` : ''}
-    <div class="dash-grid">
-      ${tile('Leads', num(leads.length), `${num(leads.filter((l) => l.source === 'pago').length)} de anúncios pagos`, true)}
-      ${tile('Taxa do formulário', '<span data-formrate>…</span>', '<span data-formrate-sub>visitas que viraram lead</span>')}
-      ${tile('Leads quentes', num(leads.filter(isHot).length), 'faturam R$50 mil+ por mês')}
-      ${tile('Convertidos', num(won.length), receita ? brl(receita) + '/mês em contratos' : `${pct(won.length, leads.length)} dos leads`)}
-      ${tile('Em aberto', num(leads.length - won.length - lost.length), `${num(leads.filter(isInactive).length)} sem atividade há 7+ dias`)}
-      ${tile('Lembretes vencidos', num(S.leads.filter(isDue).length), 'em todos os leads')}
+  const [ra, rb] = dateRange(D);
+  const b = rb || new Date();
+  const a = ra || new Date(Math.min(...S.leads.map((l) => new Date(l.created_at).getTime()), b.getTime() - 30 * DAY));
+  const len = b - a;
+  const pa = new Date(a.getTime() - len); const pb = new Date(a.getTime() - 1);
 
-      <section class="panel chart-card span-8"><h3>Leads por ${bucketDays(leads) > 1 ? 'semana' : 'dia'}</h3><p class="sub">Quantos leads entraram no período</p>
-        <div class="legend"><span><i style="background:var(--viz-1)"></i>Quentes (R$50 mil+)</span><span><i style="background:var(--viz-neutral)"></i>Demais</span></div>
-        <div class="chart" data-chart="days"></div></section>
-      <section class="panel chart-card span-4"><h3>Pipeline</h3><p class="sub">Leads do período em cada estágio</p><div data-chart="funnel"></div></section>
-
-      <section class="panel chart-card span-6"><h3>Abandono do formulário</h3><p class="sub" data-drop-sub>Carregando eventos…</p><div data-chart="drop"></div></section>
-      <section class="panel chart-card span-6"><h3>Faturamento dos leads</h3><p class="sub">Distribuição por faixa informada no formulário</p><div data-chart="fat"></div></section>
-
-      <section class="panel chart-card span-6"><h3>Campanhas</h3><p class="sub">Por utm_campaign</p><div data-chart="camp"></div></section>
-      <section class="panel chart-card span-6"><h3>Equipe</h3><p class="sub">Leads atribuídos e convertidos por pessoa</p><div data-chart="team"></div></section>
-
-      <section class="panel chart-card span-6"><h3>Fonte</h3><p class="sub">Pago tem fbclid ou utm_medium de mídia paga</p><div data-chart="source"></div></section>
-      <section class="panel chart-card span-6"><h3>Formulários</h3><p class="sub">Leads por formulário de origem</p><div data-chart="forms"></div></section>
-    </div>`;
-
+  el.innerHTML = `<div class="topline"><h1>Dashboard</h1><div class="grow"></div>${dateBtn(D)}</div><div class="loading">Carregando…</div>`;
   el.querySelector('[data-date]').addEventListener('click', (e) => datePicker(e.currentTarget, D, (st) => { Object.assign(D, st); renderDashboard(el); }));
-  el.querySelector('[data-form]').addEventListener('change', (e) => { D.form = e.target.value; renderDashboard(el); });
 
-  columnChart($('[data-chart="days"]', el), dayBuckets(leads, from));
-  const openStages = S.stages.filter((s) => s.kind === 'open');
-  hbars($('[data-chart="funnel"]', el), S.stages.map((s) => {
-    const n = leads.filter((l) => l.stage_id === s.id).length;
-    const i = openStages.indexOf(s);
-    // estágios em andamento: rampa de âmbar (avança = mais intenso); ganho: branco; perdido: cinza
-    const color = s.kind === 'won' ? 'var(--viz-cream)' : s.kind === 'lost' ? 'var(--viz-gray)' : rampAt(i, openStages.length);
-    return { name: s.name, value: n, note: pct(n, leads.length), color };
-  }));
-  hbars($('[data-chart="fat"]', el), [...FAT, null].map((f, i) => {
-    const n = leads.filter((l) => (l.faturamento || null) === f).length;
-    return { name: f || 'Não informado', value: n, note: pct(n, leads.length), color: f ? `var(--ramp-${i + 1})` : 'var(--viz-gray)' };
-  }).filter((r) => r.value || r.name !== 'Não informado'));
-  const SRC_COLOR = { pago: 'var(--viz-1)', organico: 'var(--viz-cream)', manual: 'var(--viz-gray)', api: 'var(--ramp-2)' };
-  hbars($('[data-chart="source"]', el), ['pago', 'organico', 'manual', 'api'].map((s) => { const n = leads.filter((l) => l.source === s).length; return { name: sourceLabel(s), value: n, note: pct(n, leads.length), color: SRC_COLOR[s] }; }).filter((r) => r.value));
-  hbars($('[data-chart="forms"]', el), formIds.map((id) => { const n = leads.filter((l) => l.form_id === id).length; return { name: S.forms[id]?.name || (id === 'manual' ? 'Cadastro manual' : id), value: n, note: pct(n, leads.length) }; }).filter((r) => r.value).sort((a, b) => b.value - a.value));
-  groupTable($('[data-chart="camp"]', el), leads, (l) => l.utm_campaign || 'Sem campanha', 'Campanha');
-  groupTable($('[data-chart="team"]', el), leads, (l) => profileOf(l.assigned_to)?.nome || 'Não atribuído', 'Pessoa');
-
-  // resumo do negócio: financeiro, anúncios e recuperação
-  if (canMoney) {
-    try {
-      const b = await businessSummary(dateRange(D));
-      const host = el.querySelector('[data-biz]'); if (!host) return;
-      const money = (v) => (v == null ? '—' : brl(v));
-      const x2 = (v) => (v == null ? '—' : v.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + 'x');
-      host.innerHTML = `
-        ${tile('Faturamento', brl(b.revenue), `${num(b.nSales)} venda${b.nSales === 1 ? '' : 's'} · ${brl(b.revContract)} em contratos`, true)}
-        ${tile('Investimento em anúncios', brl(b.spend), b.hasAds ? 'Meta Ads no período' : 'conecte as contas no Financeiro')}
-        ${tile('Lucro', `<span class="${b.profit < 0 ? 'neg' : 'pos'}">${brl(b.profit)}</span>`, `despesas totais ${brl(b.expenses)}`)}
-        ${tile('ROAS', x2(b.roas), 'faturamento de vendas ÷ anúncios')}
-        ${tile('Leads', num(b.leadsN), b.hasAds ? `resultados da Meta · ${num(b.crmLeads)} no CRM` : 'no CRM')}
-        ${tile('Custo por lead', money(b.cpl), 'anúncios ÷ leads')}
-        ${tile('Vendas', num(b.nSales), `ticket ${money(b.ticket)} · conversão ${b.conv == null ? '—' : (b.conv * 100).toLocaleString('pt-BR', { maximumFractionDigits: 1 }) + '%'}`)}
-        ${tile('Para recuperar', num(b.recover), '<a class="link" href="/recuperacao">formulários incompletos com contato</a>')}
-        <section class="panel chart-card span-12 dash-top"><div class="int-h"><div><h3>Campanhas com mais investimento</h3><p class="sub">Resultados da Meta no período</p></div><a class="b b-sm" href="/financeiro">Ver todas</a></div>
-          ${b.top.length ? `<div class="table-wrap"><table class="int-table"><thead><tr><th>Campanha</th><th class="num">Investimento</th><th class="num">Leads</th><th class="num">Custo por lead</th></tr></thead><tbody>
-            ${b.top.map((c) => `<tr><td><div class="adt-n"><span class="adt-dot ${c.on ? 'on' : 'off'}"></span><b class="ellip-1" title="${esc(c.name)}">${esc(c.name)}</b></div></td><td class="num">${brl(c.spend)}</td><td class="num">${num(c.leads)}</td><td class="num">${money(c.cpl)}</td></tr>`).join('')}
-          </tbody></table></div>` : '<p class="muted empty-line">Sem campanhas no período.</p>'}
-        </section>`;
-    } catch (e) { fail(e); }
-  }
-
-  // eventos do formulário (abandono) — carregados à parte
+  let ins = [], entries = [], settings = null, partials = [];
   try {
-    const events = await DB.listEvents(from ? from.toISOString() : null);
-    if (!el.isConnected) return;
-    dropOff(el, events.filter((e) => inPeriod(e.created_at)), leads, from);
+    [ins, entries, settings, partials] = await Promise.all([
+      canMoney ? DB.listInsights(iso(pa), iso(b)).catch(() => []) : [],
+      canMoney ? DB.listFinance('2000-01-01', iso(new Date())).catch(() => []) : [],
+      canMoney ? DB.getTracking().catch(() => null) : null,
+      DB.listPartials().catch(() => [])
+    ]);
   } catch (e) { fail(e); }
+  if (!el.isConnected) return;
+
+  const months = settings?.contract_months || 12;
+  const list = contracts(entries, months);
+  const useMeta = ins.length > 0;
+  const cur = metrics(ins, S.leads, a, b, list, useMeta);
+  const prev = metrics(ins, S.leads, pa, pb, list, useMeta);
+  const ltv = cur.ticket && list.length ? cur.ticket * (list.reduce((s, c) => s + c.months, 0) / list.length) : null;
+
+  // funil do período
+  const leadsR = S.leads.filter((l) => { const d = new Date(l.created_at); return d >= a && d <= b; });
+  const open = S.stages.filter((s) => s.kind === 'open').sort((x, y) => x.position - y.position);
+  const qualIdx = Math.max(0, open.findIndex((s) => /qualific/i.test(s.name)));
+  const meetIdx = open.findIndex((s) => /reuni|agend/i.test(s.name));
+  const posOf = (l) => { const s = S.stages.find((x) => x.id === l.stage_id); return s ? (s.kind === 'won' ? 999 : s.kind === 'lost' ? -1 : open.indexOf(s)) : 0; };
+  const funnel = [
+    ['Leads', leadsR.length],
+    ['Em atendimento', leadsR.filter((l) => posOf(l) >= 1 || l.won_at).length],
+    ['Qualificados', leadsR.filter((l) => posOf(l) >= Math.max(qualIdx, 1) || l.won_at).length],
+    ...(meetIdx > 0 ? [['Reunião agendada', leadsR.filter((l) => posOf(l) >= meetIdx || l.won_at).length]] : []),
+    ['Vendas', leadsR.filter((l) => l.won_at).length]
+  ];
+
+  // precisa de atenção (agora)
+  const openLeads = S.leads.filter((l) => { const k = S.stages.find((s) => s.id === l.stage_id)?.kind; return k !== 'won' && k !== 'lost'; });
+  const attention = [
+    ['Lembretes vencidos', S.leads.filter(isDue).length, '/leads', 'Retorne hoje'],
+    ['Leads sem responsável', openLeads.filter((l) => !l.assigned_to).length, '/leads', 'Distribua pra equipe'],
+    ['Sem contato há 7+ dias', openLeads.filter(isInactive).length, '/leads', 'Risco de esfriar'],
+    ['Formulários incompletos', partials.filter((p) => ['em_andamento', 'abandonado'].includes(p.status) && (p.whatsapp || p.email)).length, '/recuperacao', 'Com contato pra recuperar']
+  ];
+  const soon = canMoney ? list.filter((c) => activeAt(c, new Date()) && c.end - Date.now() < 45 * DAY).sort((x, y) => x.end - y.end).slice(0, 6) : [];
+
+  const fmtDate = (d) => d.toLocaleDateString('pt-BR', { day: '2-digit', month: 'short' });
+  el.innerHTML = `
+    <div class="topline"><h1>Dashboard</h1><div class="grow"></div>${dateBtn(D)}</div>
+    ${canMoney ? `
+    <h2 class="dash-h">Receita recorrente <span>hoje</span></h2>
+    <div class="kx-grid kx-4">
+      ${kpi('Receita mensal (MRR)', brl(cur.mrr), `${cur.newMrr ? '+' + brl(cur.newMrr) + ' em novos contratos' : 'sem contratos novos'}${cur.churnMrr ? ` · −${brl(cur.churnMrr)} cancelados` : ''}`, delta(cur.mrr, prev.mrr), 'accent')}
+      ${kpi('Clientes ativos', num(cur.active), `${cur.newClients ? '+' + num(cur.newClients) + ' novo' + (cur.newClients === 1 ? '' : 's') : 'nenhum cliente novo'}${cur.churnN ? ` · −${num(cur.churnN)} cancelado${cur.churnN === 1 ? '' : 's'}` : ''}`, delta(cur.active, prev.active))}
+      ${kpi('Ticket médio', money(cur.ticket), ltv ? `LTV estimado ${brl(ltv)}` : 'por cliente, ao mês', delta(cur.ticket, prev.ticket))}
+      ${kpi('Churn', pctTxt(cur.churn), cur.churnN ? `${num(cur.churnN)} cancelamento${cur.churnN === 1 ? '' : 's'} no período` : 'nenhum cancelamento no período', delta(cur.churn, prev.churn, 'down', true))}
+    </div>
+    <h2 class="dash-h">Aquisição <span>no período</span></h2>
+    <div class="kx-grid kx-6">
+      ${kpi('Investimento', brl(cur.spend), cur.hasAds ? 'Meta Ads' : 'sem campanhas no período', delta(cur.spend, prev.spend, null))}
+      ${kpi('Leads', num(cur.nLeads), cur.hasAds ? `resultados da Meta · ${num(cur.crmLeads)} no CRM` : 'no CRM', delta(cur.nLeads, prev.nLeads))}
+      ${kpi('Custo por lead', money(cur.cpl), 'investimento ÷ leads', delta(cur.cpl, prev.cpl, 'down'))}
+      ${kpi('Novos clientes', num(cur.newClients), `conversão ${pctTxt(cur.conv)} dos leads`, delta(cur.newClients, prev.newClients))}
+      ${kpi('CAC', money(cur.cac), ltv && cur.cac ? `LTV:CAC ${(ltv / cur.cac).toLocaleString('pt-BR', { maximumFractionDigits: 1 })}x` : 'investimento ÷ novos clientes', delta(cur.cac, prev.cac, 'down'))}
+      ${kpi('ROAS', cur.roas == null ? '—' : cur.roas.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + 'x', `${brl(cur.newValue)} em contratos fechados`, delta(cur.roas, prev.roas))}
+    </div>` : ''}
+    <div class="dash-row ${canMoney ? '' : 'two'}">
+      <section class="panel dcard">
+        <div class="dcard-h"><h3>Funil do período</h3><a class="link" href="/leads">Central de leads</a></div>
+        <div class="fnl">${funnel.map(([n, v], i) => {
+          const base = funnel[0][1] || 1; const prevStep = i ? funnel[i - 1][1] : null;
+          return `<div class="fnl-row"><div class="fnl-l"><span>${n}</span><b>${num(v)}</b></div>
+            <div class="fnl-bar"><span style="width:${Math.max(v ? 3 : 0, (v / base) * 100)}%"></span></div>
+            <small>${i ? `${pctTxt(prevStep ? v / prevStep : null)} da etapa anterior` : 'entraram no período'}</small></div>`;
+        }).join('')}</div>
+      </section>
+      <section class="panel dcard">
+        <div class="dcard-h"><h3>Precisa de atenção</h3></div>
+        <div class="att">${attention.map(([n, v, href, hint]) => `<a class="att-row ${v ? 'hot' : ''}" href="${href}"><span class="att-n">${num(v)}</span><span class="att-t"><b>${n}</b><small>${v ? hint : 'Tudo em dia'}</small></span>${ICON.caret}</a>`).join('')}</div>
+      </section>
+      ${canMoney ? `<section class="panel dcard">
+        <div class="dcard-h"><h3>Contratos a vencer</h3><span class="muted">próximos 45 dias</span></div>
+        ${soon.length ? `<div class="soon">${soon.map((c) => `<div class="soon-row"><span class="soon-d">${fmtDate(c.end)}</span><span class="soon-t"><b title="${esc(c.name)}">${esc(c.name)}</b><small>${brl(c.monthly)}/mês</small></span></div>`).join('')}</div>`
+          : '<p class="muted empty-line">Nenhum contrato vence nos próximos 45 dias.</p>'}
+        <p class="help" style="margin:10px 0 0">Registre cancelamentos no lead (Contrato cancelado em) ou no lançamento da venda, pra o churn ficar certo.</p>
+      </section>` : ''}
+    </div>`;
+  el.querySelector('[data-date]').addEventListener('click', (e) => datePicker(e.currentTarget, D, (st) => { Object.assign(D, st); renderDashboard(el); }));
 }
 
-// posição i de n numa rampa de 5 tons de âmbar (ordinal: mais avançado = mais intenso)
-function rampAt(i, n) {
-  const k = n <= 1 ? 4 : Math.round((i / (n - 1)) * 4);
-  return `var(--ramp-${Math.max(1, Math.min(5, k + 1))})`;
-}
-
-function tile(label, value, sub, accent) {
-  return `<section class="panel tile ${accent ? 'accent' : ''}"><div class="t-label">${label}</div><div class="t-value">${value}</div><div class="t-sub">${sub}</div></section>`;
-}
-
-// ---------- abandono ----------
-function dropOff(el, events, leads, from) {
-  const fid = D.form && S.forms[D.form] ? D.form : 'trafego';
-  const form = S.forms[fid];
-  const ev = events.filter((e) => e.form_id === fid);
-  const sessions = (pred) => new Set(ev.filter(pred).map((e) => e.session_id)).size;
-  const views = sessions((e) => e.event === 'view');
-  const starts = sessions((e) => e.event === 'start');
-  const submits = S.leads.filter((l) => l.form_id === fid && inPeriod(l.created_at)).length;
-  const qs = form.fields.filter((f) => QTYPES.includes(f.type));
-  const strip = (h) => String(h).replace(/<[^>]+>/g, '').replace(/\{\{(\w+)(:\w+)?\}\}/g, '…');
-  const rows = [
-    { name: 'Visitaram', value: views },
-    { name: 'Começaram', value: starts },
-    ...qs.map((q, i) => ({ name: `${i + 1}. ${strip(q.title)}`, value: sessions((e) => e.event === 'step' && e.step_id === q.id), soft: !!q.showIf })),
-    { name: 'Enviaram', value: submits }
-  ].map((r, i, arr) => ({ ...r, note: i ? pct(r.value, arr[0].value) : '100%', color: i === 0 ? 'var(--viz-cream)' : rampAt(i - 1, arr.length - 1) }));
-
-  const rate = views ? pct(submits, views) : '—';
-  $('[data-formrate]', el).textContent = rate;
-  $('[data-formrate-sub]', el).textContent = views ? `${num(submits)} de ${num(views)} visitas (${form.name.replace('Assessoria Tracto - ', '')})` : 'sem visitas registradas ainda';
-  $('[data-drop-sub]', el).textContent = `${form.name}: sessões que chegaram em cada etapa (% das visitas)`;
-  hbars($('[data-chart="drop"]', el), rows, { max: views || 1 });
-}
-
-// ---------- barras horizontais ----------
+// barras horizontais (usadas também em Integrações)
 export function hbars(host, rows, { max } = {}) {
   if (!rows.length || rows.every((r) => !r.value)) { host.innerHTML = '<p class="muted">Sem dados no período.</p>'; return; }
   const m = max || Math.max(...rows.map((r) => r.value), 1);
@@ -151,104 +177,4 @@ export function hbars(host, rows, { max } = {}) {
       <span class="v">${num(r.value)}${r.note ? `<small>${r.note}</small>` : ''}</span>
     </div>`).join('')}</div>`;
   requestAnimationFrame(() => $$('.fill', host).forEach((f, i) => { f.style.width = (rows[i].value / m) * 100 + '%'; }));
-}
-
-// ---------- tabela agrupada ----------
-function groupTable(host, leads, keyFn, colName) {
-  const g = new Map();
-  leads.forEach((l) => {
-    const k = keyFn(l);
-    const r = g.get(k) || { name: k, n: 0, hot: 0, won: 0, rev: 0 };
-    r.n++; if (isHot(l)) r.hot++;
-    if (stageOf(l)?.kind === 'won') { r.won++; r.rev += Number(l.valor || 0); }
-    g.set(k, r);
-  });
-  const rows = [...g.values()].sort((a, b) => b.n - a.n).slice(0, 10);
-  if (!rows.length) { host.innerHTML = '<p class="muted">Sem dados no período.</p>'; return; }
-  const max = rows[0].n;
-  host.innerHTML = `<div class="table-wrap"><table class="dash-table"><thead><tr><th>${colName}</th><th class="num">Leads</th><th></th><th class="num">Quentes</th><th class="num">Convertidos</th><th class="num">Conversão</th><th class="num">Receita/mês</th></tr></thead><tbody>
-    ${rows.map((r) => `<tr><td>${esc(r.name)}</td><td class="num">${num(r.n)}</td><td style="width:22%"><div class="minibar"><i style="width:${(r.n / max) * 100}%"></i></div></td><td class="num">${num(r.hot)}</td><td class="num">${num(r.won)}</td><td class="num">${pct(r.won, r.n)}</td><td class="num">${r.rev ? brl(r.rev) : '—'}</td></tr>`).join('')}
-  </tbody></table></div>`;
-}
-
-// ---------- colunas por dia/semana ----------
-function bucketDays(leads) {
-  const from = since() || (leads.length ? new Date(Math.min(...leads.map((l) => +new Date(l.created_at)))) : new Date());
-  return (until() - from) / 86400000 > 120 ? 7 : 1;
-}
-function dayBuckets(leads, from) {
-  const step = bucketDays(leads);
-  const start = new Date(from || (leads.length ? Math.min(...leads.map((l) => +new Date(l.created_at))) : Date.now()));
-  start.setHours(0, 0, 0, 0);
-  const end = new Date(until()); end.setHours(0, 0, 0, 0);
-  const out = [];
-  for (let d = new Date(start); d <= end; d = new Date(+d + step * 86400000)) out.push({ date: new Date(d), value: 0, hot: 0 });
-  if (!out.length) out.push({ date: end, value: 0, hot: 0 });
-  leads.forEach((l) => {
-    const i = Math.min(out.length - 1, Math.floor((new Date(l.created_at) - start) / (step * 86400000)));
-    if (i >= 0) { out[i].value++; if (isHot(l)) out[i].hot++; }
-  });
-  out.step = step;
-  return out;
-}
-function niceMax(v) {
-  if (v <= 4) return 4;
-  const p = Math.pow(10, Math.floor(Math.log10(v)));
-  return [1, 2, 2.5, 5, 10].map((m) => m * p).find((m) => m >= v);
-}
-function columnChart(host, data) {
-  const W = Math.max(320, host.clientWidth);
-  const H = 230; const padL = 30; const padB = 24; const padT = 18;
-  const max = niceMax(Math.max(...data.map((d) => d.value), 1));
-  const iw = W - padL; const ih = H - padB - padT;
-  const bw = iw / data.length;
-  const gap = Math.min(2, bw * 0.2);
-  const barW = Math.max(1, Math.min(28, bw - gap));
-  const y = (v) => padT + ih - (v / max) * ih;
-  const ticks = [0, max / 2, max];
-  const fmt = (d) => d.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' });
-  const every = Math.ceil(data.length / Math.max(2, Math.floor(iw / 64)));
-
-  // coluna empilhada: base = demais (neutro), topo = quentes (âmbar); só o topo da pilha é arredondado
-  const seg = (x, yTop, yBot, round) => {
-    const h = yBot - yTop; if (h <= 0) return '';
-    const r = round ? Math.min(4, barW / 2, h) : 0;
-    return r ? `M${x},${yBot} V${yTop + r} Q${x},${yTop} ${x + r},${yTop} H${x + barW - r} Q${x + barW},${yTop} ${x + barW},${yTop + r} V${yBot} Z`
-             : `M${x},${yBot} V${yTop} H${x + barW} V${yBot} Z`;
-  };
-  const GAP = 2;
-  const showTotals = bw >= 16;
-  const bars = data.map((d, i) => {
-    if (!d.value) return '';
-    const x = padL + i * bw + (bw - barW) / 2;
-    const base = padT + ih;
-    const rest = d.value - d.hot;
-    const yRest = y(rest); const yTop = y(d.value);
-    let out = '';
-    if (rest) out += `<path class="bar rest" data-i="${i}" d="${seg(x, yRest, base, !d.hot)}"/>`;
-    if (d.hot) out += `<path class="bar hot" data-i="${i}" d="${seg(x, yTop, rest ? yRest - GAP : base, true)}"/>`;
-    if (showTotals) out += `<text class="tot" x="${x + barW / 2}" y="${yTop - 5}" text-anchor="middle">${d.value}</text>`;
-    return out;
-  }).join('');
-  host.innerHTML = `<svg viewBox="0 0 ${W} ${H}" height="${H}" role="img" aria-label="Leads por período">
-    ${ticks.map((t) => `<line class="gl" x1="${padL}" x2="${W}" y1="${y(t)}" y2="${y(t)}"/><text class="ax" x="${padL - 8}" y="${y(t) + 4}" text-anchor="end">${num(t)}</text>`).join('')}
-    ${bars}
-    ${data.map((d, i) => (i % every === 0 ? `<text class="ax" x="${padL + i * bw + bw / 2}" y="${H - 6}" text-anchor="middle">${fmt(d.date)}</text>` : '')).join('')}
-    ${data.map((d, i) => `<rect class="hit" data-i="${i}" x="${padL + i * bw}" y="${padT}" width="${bw}" height="${ih}"/>`).join('')}
-  </svg><div class="ctip" hidden></div>`;
-
-  const tip = host.querySelector('.ctip');
-  const svg = host.querySelector('svg');
-  svg.addEventListener('mousemove', (e) => {
-    const h = e.target.closest('.hit'); if (!h) return;
-    const i = +h.dataset.i; const d = data[i];
-    host.querySelectorAll('.bar').forEach((b) => b.classList.toggle('dim', +b.dataset.i !== i));
-    const label = data.step > 1 ? `Semana de ${fmt(d.date)}` : d.date.toLocaleDateString('pt-BR', { weekday: 'short', day: '2-digit', month: 'short' });
-    tip.innerHTML = `<div class="muted">${label}</div><b>${num(d.value)}</b> lead${d.value === 1 ? '' : 's'}${d.hot ? ` · ${d.hot} quente${d.hot > 1 ? 's' : ''}` : ''}`;
-    tip.hidden = false;
-    const scale = svg.getBoundingClientRect().width / W;
-    tip.style.left = Math.min(Math.max((padL + i * bw + bw / 2) * scale, 70), host.clientWidth - 70) + 'px';
-    tip.style.top = y(Math.max(d.value, 0)) * scale + 'px';
-  });
-  svg.addEventListener('mouseleave', () => { tip.hidden = true; host.querySelectorAll('.bar').forEach((b) => b.classList.remove('dim')); });
 }

@@ -1,6 +1,6 @@
 // Financeiro (estilo UTMify): gasto da Meta Ads × leads e vendas do CRM × receitas e despesas lançadas
 import { DB } from '@shared/db.js';
-import { BRAND, dateRange, datePicker, dateBtn, S, $, $$, esc, ICON, brl, num, pct, fullDate, ago, toast, fail, modal, confirmBox } from './util.js?v=2609281959';
+import { BRAND, dateRange, datePicker, dateBtn, S, $, $$, esc, ICON, brl, num, pct, fullDate, ago, toast, fail, modal, confirmBox } from './util.js?v=2609282004';
 
 const F = { period: '30', from: '', to: '', level: 'campaign', revenue: 'mensal', sort: 'spend', tab: 'geral' };
 const GRAPH = 'v21.0';
@@ -404,40 +404,6 @@ function bindLeadActions(el, reload) {
   card.querySelector('[data-la-auto]')?.addEventListener('click', (e) => save([], e.currentTarget));
 }
 
-// ---------- resumo do negócio (usado no Dashboard) ----------
-export async function businessSummary([from, to]) {
-  const a = from ? iso(from) : '2020-01-01'; const b = iso(to || new Date());
-  const inR = (d) => { const x = iso(new Date(d)); return x >= a && x <= b; };
-  const [ins, entries, settings, partials] = await Promise.all([DB.listInsights(a, b).catch(() => []), DB.listFinance(a, b).catch(() => []), DB.getTracking().catch(() => null), DB.listPartials().catch(() => [])]);
-  LEAD_TYPES = Array.isArray(settings?.meta_lead_actions) && settings.meta_lead_actions.length ? settings.meta_lead_actions : null;
-  const leads = S.leads.filter((l) => inR(l.created_at));
-  const sales = S.leads.filter((l) => l.won_at && inR(l.won_at));
-  const manual = entries.filter(isSaleEntry);
-  const monthly = (e) => Number(e.monthly_amount || e.amount);
-  const revSales = sales.reduce((x, l) => x + Number(l.valor || 0), 0) + manual.reduce((x, e) => x + monthly(e), 0);
-  const revContract = sales.reduce((x, l) => x + Number(l.valor || 0) * (settings?.contract_months || 12), 0) + manual.reduce((x, e) => x + Number(e.amount), 0);
-  const other = entries.filter((e) => e.kind === 'receita' && !isSaleEntry(e)).reduce((x, e) => x + Number(e.amount), 0);
-  const exp = entries.filter((e) => e.kind === 'despesa').reduce((x, e) => x + Number(e.amount), 0);
-  const spend = ins.reduce((x, r) => x + Number(r.spend), 0);
-  const metaLeads = ins.reduce((x, r) => x + rowLeads(r), 0);
-  const nSales = sales.length + manual.length;
-  const camps = new Map();
-  ins.forEach((r) => {
-    const k = r.campaign_id || r.campaign_name; const c = camps.get(k) || { name: r.campaign_name || '(sem nome)', spend: 0, leads: 0, last: '' };
-    c.spend += Number(r.spend); c.leads += rowLeads(r); if (Number(r.spend) > 0 && r.date > c.last) c.last = r.date; camps.set(k, c);
-  });
-  const lastDay = ins.reduce((x, r) => (r.date > x ? r.date : x), '');
-  const open = partials.filter((p) => ['em_andamento', 'abandonado'].includes(p.status) && (p.whatsapp || p.email) && inR(p.updated_at || p.created_at));
-  return {
-    hasAds: ins.length > 0, spend, metaLeads, crmLeads: leads.length, leadsN: ins.length ? metaLeads : leads.length,
-    revenue: revSales + other, revContract: revContract + other, other, expenses: spend + exp, profit: revSales + other - spend - exp,
-    roas: spend ? revSales / spend : null, cpl: (ins.length ? metaLeads : leads.length) ? spend / (ins.length ? metaLeads : leads.length) : null,
-    nSales, ticket: nSales ? revSales / nSales : null, conv: (ins.length ? metaLeads : leads.length) ? nSales / (ins.length ? metaLeads : leads.length) : null,
-    recover: open.length,
-    top: [...camps.values()].sort((x, y) => y.spend - x.spend).slice(0, 6).map((c) => ({ ...c, cpl: c.leads ? c.spend / c.leads : null, on: c.last && c.last >= lastDay }))
-  };
-}
-
 function pickAccounts(conn, fbName, list, current, done) {
   const cur = new Map(current.map((a) => [a.account_id, a]));
   const rows = list.map((a) => ({ id: a.id, name: a.name, currency: a.currency, status: a.account_status, biz: a.business?.name }))
@@ -651,6 +617,7 @@ function entryModal(done, entry = null) {
         <div class="row"><label class="lbl">Valor total (R$)</label><input class="inp" data-total inputmode="decimal" placeholder="0,00" value="${entry && SALE_CATS.includes(entry.category) ? fmt0(entry.amount) : ''}"></div>
       </div>
       <p class="help" style="margin-top:-4px">O total é calculado sozinho (mensal × meses). Se o valor arrecadado for outro, é só editar.</p>
+      <div class="row"><label class="lbl">Contrato cancelado em <span class="muted" style="text-transform:none;letter-spacing:0">(opcional, entra no churn)</span></label><input class="inp" type="date" data-canceled value="${entry?.canceled_at || ''}"></div>
     </div>
     <div class="row" data-simple hidden><label class="lbl">Valor (R$)</label><input class="inp" data-amount inputmode="decimal" placeholder="0,00" value="${entry && !SALE_CATS.includes(entry.category) ? fmt0(entry.amount) : ''}"></div>
     <div class="row"><label class="lbl" data-desc-l>Cliente</label><input class="inp" data-desc maxlength="200" placeholder="Ex: Ferragista Silva" value="${esc(entry?.description || '')}"></div>
@@ -696,7 +663,7 @@ function entryModal(done, entry = null) {
         if (!(months >= 1 && months <= 120)) return toast('Meses de contrato entre 1 e 120', true);
         if (!(monthly > 0)) return toast('Informe o valor mensal', true);
         if (!(total > 0)) return toast('Informe o valor total', true);
-        row = { ...base, amount: total, months, monthly_amount: monthly };
+        row = { ...base, amount: total, months, monthly_amount: monthly, canceled_at: $c('[data-canceled]').value || null };
       } else {
         const amount = parseMoney($c('[data-amount]').value);
         if (!(amount > 0)) return toast('Informe um valor', true);

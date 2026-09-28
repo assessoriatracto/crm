@@ -3,16 +3,16 @@ import {
   go, routeName, S, $, $$, esc, ICON, FAT, COLORS, initials, isHot, stageOf, profileOf, labelOf, isInactive, isDue, fatShort, brl, pct, num,
   fmtPhone, fullDate, longDate, addedAt, ago, sourceLabel, formName, waLink, toast, fail, popover, closePop, menu, multiSelect,
   modal, confirmBox, downloadCSV, dateRange, datePicker, dateBtn
-} from './util.js?v=2609281959';
-import { importModal } from './import.js?v=2609281959';
-import { renderDashboard } from './dashboard.js?v=2609281959';
-import { renderSettings } from './admin.js?v=2609281959';
-import { renderIntegrations, renderPixel, leadMetaEvents, statusPill } from './integrations.js?v=2609281959';
-import { renderRecovery, loadPartials } from './recovery.js?v=2609281959';
-import { showSignIn, showSignUp, showForgot, showReset, showMfa, showPending, watchIdle, AUTH_ROUTES } from './auth.js?v=2609281959';
-import { openProfile } from './profile.js?v=2609281959';
-import { renderBuilder } from './builder.js?v=2609281959';
-import { renderFinance } from './finance.js?v=2609281959';
+} from './util.js?v=2609282004';
+import { importModal } from './import.js?v=2609282004';
+import { renderDashboard } from './dashboard.js?v=2609282004';
+import { renderSettings } from './admin.js?v=2609282004';
+import { renderIntegrations, renderPixel, leadMetaEvents, statusPill } from './integrations.js?v=2609282004';
+import { renderRecovery, loadPartials } from './recovery.js?v=2609282004';
+import { showSignIn, showSignUp, showForgot, showReset, showMfa, showPending, watchIdle, AUTH_ROUTES } from './auth.js?v=2609282004';
+import { openProfile } from './profile.js?v=2609282004';
+import { renderBuilder } from './builder.js?v=2609282004';
+import { renderFinance } from './finance.js?v=2609282004';
 
 // ============================================================
 // preferências locais (por navegador)
@@ -713,7 +713,8 @@ function renderDrawer() {
           <div><label class="lbl">Atribuído a</label><select class="inp" data-field="assigned_to"><option value="">Não atribuído</option>${S.profiles.filter((p) => p.ativo || p.id === l.assigned_to).map((p) => `<option value="${p.id}" ${p.id === l.assigned_to ? 'selected' : ''}>${esc(p.nome)}</option>`).join('')}</select></div>
           <div><label class="lbl">Estágio</label><select class="inp" data-field="stage_id">${S.stages.map((s) => `<option value="${s.id}" ${s.id === l.stage_id ? 'selected' : ''}>${esc(s.name)}</option>`).join('')}</select></div>
         </div>
-        <div style="margin-top:10px"><label class="lbl">Valor do contrato (R$/mês)</label><input class="inp" data-field="valor" inputmode="decimal" value="${l.valor ?? ''}" placeholder="0"></div>
+        <div class="${l.won_at ? 'grid2' : ''}" style="margin-top:10px"><div><label class="lbl">Valor do contrato (R$/mês)</label><input class="inp" data-field="valor" inputmode="decimal" value="${l.valor ?? ''}" placeholder="0"></div>
+          ${l.won_at ? `<div><label class="lbl">Contrato cancelado em</label><input class="inp" type="date" data-field="canceled_at" value="${l.canceled_at || ''}"></div>` : ''}</div>
       </div>
       <div class="sec">
         <h4>Lembrete</h4>
@@ -797,7 +798,7 @@ drawer.addEventListener('change', async (e) => {
   let v = e.target.value.trim();
   if (f === 'valor') { v = v ? Number(v.replace(/\./g, '').replace(',', '.')) : null; if (v !== null && Number.isNaN(v)) return toast('Valor inválido', true); }
   else v = v || null;
-  patch([S.openId], { [f]: v }, f === 'valor' ? 'Valor salvo' : null);
+  patch([S.openId], { [f]: v }, f === 'valor' ? 'Valor salvo' : f === 'canceled_at' ? (v ? 'Cancelamento registrado' : 'Cancelamento removido') : null);
 });
 drawer.addEventListener('click', async (e) => {
   const b = e.target.closest('[data-d]'); if (!b) return;
