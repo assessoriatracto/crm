@@ -232,15 +232,17 @@ alter table public.stages add column if not exists meta_event text;
 alter table public.stages add column if not exists ga4_event text;
 alter table public.stages add column if not exists meta_value text not null default 'none';
 alter table public.stages drop constraint if exists stages_meta_value_check;
-alter table public.stages add constraint stages_meta_value_check check (meta_value in ('none', 'lead', 'contract'));
+-- lead não tem valor: só a venda confirmada (estágio de venda) envia o valor do contrato
+update public.stages set meta_value = 'none' where meta_value = 'lead' or (meta_value = 'contract' and kind <> 'won');
+alter table public.stages add constraint stages_meta_value_check check (meta_value in ('none', 'contract') and (meta_value = 'none' or kind = 'won'));
 
 insert into public.stages (name, color, position, kind, meta_event, ga4_event, meta_value)
 select * from (values
   ('Em análise',        '#6AA8FF', 0, 'open', null,              null,                   'none'),
   ('Contato realizado', '#B58CFF', 1, 'open', 'LeadContatado',   'working_lead',         'none'),
   ('Ligação',           '#4FD1C5', 2, 'open', null,              null,                   'none'),
-  ('Qualificado',       '#FFAD00', 3, 'open', 'LeadQualificado', 'qualify_lead',         'lead'),
-  ('Reunião agendada',  '#FF8A3D', 4, 'open', 'ReuniaoAgendada', 'reuniao_agendada',     'lead'),
+  ('Qualificado',       '#FFAD00', 3, 'open', 'LeadQualificado', 'qualify_lead',         'none'),
+  ('Reunião agendada',  '#FF8A3D', 4, 'open', 'ReuniaoAgendada', 'reuniao_agendada',     'none'),
   ('Venda realizada',   '#3DDC84', 5, 'won',  'VendaRealizada',  'close_convert_lead',   'contract'),
   ('Perdido',           '#6B6B6B', 6, 'lost', null,              'close_unconvert_lead', 'none')
 ) v(name, color, position, kind, meta_event, ga4_event, meta_value)
@@ -670,13 +672,11 @@ language sql stable as $$
   ));
 $$;
 
--- valor enviado com o evento: estimado pela faixa de faturamento ou do contrato × meses
+-- valor enviado com o evento: só na venda confirmada (mensalidade × meses de contrato). Lead não tem valor.
 create or replace function public.lead_value(l public.leads, p_mode text) returns numeric
 language sql stable security definer set search_path = public as $$
-  select case p_mode
-    when 'lead' then (select (lead_values->>l.faturamento)::numeric from tracking_settings where id = 1)
-    when 'contract' then l.valor * (select contract_months from tracking_settings where id = 1)
-  end;
+  select case when p_mode = 'contract' and l.valor > 0 and l.stage_id in (select id from stages where kind = 'won')
+    then l.valor * (select contract_months from tracking_settings where id = 1) end;
 $$;
 
 
@@ -791,11 +791,10 @@ begin
     'event_source_url', case when p_action_source = 'website' then coalesce(l.event_source_url, 'https://assessoriatracto.com.br/aplicar/') end,
     'user_data', meta_user_data(l),
     'custom_data', jsonb_strip_nulls(jsonb_build_object(
-      'currency', cfg.currency, 'value', p_value,
+      'currency', case when p_value is not null then cfg.currency end, 'value', p_value,
       'content_name', coalesce(l.form_name, l.form_id), 'content_category', 'lead',
       'event_source', 'crm', 'lead_event_source', 'Tracto CRM',
-      'lead_stage', st.name, 'faturamento', l.faturamento,
-      'lead_score', (cfg.lead_values->>l.faturamento)::numeric, 'fonte', l.source,
+      'lead_stage', st.name, 'faturamento', l.faturamento, 'fonte', l.source,
       'utm_source', l.utm_source, 'utm_medium', l.utm_medium, 'utm_campaign', l.utm_campaign, 'utm_content', l.utm_content))
   ));
   v_body := jsonb_strip_nulls(jsonb_build_object('data', jsonb_build_array(v_event), 'test_event_code', px.test_event_code));
@@ -828,7 +827,7 @@ begin
         'sha256_first_name', meta_hash(v_first), 'sha256_last_name', meta_hash(split_part(v_last, ' ', -1)),
         'city', lower(l.cidade), 'region', lower(coalesce(l.estado, ddd_uf(l.whatsapp))), 'postal_code', regexp_replace(coalesce(l.cep, ''), '\D', '', 'g'), 'country', 'BR'))))),
     'events', jsonb_build_array(jsonb_build_object('name', p_event, 'params', jsonb_strip_nulls(jsonb_build_object(
-      'currency', cfg.currency, 'value', p_value, 'lead_source', l.source, 'form_name', coalesce(l.form_name, l.form_id),
+      'currency', case when p_value is not null then cfg.currency end, 'value', p_value, 'lead_source', l.source, 'form_name', coalesce(l.form_name, l.form_id),
       'lead_stage', st.name, 'faturamento', l.faturamento, 'transaction_id', p_event_id,
       'campaign', l.utm_campaign, 'source', l.utm_source, 'medium', l.utm_medium, 'engagement_time_msec', 1))))
   ));
@@ -853,11 +852,11 @@ begin
   for px in select * from tracking_pixels where enabled and access_token is not null loop
     if p_kind = 'lead' and coalesce((px.events->>'lead')::boolean, true) and l.form_id <> 'manual' and l.recovered_from is null then
       if px.platform = 'meta' then
-        n := n + meta_send(px, l, 'Lead', coalesce(l.lead_event_id, l.id::text), lead_value(l, 'lead'),
+        n := n + meta_send(px, l, 'Lead', coalesce(l.lead_event_id, l.id::text), null,
                case when l.event_source_url is not null then 'website' else 'system_generated' end)::int;
       elsif px.platform = 'ga4' and l.event_source_url is null then
         -- leads do navegador já mandam generate_lead pelo gtag; aqui só os que chegam por API
-        n := n + ga4_send(px, l, 'generate_lead', coalesce(l.lead_event_id, l.id::text), lead_value(l, 'lead'))::int;
+        n := n + ga4_send(px, l, 'generate_lead', coalesce(l.lead_event_id, l.id::text), null)::int;
       end if;
     elsif p_kind = 'stage' and st.id is not null and coalesce((px.events->>'funnel')::boolean, true) then
       if px.platform = 'meta' and st.meta_event is not null then
@@ -1280,9 +1279,9 @@ begin
   if l.id is null then raise exception 'receba ou crie ao menos um lead pra testar'; end if;
   if px.platform = 'meta' then
     if px.test_event_code is null then raise exception 'preencha o código de evento de teste do Gerenciador de Eventos'; end if;
-    return meta_send(px, l, 'Lead', 'teste-' || gen_random_uuid()::text, lead_value(l, 'lead'), 'website', true)::int;
+    return meta_send(px, l, 'Lead', 'teste-' || gen_random_uuid()::text, null, 'website', true)::int;
   elsif px.platform = 'ga4' then
-    return ga4_send(px, l, 'generate_lead', 'teste-' || gen_random_uuid()::text, lead_value(l, 'lead'), true)::int;
+    return ga4_send(px, l, 'generate_lead', 'teste-' || gen_random_uuid()::text, null, true)::int;
   end if;
   raise exception 'Google Ads é testado pelo Tag Assistant, direto no formulário';
 end $$;

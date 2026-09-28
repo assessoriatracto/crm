@@ -1,7 +1,7 @@
 // Abas "Integrações" (API + webhooks) e "Pixel" (Meta Pixel + Conversions API)
 import { DB, LIVE } from '@shared/db.js';
-import { S, $, $$, esc, FAT, ICON, BRAND, num, pct, brl, fullDate, ago, toast, fail, modal, confirmBox, menu } from './util.js?v=2609281334';
-import { hbars } from './dashboard.js?v=2609281334';
+import { S, $, $$, esc, FAT, ICON, BRAND, num, pct, brl, fullDate, ago, toast, fail, modal, confirmBox, menu } from './util.js?v=2609281347';
+import { hbars } from './dashboard.js?v=2609281347';
 import { PIXEL_EVENTS_RECOMMENDED } from '@shared/db.js';
 
 const EVENTS = [
@@ -251,7 +251,6 @@ export async function renderPixel(el, { quiet = false } = {}) {
   const formLeads = S.leads.filter((l) => l.form_id !== 'manual' && !l.recovered_from && new Date(l.created_at) >= since);
   const bestPx = pixels.find((p) => p.platform === 'meta' && p.access_token && p.enabled) || pixels.find((p) => p.platform === 'meta');
   const score = matchScore(formLeads, bestPx);
-  const lv = settings.lead_values || {};
   const q = PX.q.trim().toLowerCase();
   const list = pixels.filter((p) => (!PX.platform || p.platform === PX.platform) && (!q || (p.name + ' ' + p.pixel_id).toLowerCase().includes(q)));
   const sent = events.filter((e) => !e.test);
@@ -301,16 +300,15 @@ export async function renderPixel(el, { quiet = false } = {}) {
           ${S.stages.map((s) => `<tr data-stage="${s.id}"><td><span class="stage-pill"><span class="dot" style="background:${s.color}"></span>${esc(s.name)}</span></td>
             <td><input class="inp" data-meta maxlength="40" placeholder="não enviar" value="${esc(s.meta_event || '')}"></td>
             <td><input class="inp" data-ga4 maxlength="40" placeholder="não enviar" value="${esc(s.ga4_event || '')}"></td>
-            <td><select class="inp" data-val><option value="none" ${s.meta_value === 'none' ? 'selected' : ''}>Sem valor</option><option value="lead" ${s.meta_value === 'lead' ? 'selected' : ''}>Valor estimado do lead</option><option value="contract" ${s.meta_value === 'contract' ? 'selected' : ''}>Contrato × ${settings.contract_months} meses</option></select></td></tr>`).join('')}
+            <td>${s.kind === 'won' ? `<select class="inp" data-val><option value="contract" ${s.meta_value === 'contract' ? 'selected' : ''}>Valor da venda</option><option value="none" ${s.meta_value !== 'contract' ? 'selected' : ''}>Sem valor</option></select>` : '<span class="muted">Sem valor</span><input type="hidden" data-val value="none">'}</td></tr>`).join('')}
         </tbody></table></div>
         <p class="help" style="margin-top:10px">Nomes sem espaço (ex: <code>LeadQualificado</code>). Evite nomes de eventos padrão da Meta como Lead ou Purchase aqui, pra não contarem como conversão. No GA4 os nomes recomendados pra funil de leads são <code>working_lead</code>, <code>qualify_lead</code>, <code>close_convert_lead</code> e <code>close_unconvert_lead</code>.</p>
       </section>
 
       <section class="panel int-card">
-        <div class="int-h"><div><h3>Valor dos leads</h3><p class="help">Valor estimado de cada lead pela faixa de faturamento, enviado junto com a conversão. Mostra nos relatórios quais campanhas trazem os leads mais valiosos.</p></div></div>
-        ${FAT.map((f) => `<div class="srow"><span class="grow">${esc(f)}</span><span class="muted">R$</span><input class="inp" style="width:110px" data-lv="${esc(f)}" inputmode="decimal" value="${lv[f] ?? ''}"></div>`).join('')}
-        <div class="srow"><span class="grow">Meses de contrato (venda = mensalidade × meses)</span><input class="inp" style="width:80px" data-months inputmode="numeric" value="${settings.contract_months}"></div>
-        <div class="sec-actions"><button class="b b-primary" data-save-values>Salvar valores</button></div>
+        <div class="int-h"><div><h3>Valor da venda</h3><p class="help">Leads e etapas do funil vão sem valor. Só a venda confirmada (estágio de venda) envia valor: a mensalidade do lead × meses de contrato. É esse sinal que ensina a Meta e o Google a buscar quem compra.</p></div></div>
+        <div class="srow"><span class="grow">Meses de contrato</span><input class="inp" style="width:80px" data-months inputmode="numeric" value="${settings.contract_months}"></div>
+        <div class="sec-actions"><button class="b b-primary" data-save-values>Salvar</button></div>
       </section>
 
       <section class="panel int-card">
@@ -318,7 +316,7 @@ export async function renderPixel(el, { quiet = false } = {}) {
         <ul class="how">
           <li><b>Dados do lead</b> (e-mail, telefone, nome e localização) vão criptografados. Nem a Meta nem o Google recebem o dado aberto.</li>
           <li><b>Dados da visita</b> (navegador e clique no anúncio) ajudam a reconhecer quem clicou no anúncio.</li>
-          <li><b>Contexto</b>: formulário, faixa de faturamento, estágio no funil, valor e campanha.</li>
+          <li><b>Contexto</b>: formulário, faixa de faturamento, estágio no funil e campanha. <b>Valor só na venda confirmada.</b></li>
           <li>Cada conversão vai pelo navegador e pelo servidor e é <b>contada uma vez só</b>.</li>
         </ul>
       </section>
@@ -379,12 +377,9 @@ export async function renderPixel(el, { quiet = false } = {}) {
   });
 
   el.querySelector('[data-save-values]').addEventListener('click', async () => {
-    const vals = {};
-    for (const i of $$('[data-lv]', el)) { const v = i.value.trim().replace(/\./g, '').replace(',', '.'); if (v) vals[i.dataset.lv] = Number(v); }
-    if (Object.values(vals).some((v) => Number.isNaN(v) || v < 0)) return toast('Valores inválidos', true);
     const months = Math.round(Number(el.querySelector('[data-months]').value));
     if (!(months >= 1 && months <= 60)) return toast('Meses entre 1 e 60', true);
-    try { await DB.saveTracking({ lead_values: vals, contract_months: months }); toast('Valores salvos'); reload(); } catch (e) { fail(e); }
+    try { await DB.saveTracking({ contract_months: months }); toast('Salvo'); reload(); } catch (e) { fail(e); }
   });
 }
 
