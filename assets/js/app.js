@@ -3,15 +3,15 @@ import {
   S, $, $$, esc, ICON, FAT, COLORS, initials, isHot, stageOf, profileOf, labelOf, isInactive, isDue, fatShort, brl, pct, num,
   fmtPhone, fullDate, longDate, addedAt, ago, sourceLabel, formName, waLink, toast, fail, popover, closePop, menu, multiSelect,
   modal, confirmBox, downloadCSV, dateRange, datePicker, dateBtn
-} from './util.js?v=2609280024';
-import { renderDashboard } from './dashboard.js?v=2609280024';
-import { renderSettings } from './admin.js?v=2609280024';
-import { renderIntegrations, renderPixel, leadMetaEvents, statusPill } from './integrations.js?v=2609280024';
-import { renderRecovery, loadPartials } from './recovery.js?v=2609280024';
-import { showSignIn, showSignUp, showForgot, showReset, showMfa, showPending, watchIdle, AUTH_ROUTES } from './auth.js?v=2609280024';
-import { openProfile } from './profile.js?v=2609280024';
-import { renderBuilder } from './builder.js?v=2609280024';
-import { renderFinance } from './finance.js?v=2609280024';
+} from './util.js?v=2609280031';
+import { renderDashboard } from './dashboard.js?v=2609280031';
+import { renderSettings } from './admin.js?v=2609280031';
+import { renderIntegrations, renderPixel, leadMetaEvents, statusPill } from './integrations.js?v=2609280031';
+import { renderRecovery, loadPartials } from './recovery.js?v=2609280031';
+import { showSignIn, showSignUp, showForgot, showReset, showMfa, showPending, watchIdle, AUTH_ROUTES } from './auth.js?v=2609280031';
+import { openProfile } from './profile.js?v=2609280031';
+import { renderBuilder } from './builder.js?v=2609280031';
+import { renderFinance } from './finance.js?v=2609280031';
 
 // ============================================================
 // preferências locais (por navegador)
@@ -22,7 +22,7 @@ const savePref = () => { try { localStorage.setItem(PREF_KEY, JSON.stringify({ v
 
 const V = {
   view: pref.view || 'board',
-  showFilters: pref.showFilters ?? true,
+  showFilters: pref.showFilters ?? !matchMedia('(max-width:760px)').matches,
   bulkMode: false,
   sel: new Set(),
   sort: { key: 'created_at', dir: -1 },
@@ -251,16 +251,16 @@ function renderLeads() {
     <section class="panel toolbar">
       <div class="tb-row">
         <div class="seg">
-          <button class="b ${V.view === 'board' ? 'on' : ''}" data-act="view" data-v="board"><svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor"><rect x="3" y="4" width="4.5" height="16" rx="1"/><rect x="9.75" y="4" width="4.5" height="12" rx="1"/><rect x="16.5" y="4" width="4.5" height="8" rx="1"/></svg>Visualização de pipeline</button>
-          <button class="b ${V.view === 'table' ? 'on' : ''}" data-act="view" data-v="table"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 10h18M3 15h18M9 4v16"/></svg>Visualização de tabela</button>
+          <button class="b ${V.view === 'board' ? 'on' : ''}" data-act="view" data-v="board"><svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor"><rect x="3" y="4" width="4.5" height="16" rx="1"/><rect x="9.75" y="4" width="4.5" height="12" rx="1"/><rect x="16.5" y="4" width="4.5" height="8" rx="1"/></svg><span class="tb-t">Visualização de pipeline</span></button>
+          <button class="b ${V.view === 'table' ? 'on' : ''}" data-act="view" data-v="table"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 10h18M3 15h18M9 4v16"/></svg><span class="tb-t">Visualização de tabela</span></button>
         </div>
         <div class="grow"></div>
-        <button class="b" data-act="toggle-filters"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 6h16M7 12h10M10 18h4"/></svg>${V.showFilters ? 'Ocultar filtros' : 'Mostrar filtros'}</button>
+        <button class="b" data-act="toggle-filters"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 6h16M7 12h10M10 18h4"/></svg><span class="tb-t">${V.showFilters ? 'Ocultar filtros' : 'Mostrar filtros'}</span><span class="tb-m">Filtros</span>${anyFilter ? '<i class="tb-dot"></i>' : ''}</button>
       </div>
       <div class="tb-row filters" ${V.showFilters ? '' : 'hidden'}>
-        <button class="b" data-act="add-stage">Adicionar estágio personalizado</button>
-        <button class="b ${V.bulkMode ? 'on' : ''}" data-act="bulk">Edição em massa</button>
-        <span class="vsep"></span>
+        <button class="b tb-desk" data-act="add-stage">Adicionar estágio personalizado</button>
+        <button class="b tb-desk ${V.bulkMode ? 'on' : ''}" data-act="bulk">Edição em massa</button>
+        <span class="vsep tb-desk"></span>
         <label class="search">${ICON.search}<input class="inp" data-q type="search" placeholder="Buscar nome, @, WhatsApp, e-mail" value="${esc(V.f.q)}"></label>
         ${filterBtn('campaigns', 'Campanha')}${filterBtn('forms', 'Formulários')}${filterBtn('period', 'Selecionar datas')}${filterBtn('stages', 'Estágio')}${filterBtn('sources', 'Fonte')}${filterBtn('assignees', 'Atribuído a')}${filterBtn('labels', 'Rótulos')}
         ${anyFilter ? '<button class="b b-ghost" data-act="clear">Limpar filtros</button>' : ''}
@@ -457,7 +457,7 @@ view.addEventListener('click', async (e) => {
   if (act === 'clear') { V.f = { q: '', period: 'tudo', from: '', to: '', campaigns: [], forms: [], stages: [], sources: [], assignees: [], labels: [] }; renderLeads(); return; }
   if (act === 'new-lead') { newLeadModal(); return; }
   if (act === 'add-stage') { stageModal(); return; }
-  if (act === 'more') { menu(a, [{ label: 'Exportar leads filtrados (CSV)', action: () => exportCSV(filtered()) }, { label: 'Gerenciar estágios e rótulos', action: () => { location.hash = '#/ajustes'; } }]); return; }
+  if (act === 'more') { const mob = matchMedia('(max-width:760px)').matches; menu(a, [...(mob ? [{ label: 'Adicionar estágio personalizado', action: () => stageModal() }, { label: V.bulkMode ? 'Sair da edição em massa' : 'Edição em massa', action: () => { V.bulkMode = !V.bulkMode; V.sel.clear(); renderLeads(); } }] : []), { label: 'Exportar leads filtrados (CSV)', action: () => exportCSV(filtered()) }, { label: 'Gerenciar estágios e rótulos', action: () => { location.hash = '#/ajustes'; } }]); return; }
   if (act === 'sort') { const k = a.dataset.k; V.sort = { key: k, dir: V.sort.key === k ? -V.sort.dir : (k === 'created_at' ? -1 : 1) }; renderLeads(); return; }
   if (act === 'sel-all') { const list = filtered(); const all = list.every((l) => V.sel.has(l.id)); list.forEach((l) => (all ? V.sel.delete(l.id) : V.sel.add(l.id))); renderLeads(); return; }
   if (act === 'sel' && row) { toggleSel(row.dataset.id); return; }

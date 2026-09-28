@@ -875,3 +875,22 @@ th.sortable svg{width:12px;height:12px;vertical-align:-1px;margin-left:4px;color
 .msheet-list button svg{width:20px;height:20px;color:var(--gray-3);flex:none;}
 .msheet-list button.danger,.msheet-list button.danger svg{color:var(--fg-red);}
 @media (prefers-reduced-motion:reduce){ .msheet,.msheet-wrap{transition:none;} }
+/* barra de ferramentas dos leads: compacta no celular */
+.tb-m,.tb-dot{display:none;}
+@media (max-width:760px){
+  .toolbar{padding:10px;gap:10px;}
+  .toolbar .tb-row:first-child{flex-wrap:nowrap;}
+  .toolbar .seg .b .tb-t,.toolbar [data-act="toggle-filters"] .tb-t,.tb-desk{display:none !important;}
+  .toolbar .seg .b{width:40px;justify-content:center;padding:0;}
+  .toolbar .tb-m{display:inline;}
+  .toolbar [data-act="toggle-filters"]{position:relative;}
+  .toolbar .tb-dot{display:block;position:absolute;top:6px;right:6px;width:7px;height:7px;border-radius:50%;background:var(--amber);}
+  .toolbar .filters .search{order:-1;}
+  .toolbar .filters{gap:6px;}
+  .toolbar .filters .b{height:34px;font-size:13px;padding:0 10px;}
+  .topline .b-primary{height:38px;}
+  .kpis{overflow-x:auto;flex-wrap:nowrap !important;scrollbar-width:none;}
+  .kpis::-webkit-scrollbar{display:none;}
+  .kpis .k{flex:none;}
+}
+@media (max-width:760px){ .toasts{bottom:calc(84px + env(safe-area-inset-bottom));width:calc(100% - 32px);} .toast{max-width:100%;} }
