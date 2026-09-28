@@ -1,7 +1,7 @@
 // Dashboard de leads e do formulário
 import { DB } from '@shared/db.js';
-import { businessSummary } from './finance.js?v=2609281950';
-import { dateRange, datePicker, dateBtn, S, $, $$, esc, FAT, stageOf, profileOf, isHot, isInactive, isDue, brl, pct, num, formName, sourceLabel, fail } from './util.js?v=2609281950';
+import { businessSummary } from './finance.js?v=2609281959';
+import { dateRange, datePicker, dateBtn, S, $, $$, esc, FAT, stageOf, profileOf, isHot, isInactive, isDue, brl, pct, num, formName, sourceLabel, fail } from './util.js?v=2609281959';
 
 const D = { period: '30', from: '', to: '', form: '' };
 const QTYPES = ['short_text', 'long_text', 'email', 'phone', 'number', 'url', 'date', 'choice', 'multi', 'dropdown', 'yes_no', 'rating', 'scale', 'consent'];
