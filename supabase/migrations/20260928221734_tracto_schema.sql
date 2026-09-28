@@ -1708,3 +1708,11 @@ drop function if exists public.capi_test();
 drop function if exists public.activity_touch_lead();
 drop function if exists public.activity_integrations();
 drop function if exists public.leads_before_update();
+
+-- ============================================================
+-- Execução única desta migração: contagem de leads pela coluna "Resultados" da Meta
+-- ============================================================
+-- volta a contagem de leads pro automático (Resultados de cada campanha)
+update public.tracking_settings set meta_lead_actions = null where id = 1;
+-- refaz os últimos 180 dias de todas as contas ativas (o processamento roda a cada 5 minutos)
+select public.ads_sync(null, 180);
