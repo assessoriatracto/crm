@@ -119,20 +119,22 @@ export const fail = (e) => { console.error(e); toast('Algo deu errado: ' + (e?.m
 // ---------- popover ----------
 let openPop = null;
 export function closePop() { openPop?.remove(); openPop = null; }
-export function popover(anchor, html, bind) {
+export function popover(anchor, html, bind, { cls = '' } = {}) {
   closePop();
   const p = document.createElement('div');
-  p.className = 'pop';
+  p.className = 'pop' + (cls ? ' ' + cls : '');
   p.innerHTML = html;
   document.body.appendChild(p);
   const r = anchor.getBoundingClientRect();
   const w = p.offsetWidth;
   const h = p.offsetHeight;
-  let left = Math.min(r.left, innerWidth - w - 12);
+  // abre alinhado à esquerda do botão; se não couber, alinha à direita dele; nunca sai da tela
+  let left = r.left;
+  if (left + w > innerWidth - 12) { left = r.right - w; p.dataset.align = 'right'; }
+  left = Math.max(12, Math.min(left, innerWidth - w - 12));
   let top = r.bottom + 6;
   if (top + h > innerHeight - 12) { top = Math.max(12, r.top - h - 6); p.dataset.side = 'top'; }
-  if (left + w > r.right + 4 && r.right - w > 12) { left = r.right - w; p.dataset.align = 'right'; }
-  p.style.left = Math.max(12, left) + 'px';
+  p.style.left = left + 'px';
   p.style.top = top + 'px';
   openPop = p;
   bind?.(p);
@@ -257,6 +259,6 @@ export function datePicker(anchor, st, onChange, { allowAll = true } = {}) {
         closePop(); onChange({ period: 'custom', from, to });
       }
     });
-  });
+  }, { cls: 'pop-wide' });
 }
 export const dateBtn = (st, attr = 'data-date') => `<button class="b date-btn ${st.period !== 'tudo' ? 'on' : ''}" ${attr} data-pop-anchor>${ICON.calendar}<span>${esc(dateLabel(st))}</span>${ICON.caret}</button>`;
