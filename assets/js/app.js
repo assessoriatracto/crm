@@ -3,15 +3,15 @@ import {
   go, routeName, S, $, $$, esc, ICON, FAT, COLORS, initials, isHot, stageOf, profileOf, labelOf, isInactive, isDue, fatShort, brl, pct, num,
   fmtPhone, fullDate, longDate, addedAt, ago, sourceLabel, formName, waLink, toast, fail, popover, closePop, menu, multiSelect,
   modal, confirmBox, downloadCSV, dateRange, datePicker, dateBtn
-} from './util.js?v=2609281621';
-import { renderDashboard } from './dashboard.js?v=2609281621';
-import { renderSettings } from './admin.js?v=2609281621';
-import { renderIntegrations, renderPixel, leadMetaEvents, statusPill } from './integrations.js?v=2609281621';
-import { renderRecovery, loadPartials } from './recovery.js?v=2609281621';
-import { showSignIn, showSignUp, showForgot, showReset, showMfa, showPending, watchIdle, AUTH_ROUTES } from './auth.js?v=2609281621';
-import { openProfile } from './profile.js?v=2609281621';
-import { renderBuilder } from './builder.js?v=2609281621';
-import { renderFinance } from './finance.js?v=2609281621';
+} from './util.js?v=2609281634';
+import { renderDashboard } from './dashboard.js?v=2609281634';
+import { renderSettings } from './admin.js?v=2609281634';
+import { renderIntegrations, renderPixel, leadMetaEvents, statusPill } from './integrations.js?v=2609281634';
+import { renderRecovery, loadPartials } from './recovery.js?v=2609281634';
+import { showSignIn, showSignUp, showForgot, showReset, showMfa, showPending, watchIdle, AUTH_ROUTES } from './auth.js?v=2609281634';
+import { openProfile } from './profile.js?v=2609281634';
+import { renderBuilder } from './builder.js?v=2609281634';
+import { renderFinance } from './finance.js?v=2609281634';
 
 // ============================================================
 // preferências locais (por navegador)
@@ -305,7 +305,7 @@ function cardHtml(l) {
   const p = profileOf(l.assigned_to);
   const sel = V.sel.has(l.id);
   return `<article class="card ${sel ? 'sel' : ''}" draggable="${!V.bulkMode}" data-id="${l.id}">
-    ${V.bulkMode ? `<span class="cbx ${sel ? 'on' : ''}">${sel ? ICON.check : ''}</span>` : ''}
+    ${V.bulkMode ? `<span class="cbx ${sel ? 'on' : ''}">${ICON.check}</span>` : ''}
     <div class="card-top">
       <span class="av ${isHot(l) ? 'hot' : ''}">${esc(initials(l.nome))}</span>
       <div class="card-main"><div class="card-name">${esc(l.nome)}</div><div class="card-sub">${l.instagram ? '@' + esc(l.instagram) : esc(fmtPhone(l.whatsapp))}</div></div>
@@ -346,22 +346,22 @@ function tableHtml(list) {
   const rows = [...list].sort((a, b) => { const x = sortVal(a, key); const y = sortVal(b, key); return (x > y ? 1 : x < y ? -1 : 0) * dir; });
   const all = rows.every((l) => V.sel.has(l.id));
   return `<div class="panel table-wrap"><table><thead><tr>
-      <th style="width:36px"><button class="cbx ${all ? 'on' : ''}" data-act="sel-all" aria-label="Selecionar todos" style="background:${all ? 'var(--amber)' : 'transparent'}">${all ? ICON.check : ''}</button></th>
+      <th class="col-sel"><button type="button" class="cbx ${all ? 'on' : ''}" data-act="sel-all" role="checkbox" aria-checked="${all}" aria-label="Selecionar todos">${ICON.check}</button></th>
       ${COLS.map(([k, n]) => `<th class="sortable" data-act="sort" data-k="${k}">${n}${key === k ? (dir > 0 ? ICON.up : ICON.down) : ''}</th>`).join('')}
     </tr></thead><tbody>
     ${rows.map((l) => {
       const s = stageOf(l); const p = profileOf(l.assigned_to); const sel = V.sel.has(l.id);
       return `<tr data-id="${l.id}" class="${sel ? 'sel' : ''}">
-        <td><button class="cbx ${sel ? 'on' : ''}" data-act="sel" aria-label="Selecionar" style="background:${sel ? 'var(--amber)' : 'transparent'}">${sel ? ICON.check : ''}</button></td>
+        <td class="col-sel"><button type="button" class="cbx ${sel ? 'on' : ''}" data-act="sel" role="checkbox" aria-checked="${sel}" aria-label="Selecionar">${ICON.check}</button></td>
         <td><div class="td-lead"><span class="av ${isHot(l) ? 'hot' : ''}">${esc(initials(l.nome))}</span><div><b>${esc(l.nome)}</b><small>${l.instagram ? '@' + esc(l.instagram) : ''}</small></div></div></td>
         <td class="nowrap">${esc(fmtPhone(l.whatsapp))}${l.email ? `<br><small class="muted">${esc(l.email)}</small>` : ''}</td>
         <td class="nowrap">${s ? `<span class="stage-pill"><span class="dot" style="background:${s.color}"></span>${esc(s.name)}</span>` : '—'}</td>
         <td class="nowrap">${p ? esc(p.nome) : '<span class="muted">Não atribuído</span>'}</td>
         <td>${(l.label_ids || []).map(labelOf).filter(Boolean).map((x) => `<span class="chip tag" style="--c:${x.color}">${esc(x.name)}</span>`).join(' ') || '<span class="muted">—</span>'}</td>
         <td class="nowrap">${esc(l.faturamento || '—')}</td>
-        <td>${esc(formName(l).replace('Assessoria Tracto - ', ''))}</td>
+        <td class="nowrap">${esc(formName(l).replace('Assessoria Tracto - ', ''))}</td>
         <td>${sourceLabel(l.source)}</td>
-        <td>${esc(l.utm_campaign || '—')}</td>
+        <td class="ellip" title="${esc(l.utm_campaign || '')}">${esc(l.utm_campaign || '—')}</td>
         <td class="nowrap" title="${fullDate(l.created_at)}">${new Date(l.created_at).toLocaleDateString('pt-BR')} <small class="muted">${new Date(l.created_at).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}</small></td>
       </tr>`;
     }).join('')}
