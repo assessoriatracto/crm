@@ -929,5 +929,7 @@ th.sortable svg{width:12px;height:12px;vertical-align:-1px;margin-left:4px;color
 .acc-pick-h{display:flex;align-items:center;gap:6px;margin:4px 0 2px;font-size:13px;}
 .acc-opt{min-height:64px;}
 .acc-opt.on{border-color:var(--c-line-strong);background:var(--c-sunken);}
-.acc-opt .acc-info{min-width:0;}
+.acc-opt .acc-info{flex:1;min-width:0;}
+.acc-pick-h .grow{flex:1;}
+.acc-opt .pill{flex:none;}
 .acc-opt .acc-info b{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
