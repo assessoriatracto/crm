@@ -1,7 +1,7 @@
 // Dashboard: visão executiva e enxuta da saúde do negócio.
 // O detalhe (campanhas, lançamentos, gráficos por dia) fica no Financeiro e na Central de leads.
 import { DB } from '@shared/db.js';
-import { dateRange, datePicker, dateBtn, S, $, $$, esc, ICON, brl, num, isDue, isInactive, fail } from './util.js?v=2609282007';
+import { dateRange, datePicker, dateBtn, S, $, $$, esc, ICON, brl, num, isDue, isInactive, fail } from './util.js?v=2609282010';
 
 const D = { period: '30', from: '', to: '' };
 const DAY = 86400000;
@@ -145,18 +145,17 @@ export async function renderDashboard(el) {
     <div class="dash-row ${canMoney ? '' : 'two'}">
       <section class="panel dcard">
         <div class="dcard-h"><h3>Funil do período</h3><a class="link" href="/leads">Central de leads</a></div>
-        <div class="funnel">${(() => {
-          const base = funnel[0][1];
-          // largura de cada faixa segue o volume (com mínimo pra continuar legível); a de baixo afunila até a próxima
-          const widths = funnel.map(([, v], i) => (base ? Math.max(26, Math.min(100, (v / base) * 100)) : 100 - i * (60 / Math.max(1, funnel.length - 1))));
-          return funnel.map(([n, v], i) => {
-            const top = widths[i]; const bot = i < funnel.length - 1 ? Math.min(top, widths[i + 1]) : top * 0.82;
-            const inset = ((top - bot) / 2 / top) * 100;
-            const last = i === funnel.length - 1;
-            return `<div class="fn-row"><div class="fn-shape"><div class="fn-seg ${last ? 'won' : ''}" style="width:${top}%;--i:${i};clip-path:polygon(0 0,100% 0,${100 - inset}% 100%,${inset}% 100%)"><b>${num(v)}</b></div></div>
-              <div class="fn-txt"><span>${n}</span><small>${i ? `${pctTxt(base ? v / base : null)} dos leads` : '100% · base do funil'}</small></div></div>`;
-          }).join('');
-        })()}</div>
+        <div class="fz" style="--n:${funnel.length}">
+          <div class="fz-shape">
+            <svg viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true">
+              <defs><linearGradient id="fzGrad" x1="0" y1="0" x2="0" y2="1"><stop offset="0" class="fz-s1"/><stop offset="1" class="fz-s2"/></linearGradient></defs>
+              <path d="M2.5 0 H97.5 Q100 0 98.9 2.3 L53.2 95.5 Q50 101.5 46.8 95.5 L1.1 2.3 Q0 0 2.5 0 Z" fill="url(#fzGrad)"/>
+              ${funnel.slice(1).map((_, k) => `<line x1="0" x2="100" y1="${((k + 1) / funnel.length) * 100}" y2="${((k + 1) / funnel.length) * 100}" class="fz-gap" vector-effect="non-scaling-stroke"/>`).join('')}
+            </svg>
+            ${funnel.map(([, v], k) => `<b class="fz-num" style="top:${((k + 0.46) / funnel.length) * 100}%">${num(v)}</b>`).join('')}
+          </div>
+          <div class="fz-labels">${funnel.map(([n, v], k) => `<div class="fz-l"><span>${n}</span><small>${k ? `${pctTxt(funnel[0][1] ? v / funnel[0][1] : null)} dos leads` : '100% · base do funil'}</small></div>`).join('')}</div>
+        </div>
       </section>
       <section class="panel dcard">
         <div class="dcard-h"><h3>Precisa de atenção</h3></div>
