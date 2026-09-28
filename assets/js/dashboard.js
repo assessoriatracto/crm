@@ -1,7 +1,7 @@
 // Dashboard: visão executiva e enxuta da saúde do negócio.
 // O detalhe (campanhas, lançamentos, gráficos por dia) fica no Financeiro e na Central de leads.
 import { DB } from '@shared/db.js';
-import { dateRange, datePicker, dateBtn, S, $, $$, esc, ICON, brl, num, isDue, isInactive, fail } from './util.js?v=2609282004';
+import { dateRange, datePicker, dateBtn, S, $, $$, esc, ICON, brl, num, isDue, isInactive, fail } from './util.js?v=2609282007';
 
 const D = { period: '30', from: '', to: '' };
 const DAY = 86400000;
@@ -145,12 +145,18 @@ export async function renderDashboard(el) {
     <div class="dash-row ${canMoney ? '' : 'two'}">
       <section class="panel dcard">
         <div class="dcard-h"><h3>Funil do período</h3><a class="link" href="/leads">Central de leads</a></div>
-        <div class="fnl">${funnel.map(([n, v], i) => {
-          const base = funnel[0][1] || 1; const prevStep = i ? funnel[i - 1][1] : null;
-          return `<div class="fnl-row"><div class="fnl-l"><span>${n}</span><b>${num(v)}</b></div>
-            <div class="fnl-bar"><span style="width:${Math.max(v ? 3 : 0, (v / base) * 100)}%"></span></div>
-            <small>${i ? `${pctTxt(prevStep ? v / prevStep : null)} da etapa anterior` : 'entraram no período'}</small></div>`;
-        }).join('')}</div>
+        <div class="funnel">${(() => {
+          const base = funnel[0][1];
+          // largura de cada faixa segue o volume (com mínimo pra continuar legível); a de baixo afunila até a próxima
+          const widths = funnel.map(([, v], i) => (base ? Math.max(26, Math.min(100, (v / base) * 100)) : 100 - i * (60 / Math.max(1, funnel.length - 1))));
+          return funnel.map(([n, v], i) => {
+            const top = widths[i]; const bot = i < funnel.length - 1 ? Math.min(top, widths[i + 1]) : top * 0.82;
+            const inset = ((top - bot) / 2 / top) * 100;
+            const last = i === funnel.length - 1;
+            return `<div class="fn-row"><div class="fn-shape"><div class="fn-seg ${last ? 'won' : ''}" style="width:${top}%;--i:${i};clip-path:polygon(0 0,100% 0,${100 - inset}% 100%,${inset}% 100%)"><b>${num(v)}</b></div></div>
+              <div class="fn-txt"><span>${n}</span><small>${i ? `${pctTxt(base ? v / base : null)} dos leads` : '100% · base do funil'}</small></div></div>`;
+          }).join('');
+        })()}</div>
       </section>
       <section class="panel dcard">
         <div class="dcard-h"><h3>Precisa de atenção</h3></div>

@@ -1945,3 +1945,6 @@ drop function if exists public.capi_test();
 drop function if exists public.activity_touch_lead();
 drop function if exists public.activity_integrations();
 drop function if exists public.leads_before_update();
+
+-- execução única: primeiro estágio passa a se chamar Novos leads
+update public.stages set name = 'Novos leads' where name = 'Em análise';

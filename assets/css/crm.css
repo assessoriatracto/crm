@@ -1191,3 +1191,18 @@ tr.row-click:hover td{background:var(--c-hover);}
 .kx-vr{display:flex;align-items:center;gap:8px;min-width:0;flex-wrap:wrap;}
 .kx-vr .kx-v{min-width:0;}
 .kx-l{flex:none;}
+/* funil visual: faixas que afunilam, % sempre sobre os leads */
+.funnel{display:grid;gap:4px;}
+.fn-row{display:grid;grid-template-columns:minmax(0,1.35fr) minmax(0,1fr);align-items:center;gap:14px;}
+.fn-shape{display:flex;justify-content:center;}
+.fn-seg{height:46px;display:grid;place-items:center;background:linear-gradient(180deg,color-mix(in srgb,#FFB21A calc(100% - var(--i) * 14%),#8A5A00),color-mix(in srgb,#E09600 calc(100% - var(--i) * 14%),#6B4500));transition:width 600ms var(--ease-out);}
+.fn-seg b{font-size:15px;font-weight:700;color:#1a1207;font-variant-numeric:tabular-nums;}
+.fn-seg.won{background:linear-gradient(180deg,#4BE08F,#2BB870);}
+.fn-seg.won b{color:#06270f;}
+.fn-txt span{display:block;font-size:13.5px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.fn-txt small{display:block;font-size:12px;color:var(--gray-3);font-variant-numeric:tabular-nums;}
+.side a:has(#newBadge:not([hidden])) .dot{display:none;}
+@media (min-width:761px){
+  .side a .side-lbl{order:1;}
+  :root.side-open .side a .nbadge{order:2;}
+}

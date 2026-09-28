@@ -3,16 +3,16 @@ import {
   go, routeName, S, $, $$, esc, ICON, FAT, COLORS, initials, isHot, stageOf, profileOf, labelOf, isInactive, isDue, fatShort, brl, pct, num,
   fmtPhone, fullDate, longDate, addedAt, ago, sourceLabel, formName, waLink, toast, fail, popover, closePop, menu, multiSelect,
   modal, confirmBox, downloadCSV, dateRange, datePicker, dateBtn
-} from './util.js?v=2609282004';
-import { importModal } from './import.js?v=2609282004';
-import { renderDashboard } from './dashboard.js?v=2609282004';
-import { renderSettings } from './admin.js?v=2609282004';
-import { renderIntegrations, renderPixel, leadMetaEvents, statusPill } from './integrations.js?v=2609282004';
-import { renderRecovery, loadPartials } from './recovery.js?v=2609282004';
-import { showSignIn, showSignUp, showForgot, showReset, showMfa, showPending, watchIdle, AUTH_ROUTES } from './auth.js?v=2609282004';
-import { openProfile } from './profile.js?v=2609282004';
-import { renderBuilder } from './builder.js?v=2609282004';
-import { renderFinance } from './finance.js?v=2609282004';
+} from './util.js?v=2609282007';
+import { importModal } from './import.js?v=2609282007';
+import { renderDashboard } from './dashboard.js?v=2609282007';
+import { renderSettings } from './admin.js?v=2609282007';
+import { renderIntegrations, renderPixel, leadMetaEvents, statusPill } from './integrations.js?v=2609282007';
+import { renderRecovery, loadPartials } from './recovery.js?v=2609282007';
+import { showSignIn, showSignUp, showForgot, showReset, showMfa, showPending, watchIdle, AUTH_ROUTES } from './auth.js?v=2609282007';
+import { openProfile } from './profile.js?v=2609282007';
+import { renderBuilder } from './builder.js?v=2609282007';
+import { renderFinance } from './finance.js?v=2609282007';
 
 // ============================================================
 // preferências locais (por navegador)
@@ -199,6 +199,15 @@ function confirmLogout() {
 $('#logoutBtn').addEventListener('click', (e) => { e.preventDefault(); confirmLogout(); });
 $('#meBtn')?.addEventListener('click', (e) => { e.preventDefault(); openProfile(); });
 
+// contador vermelho: leads no primeiro estágio (novos, esperando contato)
+function refreshNewBadge() {
+  const first = [...S.stages].filter((s) => s.kind === 'open').sort((a, b) => a.position - b.position)[0];
+  const n = first ? S.leads.filter((l) => l.stage_id === first.id).length : 0;
+  const b = $('#newBadge'); if (!b) return;
+  b.textContent = n > 99 ? '99+' : n; b.hidden = !n;
+  b.title = n ? `${n} ${n === 1 ? 'novo lead esperando' : 'novos leads esperando'} contato` : '';
+}
+
 async function refreshPartialsBadge() {
   try {
     const list = await loadPartials();
@@ -219,6 +228,7 @@ export async function loadAll(showSpinner = true) {
 let lastRoute = null;
 function route() {
   closePop();
+  refreshNewBadge();
   let r = hashRoute();
   if (!can(r)) { r = 'dashboard'; history.replaceState(null, '', '/dashboard'); }
   // animação grande só quando a página muda (refiltrar/atualizar não anima)
@@ -321,7 +331,7 @@ function renderLeads() {
     </section>
     <section class="panel kpis">
       <div class="k"><span>Leads${anyFilter ? ' filtrados' : ''}:</span><b>${num(list.length)}</b></div>
-      <div class="k"><span>Leads em análise:</span><b>${num(list.filter((l) => l.stage_id === first?.id).length)}</b></div>
+      <div class="k"><span>Novos leads:</span><b>${num(list.filter((l) => l.stage_id === first?.id).length)}</b></div>
       <div class="k hot"><span>Quentes (50k+):</span><b>${num(list.filter(isHot).length)}</b></div>
       <div class="k"><span>Leads convertidos:</span><b>${won.length ? num(won.length) : '--'}</b></div>
       <div class="k"><span>Taxa de conversão:</span><b>${won.length ? pct(won.length, list.length) : '--'}</b></div>
