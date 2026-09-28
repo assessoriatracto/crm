@@ -1,6 +1,6 @@
 // Financeiro (estilo UTMify): gasto da Meta Ads × leads e vendas do CRM × receitas e despesas lançadas
 import { DB } from '@shared/db.js';
-import { BRAND, dateRange, datePicker, dateBtn, S, $, $$, esc, ICON, brl, num, pct, fullDate, ago, toast, fail, modal, confirmBox } from './util.js?v=2609281726';
+import { BRAND, dateRange, datePicker, dateBtn, S, $, $$, esc, ICON, brl, num, pct, fullDate, ago, toast, fail, modal, confirmBox } from './util.js?v=2609281753';
 
 const F = { period: '30', from: '', to: '', level: 'campaign', revenue: 'mensal', sort: 'spend', tab: 'geral' };
 const GRAPH = 'v21.0';
@@ -126,10 +126,13 @@ export async function renderFinance(el, swap = false) {
       <div class="legend"><span><i style="background:var(--viz-1)"></i>Faturamento</span><span><i style="background:var(--viz-neutral)"></i>Gastos</span></div>
       <div class="chart" data-chart></div></section>
 
-    <section class="panel int-card" style="margin-top:12px">
-      <div class="int-h"><div><h3>Desempenho por ${F.level === 'campaign' ? 'campanha' : F.level === 'adset' ? 'conjunto' : 'anúncio'}</h3><p class="help">Cruza o gasto da Meta com os leads e as vendas do CRM pelas UTMs dos anúncios.</p></div>
-        <div class="seg">${[['campaign', 'Campanhas'], ['adset', 'Conjuntos'], ['ad', 'Anúncios']].map(([k, n]) => `<button class="b b-sm ${F.level === k ? 'on' : ''}" data-level="${k}">${n}</button>`).join('')}</div></div>
-      <div class="table-wrap" data-table></div>
+    <section class="panel adt-card">
+      <div class="adt-head">
+        <nav class="adt-tabs" role="tablist">${[['campaign', 'Campanhas'], ['adset', 'Conjuntos de anúncios'], ['ad', 'Anúncios']].map(([k, n]) => `<button role="tab" aria-selected="${F.level === k}" class="adt-tab ${F.level === k ? 'on' : ''}" data-level="${k}">${LVL_IC[k]}<span>${n}</span></button>`).join('')}</nav>
+        <label class="adt-search">${ICON.search}<input type="search" data-adt-q placeholder="Buscar por nome" value="${esc(F.q || '')}"></label>
+      </div>
+      <div class="adt-wrap" data-table></div>
+      <p class="adt-note">Resultados, gasto e cliques vêm da Meta (mesma atribuição do Gerenciador). Vendas e faturamento vêm do CRM, ligados pelas UTMs dos anúncios.</p>
       <details class="docs"><summary>Parâmetros de URL pra colar nos anúncios</summary>
         <p class="help">No Gerenciador de Anúncios, em cada anúncio: Rastreamento &gt; Parâmetros de URL. É assim que o CRM liga cada lead e venda à campanha, conjunto e anúncio que trouxe.</p>
         <div class="code"><div class="code-h"><span>Parâmetros de URL</span><button class="b b-sm b-ghost" data-copy-utm>Copiar</button></div><pre>${esc(UTM_TEMPLATE)}</pre></div></details>
@@ -152,6 +155,7 @@ export async function renderFinance(el, swap = false) {
 
   // tabela por nível
   renderTable(el.querySelector('[data-table]'), ins, leads, sales, saleValue);
+  let qT; el.querySelector('[data-adt-q]').addEventListener('input', (e) => { clearTimeout(qT); qT = setTimeout(() => { F.q = e.target.value; renderTable(el.querySelector('[data-table]'), ins, leads, sales, saleValue); }, 150); });
   dailyChart(el.querySelector('[data-chart]'), r, ins, sales, entries, saleValue);
 
   const reload = () => renderFinance(el);
@@ -389,38 +393,121 @@ function pickAccounts(conn, fbName, list, current, done) {
   });
 }
 
+// ---------- tabela de campanhas / conjuntos / anúncios (estilo Gerenciador de Anúncios + UTMify) ----------
+const money2 = (n) => Number(n || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL', minimumFractionDigits: 2, maximumFractionDigits: 2 });
+const RESULT_NAMES = {
+  'actions:onsite_conversion.lead_grouped': 'Leads no formulário',
+  'actions:lead': 'Leads',
+  'actions:offsite_conversion.fb_pixel_lead': 'Leads no site',
+  'actions:onsite_conversion.messaging_conversation_started_7d': 'Conversas iniciadas',
+  'actions:link_click': 'Cliques no link',
+  'actions:landing_page_view': 'Visualizações da página',
+  total_profile_visits: 'Visitas ao perfil',
+  reach: 'Alcance',
+  impressions: 'Impressões'
+};
+const resultName = (ind) => {
+  if (!ind) return '';
+  if (RESULT_NAMES[ind]) return RESULT_NAMES[ind];
+  const m = ind.match(/fb_pixel_custom\.(.+)$/) || ind.match(/custom\.(\d+)$/);
+  if (m) return m[1];
+  return ind.replace(/^(actions|conversions):/, '').replace(/^(offsite|onsite)_conversion\./, '').replace(/_/g, ' ');
+};
+const LVL_IC = {campaign: '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 11v2a1 1 0 0 0 1 1h2l5 4V6L6 10H4a1 1 0 0 0-1 1zM15.5 8.5a5 5 0 0 1 0 7M18.5 5.5a9 9 0 0 1 0 13"/></svg>', adset: '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></svg>', ad: '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="m3 16 5-5 4 4 3-3 6 6"/><circle cx="16" cy="9" r="1.5"/></svg>'};
+const LEVELS = [['campaign', 'Campanhas', 'campanha'], ['adset', 'Conjuntos de anúncios', 'conjunto'], ['ad', 'Anúncios', 'anúncio']];
+const COLS = [
+  ['results', 'Resultados'], ['cpr', 'Custo por resultado'], ['spend', 'Valor usado'], ['imp', 'Impressões'], ['cpm', 'CPM'],
+  ['link', 'Cliques no link'], ['ctr', 'CTR'], ['cpc', 'CPC'], ['sales', 'Vendas'], ['rev', 'Faturamento'], ['roas', 'ROAS'], ['profit', 'Lucro']
+];
+
 function renderTable(host, ins, leads, sales, saleValue) {
   const key = { campaign: ['campaign_id', 'campaign_name'], adset: ['adset_id', 'adset_name'], ad: ['ad_id', 'ad_name'] }[F.level];
   const utm = { campaign: 'utm_campaign', adset: 'utm_term', ad: 'utm_content' }[F.level];
+  const lastDay = ins.reduce((a, x) => (x.date > a ? x.date : a), '');
   const rows = new Map();
   ins.forEach((x) => {
     const k = x[key[0]] || x[key[1]];
-    const r = rows.get(k) || { id: x[key[0]], name: x[key[1]] || '(sem nome)', campaign: x.campaign_name, spend: 0, imp: 0, clicks: 0, metaLeads: 0 };
-    r.spend += Number(x.spend); r.imp += Number(x.impressions); r.clicks += Number(x.clicks); r.metaLeads += rowLeads(x);
+    const r = rows.get(k) || { id: x[key[0]], name: x[key[1]] || '(sem nome)', campaign: x.campaign_name, adset: x.adset_name, spend: 0, imp: 0, clicks: 0, link: 0, results: 0, leads: 0, ind: {}, last: '' };
+    r.spend += Number(x.spend); r.imp += Number(x.impressions); r.clicks += Number(x.clicks); r.link += Number(x.link_clicks || 0);
+    r.leads += rowLeads(x);
+    // "Resultados" = o que a Meta mostra na coluna de mesmo nome; sem ela, os leads
+    const res = x.results != null ? Number(x.results) : rowLeads(x);
+    r.results += res;
+    const ind = x.result_indicator || (res ? 'actions:lead' : '');
+    if (ind) r.ind[ind] = (r.ind[ind] || 0) + res + 0.0001;
+    if (Number(x.spend) > 0 && x.date > r.last) r.last = x.date;
     rows.set(k, r);
   });
-  // liga leads e vendas às linhas pela UTM (ou pelo id da campanha em utm_id)
+  // vendas do CRM ligadas pela UTM (ou pelo id da campanha em utm_id)
   const match = (l) => [...rows.values()].find((r) => (F.level === 'campaign' && l.utm_id && l.utm_id === r.id) || (l[utm] && l[utm] === r.name));
-  const unmatched = { name: 'Sem anúncio identificado (orgânico, indicação, sem UTM)', spend: 0, imp: 0, clicks: 0, metaLeads: 0, leads: 0, sales: 0, rev: 0, none: true };
-  [...rows.values()].forEach((r) => Object.assign(r, { leads: 0, sales: 0, rev: 0 }));
-  leads.forEach((l) => { const r = match(l); if (!r) unmatched.leads++; else if (!r.metaLeads) r.leads++; });
-  // linhas de anúncio usam os leads que a própria Meta contou
-  rows.forEach((r) => { if (r.metaLeads) r.leads = r.metaLeads; });
+  rows.forEach((r) => Object.assign(r, { sales: 0, rev: 0, indicator: Object.entries(r.ind).sort((a, b) => b[1] - a[1])[0]?.[0] || '' }));
+  const unmatched = { name: 'Sem anúncio identificado', sub: 'Orgânico, indicação ou link sem UTM', spend: 0, imp: 0, clicks: 0, link: 0, results: 0, leads: 0, sales: 0, rev: 0, none: true };
+  leads.forEach((l) => { if (!match(l)) unmatched.leads++; });
   sales.forEach((l) => { const r = match(l) || unmatched; r.sales++; r.rev += saleValue(l); });
-  const list = [...rows.values()].sort((a, b) => b.spend - a.spend);
-  if (unmatched.leads || unmatched.sales) list.push(unmatched);
-  if (!list.length) { host.innerHTML = '<p class="muted" style="padding:6px 0">Sem gasto nem leads no período.</p>'; return; }
-  const tot = list.reduce((a, r) => ({ spend: a.spend + r.spend, imp: a.imp + r.imp, clicks: a.clicks + r.clicks, leads: a.leads + r.leads, sales: a.sales + r.sales, rev: a.rev + r.rev }), { spend: 0, imp: 0, clicks: 0, leads: 0, sales: 0, rev: 0 });
-  const cell = (r) => {
-    const roas = r.spend ? r.rev / r.spend : null; const profit = r.rev - r.spend;
-    return `<td class="num">${r.none ? '—' : brl(r.spend)}</td><td class="num">${r.none ? '—' : num(r.imp)}</td><td class="num">${r.none || !r.imp ? '—' : pct(r.clicks, r.imp)}</td><td class="num">${r.none || !r.clicks ? '—' : brl(r.spend / r.clicks)}</td>
-      <td class="num">${num(r.leads)}</td><td class="num">${r.none || !r.leads ? '—' : brl(r.spend / r.leads)}</td><td class="num">${num(r.sales)}</td><td class="num">${brl(r.rev)}</td>
-      <td class="num">${roas == null ? '—' : `<span class="roas ${roas >= 1 ? 'good' : 'bad'}">${roas.toLocaleString('pt-BR', { maximumFractionDigits: 2 })}x</span>`}</td><td class="num ${profit < 0 ? 'neg' : ''}">${r.none ? '—' : brl(profit)}</td>`;
+  unmatched.results = unmatched.leads;
+
+  const val = (r, k) => ({
+    results: r.results, cpr: r.results ? r.spend / r.results : null, spend: r.spend, imp: r.imp, cpm: r.imp ? (r.spend / r.imp) * 1000 : null,
+    link: r.link || r.clicks, ctr: r.imp ? (r.link || r.clicks) / r.imp : null, cpc: (r.link || r.clicks) ? r.spend / (r.link || r.clicks) : null,
+    sales: r.sales, rev: r.rev, roas: r.spend ? r.rev / r.spend : null, profit: r.rev - r.spend
+  })[k];
+  const q = (F.q || '').trim().toLowerCase();
+  let list = [...rows.values()].filter((r) => !q || `${r.name} ${r.campaign || ''} ${r.adset || ''}`.toLowerCase().includes(q));
+  const sk = F.sort || 'spend'; const dir = F.sortDir || -1;
+  list.sort((a, b) => ((val(a, sk) ?? -Infinity) - (val(b, sk) ?? -Infinity)) * dir || b.spend - a.spend);
+  if (!q && (unmatched.leads || unmatched.sales)) list.push(unmatched);
+  const levelName = LEVELS.find(([k]) => k === F.level);
+  if (!list.length) { host.innerHTML = `<div class="adt-empty">${q ? 'Nada encontrado com essa busca.' : 'Sem gasto nem leads no período.'}</div>`; return; }
+
+  const tot = list.filter((r) => !r.none).reduce((a, r) => { ['spend', 'imp', 'clicks', 'link', 'results', 'leads'].forEach((k) => { a[k] += r[k]; }); return a; }, { spend: 0, imp: 0, clicks: 0, link: 0, results: 0, leads: 0 });
+  list.forEach((r) => { tot.sales = (tot.sales || 0) + r.sales; tot.rev = (tot.rev || 0) + r.rev; });
+  const inds = new Set(list.filter((r) => !r.none && r.indicator).map((r) => r.indicator));
+  tot.indicator = inds.size === 1 ? [...inds][0] : '';
+  const mixed = inds.size > 1;
+
+  const dash = '<span class="adt-dash">—</span>';
+  const cell = (r, k, isTot) => {
+    const v = val(r, k);
+    if (r.none && ['cpr', 'spend', 'imp', 'cpm', 'link', 'ctr', 'cpc', 'roas', 'profit'].includes(k)) return dash;
+    switch (k) {
+      case 'results': {
+        if (isTot && mixed) return `<b>${num(r.leads)}</b><small>leads</small>`;
+        const label = r.none ? 'leads no CRM' : resultName(r.indicator);
+        return v ? `<b>${num(v)}</b>${label ? `<small>${esc(label)}</small>` : ''}` : dash;
+      }
+      case 'cpr': return isTot && mixed ? (r.leads ? `${money2(r.spend / r.leads)}<small>por lead</small>` : dash) : v == null ? dash : `${money2(v)}<small>por resultado</small>`;
+      case 'spend': return money2(v);
+      case 'imp': return v ? num(v) : dash;
+      case 'cpm': case 'cpc': return v == null ? dash : money2(v);
+      case 'link': return v ? num(v) : dash;
+      case 'ctr': return v == null ? dash : (v * 100).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + '%';
+      case 'sales': return v ? `<b>${num(v)}</b>` : dash;
+      case 'rev': return v ? money2(v) : dash;
+      case 'roas': return !r.rev ? dash : `<span class="roas ${v >= 1 ? 'good' : 'bad'}">${v.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}x</span>`;
+      case 'profit': return !r.rev && !r.sales ? `<span class="neg">${money2(v)}</span>` : `<span class="${v < 0 ? 'neg' : 'pos'}">${money2(v)}</span>`;
+    }
+    return '';
   };
-  host.innerHTML = `<table class="int-table fin-table"><thead><tr><th>${F.level === 'campaign' ? 'Campanha' : F.level === 'adset' ? 'Conjunto' : 'Anúncio'}</th><th class="num">Gasto</th><th class="num">Impr.</th><th class="num">CTR</th><th class="num">CPC</th><th class="num">Leads</th><th class="num">CPL</th><th class="num">Vendas</th><th class="num">Receita</th><th class="num">ROAS</th><th class="num">Lucro</th></tr></thead><tbody>
-    ${list.map((r) => `<tr class="${r.none ? 'row-none' : ''}"><td><b>${esc(r.name)}</b>${F.level !== 'campaign' && r.campaign ? `<br><small class="muted">${esc(r.campaign)}</small>` : ''}</td>${cell(r)}</tr>`).join('')}
-    <tr class="row-total"><td><b>Total</b></td>${cell({ ...tot, none: false })}</tr>
-  </tbody></table>`;
+  const status = (r) => {
+    if (r.none) return '<span class="adt-dot off" title="Fora dos anúncios"></span>';
+    const on = r.last && lastDay && r.last >= lastDay;
+    return `<span class="adt-dot ${on ? 'on' : 'off'}" title="${on ? 'Com gasto no último dia do período' : 'Sem gasto no último dia do período'}"></span>`;
+  };
+  const sub = (r) => r.none ? r.sub : F.level === 'campaign' ? '' : F.level === 'adset' ? r.campaign : `${r.campaign || ''}${r.adset ? ' › ' + r.adset : ''}`;
+  const sortIc = (k) => (sk === k ? `<span class="adt-sort">${dir > 0 ? ICON.up : ICON.down}</span>` : '');
+  host.innerHTML = `<table class="adt">
+    <thead><tr><th class="adt-name" data-sort="name">${levelName[1].replace(' de anúncios', '')}</th>${COLS.map(([k, n]) => `<th class="num ${sk === k ? 'on' : ''}" data-sort="${k}">${n}${sortIc(k)}</th>`).join('')}</tr></thead>
+    <tbody>${list.map((r) => `<tr class="${r.none ? 'adt-none' : ''}">
+      <td class="adt-name"><div class="adt-n">${status(r)}<div class="adt-t"><b title="${esc(r.name)}">${esc(r.name)}</b>${sub(r) ? `<small title="${esc(sub(r))}">${esc(sub(r))}</small>` : ''}</div></div></td>
+      ${COLS.map(([k]) => `<td class="num">${cell(r, k)}</td>`).join('')}</tr>`).join('')}</tbody>
+    <tfoot><tr><td class="adt-name"><div class="adt-t"><b>Resultados de ${num(list.filter((r) => !r.none).length)} ${levelName[2]}${list.filter((r) => !r.none).length === 1 ? '' : 's'}</b><small>Soma do período</small></div></td>
+      ${COLS.map(([k]) => `<td class="num">${cell({ ...tot, none: false }, k, true)}</td>`).join('')}</tr></tfoot>
+  </table>`;
+  host.querySelectorAll('th[data-sort]').forEach((th) => th.addEventListener('click', () => {
+    const k = th.dataset.sort; if (k === 'name') return;
+    F.sortDir = F.sort === k ? -(F.sortDir || -1) : -1; F.sort = k;
+    renderTable(host, ins, leads, sales, saleValue);
+  }));
 }
 
 // colunas agrupadas: faturamento (âmbar) × gastos (cinza), mesmo eixo em R$
