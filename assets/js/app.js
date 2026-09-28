@@ -3,16 +3,16 @@ import {
   go, routeName, S, $, $$, esc, ICON, FAT, COLORS, initials, isHot, stageOf, profileOf, labelOf, isInactive, isDue, fatShort, brl, pct, num,
   fmtPhone, fullDate, longDate, addedAt, ago, sourceLabel, formName, waLink, toast, fail, popover, closePop, menu, multiSelect,
   modal, confirmBox, downloadCSV, dateRange, datePicker, dateBtn
-} from './util.js?v=2609281943';
-import { importModal } from './import.js?v=2609281943';
-import { renderDashboard } from './dashboard.js?v=2609281943';
-import { renderSettings } from './admin.js?v=2609281943';
-import { renderIntegrations, renderPixel, leadMetaEvents, statusPill } from './integrations.js?v=2609281943';
-import { renderRecovery, loadPartials } from './recovery.js?v=2609281943';
-import { showSignIn, showSignUp, showForgot, showReset, showMfa, showPending, watchIdle, AUTH_ROUTES } from './auth.js?v=2609281943';
-import { openProfile } from './profile.js?v=2609281943';
-import { renderBuilder } from './builder.js?v=2609281943';
-import { renderFinance } from './finance.js?v=2609281943';
+} from './util.js?v=2609281948';
+import { importModal } from './import.js?v=2609281948';
+import { renderDashboard } from './dashboard.js?v=2609281948';
+import { renderSettings } from './admin.js?v=2609281948';
+import { renderIntegrations, renderPixel, leadMetaEvents, statusPill } from './integrations.js?v=2609281948';
+import { renderRecovery, loadPartials } from './recovery.js?v=2609281948';
+import { showSignIn, showSignUp, showForgot, showReset, showMfa, showPending, watchIdle, AUTH_ROUTES } from './auth.js?v=2609281948';
+import { openProfile } from './profile.js?v=2609281948';
+import { renderBuilder } from './builder.js?v=2609281948';
+import { renderFinance } from './finance.js?v=2609281948';
 
 // ============================================================
 // preferências locais (por navegador)
@@ -180,7 +180,23 @@ function openMore() {
 }
 $('[data-more]').addEventListener('click', (e) => { e.preventDefault(); openMore(); });
 
-$('#logoutBtn').addEventListener('click', async (e) => { e.preventDefault(); await DB.signOut(); location.replace('/entrar'); });
+// sair da conta sempre pede confirmação
+function confirmLogout() {
+  if ($('.modal .logout-box')) return;
+  const icon = $('#logoutBtn svg').outerHTML;
+  modal(`<div class="logout-box"><span class="logout-ic">${icon}</span>
+      <h3>Sair da conta?</h3>
+      <p class="help">${S.me?.email ? `Você está conectado como <b>${esc(S.me.email)}</b>. ` : ''}Para voltar, é preciso entrar de novo com e-mail e senha.</p></div>
+    <div class="modal-foot"><button class="b" data-close>Cancelar</button><button class="b b-danger-solid" data-ok>Sair da conta</button></div>`, (c) => {
+    setTimeout(() => c.querySelector('[data-close]')?.focus(), 30);
+    c.querySelector('[data-ok]').addEventListener('click', async (e) => {
+      const btn = e.currentTarget; btn.disabled = true; btn.innerHTML = '<span class="spin"></span>';
+      try { await DB.signOut(); } catch (err) {}
+      location.replace('/entrar');
+    });
+  });
+}
+$('#logoutBtn').addEventListener('click', (e) => { e.preventDefault(); confirmLogout(); });
 $('#meBtn')?.addEventListener('click', (e) => { e.preventDefault(); openProfile(); });
 
 async function refreshPartialsBadge() {

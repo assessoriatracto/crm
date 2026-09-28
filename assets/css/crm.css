@@ -1116,3 +1116,14 @@ tr.row-click:hover td{background:var(--c-hover);}
 @media (min-width:761px) and (prefers-reduced-motion:reduce){
   .shell,.side,.side .side-lbl,.side .side-logo{transition:none !important;}
 }
+/* confirmação de saída */
+.logout-box{text-align:center;padding:6px 4px 2px;}
+.logout-box h3{margin:14px 0 6px;}
+.logout-box .help{margin:0 auto;max-width:340px;line-height:1.5;}
+.logout-ic{width:52px;height:52px;margin:0 auto;border-radius:16px;display:grid;place-items:center;background:rgba(255,92,92,.12);color:var(--fg-red);}
+.logout-ic svg{width:24px;height:24px;}
+.modal-card:has(.logout-box){max-width:400px;}
+.modal-card:has(.logout-box) .modal-foot{justify-content:center;}
+.modal-card:has(.logout-box) .modal-foot .b{flex:1;justify-content:center;}
+.b.b-danger-solid{background:#E5484D;border-color:#E5484D;color:#fff;font-weight:600;}
+.b.b-danger-solid:hover:not(:disabled){background:#D93D42;}
