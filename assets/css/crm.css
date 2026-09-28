@@ -1127,3 +1127,17 @@ tr.row-click:hover td{background:var(--c-hover);}
 .modal-card:has(.logout-box) .modal-foot .b{flex:1;justify-content:center;}
 .b.b-danger-solid{background:#E5484D;border-color:#E5484D;color:#fff;font-weight:600;}
 .b.b-danger-solid:hover:not(:disabled){background:#D93D42;}
+/* botão de fechar (X) em modais e painéis */
+.modal-card{position:relative;}
+.modal-x,.pop-x{position:absolute;top:14px;right:14px;z-index:2;width:32px;height:32px;padding:0;border:0;border-radius:10px;display:grid;place-items:center;background:transparent;color:var(--gray-3);cursor:pointer;transition:background-color 150ms ease,color 150ms ease,transform var(--dur-micro) ease;}
+.modal-x:hover,.pop-x:hover{background:var(--c-hover);color:var(--c-text);}
+.modal-x:active,.pop-x:active{transform:scale(.92);}
+.modal-x:focus-visible,.pop-x:focus-visible{outline:2px solid var(--amber);outline-offset:1px;}
+.modal-x svg,.pop-x svg{width:16px;height:16px;}
+.modal-card > h3:first-of-type,.modal-card > .logout-box{padding-right:36px;}
+.modal-card > .logout-box{padding-left:36px;}
+.pop.pop-closable{padding-top:40px;}
+.pop.pop-closable .pop-x{top:6px;right:6px;width:28px;height:28px;}
+.pop.pop-wide.pop-closable{padding-top:34px;}
+.msheet-me{position:relative;}
+.msheet-x{position:static;margin-left:auto;flex:none;}

@@ -138,11 +138,12 @@ export const fail = (e) => { console.error(e); toast('Algo deu errado: ' + (e?.m
 // ---------- popover ----------
 let openPop = null;
 export function closePop() { openPop?.remove(); openPop = null; }
-export function popover(anchor, html, bind, { cls = '' } = {}) {
+export function popover(anchor, html, bind, { cls = '', closable = false } = {}) {
   closePop();
   const p = document.createElement('div');
-  p.className = 'pop' + (cls ? ' ' + cls : '');
-  p.innerHTML = html;
+  p.className = 'pop' + (cls ? ' ' + cls : '') + (closable ? ' pop-closable' : '');
+  p.innerHTML = (closable ? `<button type="button" class="pop-x" aria-label="Fechar">${ICON.x}</button>` : '') + html;
+  if (closable) p.querySelector('.pop-x').addEventListener('click', () => closePop());
   document.body.appendChild(p);
   const r = anchor.getBoundingClientRect();
   const w = p.offsetWidth;
@@ -189,14 +190,14 @@ export function multiSelect(anchor, { title, options, selected, onChange, search
       if (e.target.closest('.ms-clear')) { sel.clear(); onChange([]); closePop(); }
       if (e.target.closest('.ms-done')) { onChange([...sel]); closePop(); }
     });
-  });
+  }, { closable: true });
 }
 
 // ---------- modal ----------
 export function modal(html, bind) {
   const m = document.createElement('div');
   m.className = 'modal';
-  m.innerHTML = `<div class="modal-card">${html}</div>`;
+  m.innerHTML = `<div class="modal-card" role="dialog" aria-modal="true"><button type="button" class="modal-x" data-close aria-label="Fechar">${ICON.x}</button>${html}</div>`;
   document.body.appendChild(m);
   let closing = false;
   const close = () => { if (closing) return; closing = true; m.classList.add('is-closing'); setTimeout(() => m.remove(), 170); };
@@ -212,7 +213,7 @@ export function confirmBox(text, okLabel = 'Confirmar', danger = true) {
   return new Promise((resolve) => {
     modal(`<h3>${esc(text)}</h3><div class="modal-foot"><button class="b" data-close data-no>Cancelar</button><button class="b ${danger ? 'b-danger' : 'b-primary'}" data-ok>${esc(okLabel)}</button></div>`, (c, close) => {
       c.querySelector('[data-ok]').addEventListener('click', () => { close(); resolve(true); });
-      c.querySelector('[data-no]').addEventListener('click', () => resolve(false));
+      c.querySelectorAll('[data-close]').forEach((b) => b.addEventListener('click', () => resolve(false)));
     });
   });
 }
@@ -278,6 +279,6 @@ export function datePicker(anchor, st, onChange, { allowAll = true } = {}) {
         closePop(); onChange({ period: 'custom', from, to });
       }
     });
-  }, { cls: 'pop-wide' });
+  }, { cls: 'pop-wide', closable: true });
 }
 export const dateBtn = (st, attr = 'data-date') => `<button class="b date-btn ${st.period !== 'tudo' ? 'on' : ''}" ${attr} data-pop-anchor>${ICON.calendar}<span>${esc(dateLabel(st))}</span>${ICON.caret}</button>`;
