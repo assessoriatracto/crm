@@ -1,7 +1,7 @@
 // Abas "Integrações" (API + webhooks) e "Pixel" (Meta Pixel + Conversions API)
 import { DB, LIVE } from '@shared/db.js';
-import { S, $, $$, esc, FAT, ICON, BRAND, num, pct, brl, fullDate, ago, toast, fail, modal, confirmBox, menu } from './util.js?v=2609282252';
-import { hbars } from './dashboard.js?v=2609282252';
+import { S, $, $$, esc, FAT, ICON, BRAND, num, pct, brl, fullDate, ago, toast, fail, modal, confirmBox, menu } from './util.js?v=2609282258';
+import { hbars } from './dashboard.js?v=2609282258';
 import { PIXEL_EVENTS_RECOMMENDED } from '@shared/db.js';
 
 const EVENTS = [
@@ -295,14 +295,18 @@ export async function renderPixel(el, { quiet = false } = {}) {
       </section>
 
       <section class="panel int-card span-all">
-        <div class="int-h"><div><h3>Eventos do funil</h3><p class="help">Quando o lead avança no pipeline, o servidor avisa Meta e Google. Use esses sinais pra criar públicos e conversões personalizadas (ex: otimizar por lead qualificado) quando tiver volume.</p></div></div>
-        <div class="table-wrap"><table class="int-table funnel-map"><thead><tr><th>Estágio</th><th>Evento na Meta</th><th>Evento no GA4</th><th>Valor enviado</th></tr></thead><tbody>
-          ${S.stages.map((s) => `<tr data-stage="${s.id}"><td><span class="stage-pill"><span class="dot" style="background:${s.color}"></span>${esc(s.name)}</span></td>
-            <td><input class="inp" data-meta maxlength="40" placeholder="não enviar" value="${esc(s.meta_event || '')}"></td>
-            <td><input class="inp" data-ga4 maxlength="40" placeholder="não enviar" value="${esc(s.ga4_event || '')}"></td>
-            <td>${s.kind === 'won' ? `<select class="inp" data-val><option value="contract" ${s.meta_value === 'contract' ? 'selected' : ''}>Valor da venda</option><option value="none" ${s.meta_value !== 'contract' ? 'selected' : ''}>Sem valor</option></select>` : '<span class="muted">Sem valor</span><input type="hidden" data-val value="none">'}</td></tr>`).join('')}
-        </tbody></table></div>
-        <p class="help" style="margin-top:10px">Nomes sem espaço (ex: <code>LeadQualificado</code>). Evite nomes de eventos padrão da Meta como Lead ou Purchase aqui, pra não contarem como conversão. No GA4 os nomes recomendados pra funil de leads são <code>working_lead</code>, <code>qualify_lead</code>, <code>close_convert_lead</code> e <code>close_unconvert_lead</code>.</p>
+        <div class="int-h"><div><h3>O que vai pra Meta e pro Google</h3><p class="help">Só dois eventos, pra não gerar duplicidade nem confundir o algoritmo. Mover o lead no pipeline não envia nada.</p></div></div>
+        <div class="ev2">
+          <div class="ev2-i"><span class="ev2-n">1</span><div><b>Lead</b><small>Quando o formulário é concluído. Vai pelo navegador e pelo servidor com o mesmo ID, e a Meta conta uma vez só. É a conversão das campanhas.</small></div></div>
+          <div class="ev2-i"><span class="ev2-n">2</span><div><b>Venda</b><small>Uma vez por cliente, quando ele está em "${esc(S.stages.find((x) => x.kind === 'won')?.name || 'Venda realizada')}" e já tem mensalidade. Leva o valor do contrato e a campanha, o conjunto e o anúncio de origem. Venda pelo pipeline e venda lançada no Financeiro usam o mesmo ID, então nunca duplicam.</small></div></div>
+        </div>
+        ${S.stages.filter((x) => x.kind === 'won').map((st) => `<div class="table-wrap" style="margin-top:12px"><table class="int-table funnel-map"><thead><tr><th>Estágio de venda</th><th>Nome do evento na Meta</th><th>Evento no GA4</th><th>Valor enviado</th></tr></thead><tbody>
+          <tr data-stage="${st.id}"><td><span class="stage-pill"><span class="dot" style="background:${st.color}"></span>${esc(st.name)}</span></td>
+            <td><input class="inp" data-meta maxlength="40" placeholder="VendaRealizada" value="${esc(st.meta_event || '')}"></td>
+            <td><input class="inp" data-ga4 maxlength="40" placeholder="close_convert_lead" value="${esc(st.ga4_event || '')}"></td>
+            <td><select class="inp" data-val><option value="contract" ${st.meta_value === 'contract' ? 'selected' : ''}>Valor do contrato</option><option value="none" ${st.meta_value !== 'contract' ? 'selected' : ''}>Sem valor</option></select></td></tr>
+        </tbody></table></div>`).join('')}
+        <p class="help" style="margin-top:10px">Nome sem espaço. Deixe <code>VendaRealizada</code> pra não misturar com eventos padrão da Meta.</p>
       </section>
 
       <section class="panel int-card">

@@ -31,7 +31,7 @@ Formulário novo feito no construtor já fica no ar em `/aplicar/<endereço>/`, 
 ## Integrações e Pixel (CRM)
 
 - **Integrações**: chaves de API (`trk_…`) pra criar, listar e atualizar leads de outros sistemas, e webhooks assinados (HMAC-SHA256) para os eventos `lead.created`, `lead.stage_changed`, `lead.won`, `lead.lost`, `lead.assigned`, `lead.updated`, `note.created` e `lead.deleted`. A documentação com exemplos fica dentro da própria aba.
-- **Pixel**: Meta Conversions API enviada pelo banco. Cole o token no CRM e ative. O Lead do formulário vai com o mesmo `event_id` do Pixel do navegador (deduplicação), e cada estágio do pipeline pode enviar um evento personalizado. Lead e etapas vão sem valor; só a venda confirmada envia o valor do contrato (mensalidade × meses).
+- **Pixel**: Meta Conversions API e GA4 pelo banco. Só dois eventos: **Lead** (formulário concluído, mesmo `event_id` do Pixel do navegador) e **Venda** (uma vez por cliente, id `sale:<lead>`, com valor do contrato e campanha de origem, quando o lead está no estágio de venda com mensalidade ou quando uma venda lançada é ligada a ele). Mover o lead no pipeline não envia nada.
 - Os envios usam a extensão `pg_net` do Supabase, que o schema ativa. Se ela não estiver disponível, os leads continuam sendo gravados normalmente e os logs mostram "pg_net indisponível".
 
 ## Segurança
