@@ -409,6 +409,10 @@ export function downloadCSV(name, rows) {
 // ---------- filtro de datas (atalhos + período personalizado com calendário nativo) ----------
 // período escolhido no Dashboard e no Financeiro (o mesmo nas duas telas)
 export const PERIOD = { period: '30', from: '', to: '' };
+// como contar cada venda no faturamento (Dashboard e Financeiro): 'mensal' = 1ª mensalidade (marketplace e único: valor inteiro), 'contrato' = contrato inteiro
+export const REVENUE = { mode: (() => { try { return localStorage.getItem('tracto_rev_mode') === 'contrato' ? 'contrato' : 'mensal'; } catch (e) { return 'mensal'; } })() };
+export function setRevenueMode(m) { REVENUE.mode = m === 'contrato' ? 'contrato' : 'mensal'; try { localStorage.setItem('tracto_rev_mode', REVENUE.mode); } catch (e) {} }
+export const revenueToggle = () => `<div class="seg rev-seg" role="radiogroup" aria-label="Como contar as vendas">${[['mensal', '1ª mensalidade'], ['contrato', 'Contrato inteiro']].map(([k, n]) => `<button type="button" class="b b-sm ${REVENUE.mode === k ? 'on' : ''}" role="radio" aria-checked="${REVENUE.mode === k}" data-rev="${k}">${n}</button>`).join('')}</div>`;
 export const DATE_PRESETS = [
   ['hoje', 'Hoje'], ['ontem', 'Ontem'], ['7', 'Últimos 7 dias'], ['14', 'Últimos 14 dias'], ['30', 'Últimos 30 dias'],
   ['90', 'Últimos 90 dias'], ['mes', 'Este mês'], ['mespassado', 'Mês passado'], ['ano', 'Este ano'], ['tudo', 'Todo o período']

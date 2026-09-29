@@ -1,7 +1,7 @@
 // Financeiro > Fluxo de caixa: resultado mês a mês (DRE simples) e previsão dos próximos 3 meses
 import { DB } from '@shared/db.js';
-import { esc, brl, fail } from './util.js?v=2609291926';
-import { contracts, received, result } from './dashboard.js?v=2609291926';
+import { esc, brl, fail } from './util.js?v=2609291931';
+import { contracts, received, result } from './dashboard.js?v=2609291931';
 
 const CF = { months: 6 };
 const iso = (d) => new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 10);
@@ -30,7 +30,7 @@ export async function renderCashflow(host) {
   for (let k = 0; k < CF.months; k++) {
     const a = new Date(first.getFullYear(), first.getMonth() + k, 1);
     const b = new Date(a.getFullYear(), a.getMonth() + 1, 0, 23, 59, 59);
-    months.push({ a, b, label: MONTH(a), current: k === CF.months - 1, ...result(ins, entries, list, a, b) });
+    months.push({ a, b, label: MONTH(a), current: k === CF.months - 1, ...result(ins, entries, list, a, b, 'caixa') });
   }
   // previsão: contratos ativos + despesas fixas cadastradas + média dos últimos 3 meses fechados em anúncios e variáveis
   const closed = months.filter((m) => !m.current).slice(-3);
@@ -64,15 +64,15 @@ export async function renderCashflow(host) {
     if (cls.includes('pct')) return pctTxt(v);
     const strong = /total|acc/.test(cls);
     if (!v && !strong) return '<span class="muted">—</span>';
-    return `<span class="${strong && v < 0 ? 'cf-neg' : ''}">${brl(v)}</span>`;
+    return `<span class="${strong && v < 0 ? 'cf-neg' : strong && v > 0 ? 'cf-pos' : ''}">${brl(v)}</span>`;
   };
 
   host.innerHTML = `
     <div class="kx-grid kx-4">
-      <section class="panel kx accent"><span class="kx-l">Resultado de ${esc(cur.label)}</span><div class="kx-vr"><span class="kx-v ${cur.profit < 0 ? 'cf-neg' : ''}">${brl(cur.profit)}</span></div><div class="kx-s">mês em andamento · margem ${pctTxt(cur.margin)}</div></section>
-      <section class="panel kx"><span class="kx-l">Média mensal</span><div class="kx-vr"><span class="kx-v ${avgProfit < 0 ? 'cf-neg' : ''}">${avgProfit == null ? '—' : brl(avgProfit)}</span></div><div class="kx-s">resultado dos últimos ${closed.length || 3} meses fechados</div></section>
-      <section class="panel kx"><span class="kx-l">Previsão de ${esc(next.label)}</span><div class="kx-vr"><span class="kx-v ${next.profit < 0 ? 'cf-neg' : ''}">${brl(next.profit)}</span></div><div class="kx-s">entram ${brl(next.revenue)} · saem ${brl(next.costs)}</div></section>
-      <section class="panel kx"><span class="kx-l">Acumulado</span><div class="kx-vr"><span class="kx-v ${realized < 0 ? 'cf-neg' : ''}">${brl(realized)}</span></div><div class="kx-s">soma dos ${CF.months} meses mostrados</div></section>
+      <section class="panel kx accent"><span class="kx-l">Resultado de ${esc(cur.label)}</span><div class="kx-vr"><span class="kx-v ${cur.profit < 0 ? 'cf-neg' : cur.profit > 0 ? 'cf-pos' : ''}">${brl(cur.profit)}</span></div><div class="kx-s">mês em andamento · margem ${pctTxt(cur.margin)}</div></section>
+      <section class="panel kx"><span class="kx-l">Média mensal</span><div class="kx-vr"><span class="kx-v ${avgProfit < 0 ? 'cf-neg' : avgProfit > 0 ? 'cf-pos' : ''}">${avgProfit == null ? '—' : brl(avgProfit)}</span></div><div class="kx-s">resultado dos últimos ${closed.length || 3} meses fechados</div></section>
+      <section class="panel kx"><span class="kx-l">Previsão de ${esc(next.label)}</span><div class="kx-vr"><span class="kx-v ${next.profit < 0 ? 'cf-neg' : next.profit > 0 ? 'cf-pos' : ''}">${brl(next.profit)}</span></div><div class="kx-s">entram ${brl(next.revenue)} · saem ${brl(next.costs)}</div></section>
+      <section class="panel kx"><span class="kx-l">Acumulado</span><div class="kx-vr"><span class="kx-v ${realized < 0 ? 'cf-neg' : realized > 0 ? 'cf-pos' : ''}">${brl(realized)}</span></div><div class="kx-s">soma dos ${CF.months} meses mostrados</div></section>
     </div>
 
     <section class="panel chart-card" style="margin-top:12px">

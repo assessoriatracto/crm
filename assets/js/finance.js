@@ -1,12 +1,12 @@
 // Financeiro (estilo UTMify): gasto da Meta Ads × leads e vendas do CRM × receitas e despesas lançadas
 import { DB } from '@shared/db.js';
-import { renderClients } from './clients.js?v=2609291926';
-import { renderExpenses } from './expenses.js?v=2609291926';
-import { renderCashflow } from './cashflow.js?v=2609291926';
-import { contracts, received, result, fromAds } from './dashboard.js?v=2609291926';
-import { contractTags } from './contract.js?v=2609291926';
-import { entryModal } from './entry.js?v=2609291926';
-import { PERIOD, BRAND, popover, dateRange, datePicker, dateBtn, S, $, $$, esc, ICON, brl, num, pct, fullDate, ago, toast, fail, modal, confirmBox } from './util.js?v=2609291926';
+import { renderClients } from './clients.js?v=2609291931';
+import { renderExpenses } from './expenses.js?v=2609291931';
+import { renderCashflow } from './cashflow.js?v=2609291931';
+import { contracts, result, fromAds, saleRevenue } from './dashboard.js?v=2609291931';
+import { contractTags } from './contract.js?v=2609291931';
+import { entryModal } from './entry.js?v=2609291931';
+import { PERIOD, REVENUE, setRevenueMode, revenueToggle, BRAND, popover, dateRange, datePicker, dateBtn, S, $, $$, esc, ICON, brl, num, pct, fullDate, ago, toast, fail, modal, confirmBox } from './util.js?v=2609291931';
 
 const F = { period: '30', from: '', to: '', level: 'campaign', revenue: 'mensal', sort: 'spend', tab: 'geral' };
 const GRAPH = 'v21.0';
@@ -106,8 +106,9 @@ export async function renderFinance(el, swap = false) {
   const salesR = list.filter((c) => c.start >= ra && c.start <= rb);
   const nSales = salesR.length;
   const salesValue = salesR.reduce((a, c) => a + c.value, 0);
+  const salesRev = salesR.reduce((a, c) => a + saleRevenue(c), 0);
   const adsSales = salesR.filter(fromAds);
-  const revAds = adsSales.reduce((a, c) => a + c.value, 0);
+  const revAds = adsSales.reduce((a, c) => a + saleRevenue(c), 0);
   const isFixed = (e) => !!(e.recurring_id || e.expense_type === 'fixa');
   const exp = entries.filter((e) => e.kind === 'despesa');
   const { ads: spend, fixed, variable, other: revOther } = res;
@@ -120,7 +121,7 @@ export async function renderFinance(el, swap = false) {
 
   // receita por serviço e custos por categoria
   const svcRows = [['marketing', 'Marketing'], ['marketplace', 'Marketplace'], [null, 'Sem serviço definido']].map(([k, n]) => {
-    const cs = list.filter((c) => (c.service || null) === k).map((c) => received(c, ra, rb)).filter((v) => v > 0);
+    const cs = salesR.filter((c) => (c.service || null) === k).map((c) => saleRevenue(c));
     return { key: k, name: n, n: cs.length, value: cs.reduce((a, v) => a + v, 0) };
   }).filter((x) => x.n);
   const catMap = new Map(); if (spend) catMap.set('Anúncios (Meta)', spend);
@@ -134,29 +135,29 @@ export async function renderFinance(el, swap = false) {
   const shown = F.allEntries ? allRows : allRows.slice(0, 8);
 
   el.innerHTML = `
-    <div class="topline"><h1>Financeiro</h1><div class="grow"></div>${dateBtn(F)}</div>
+    <div class="topline"><h1>Financeiro</h1><div class="grow"></div>${revenueToggle()}${dateBtn(F)}</div>
     ${tabBar()}
     <div class="tab-body">
     <div class="kx-grid kx-4">
-      <section class="panel kx accent"><span class="kx-l">Faturamento</span><div class="kx-vr"><span class="kx-v">${brl(faturamento)}</span></div><div class="kx-s">o que entrou no período${nSales ? ` · ${num(nSales)} venda${nSales === 1 ? '' : 's'} fechada${nSales === 1 ? '' : 's'} (${brl(salesValue)} em contratos)` : ''}</div></section>
+      <section class="panel kx accent"><span class="kx-l">Faturamento</span><div class="kx-vr"><span class="kx-v">${brl(faturamento)}</span></div><div class="kx-s">${nSales ? `${num(nSales)} venda${nSales === 1 ? '' : 's'} ${REVENUE.mode === 'contrato' ? 'pelo contrato inteiro' : 'pela 1ª mensalidade'}${REVENUE.mode === 'contrato' ? '' : ` · ${brl(salesValue)} em contratos`}` : 'nenhuma venda no período'}${revOther ? ` · ${brl(revOther)} em outras receitas` : ''}</div></section>
       <section class="panel kx"><span class="kx-l">Custos</span><div class="kx-vr"><span class="kx-v">${brl(custos)}</span></div><div class="kx-s">${custos ? `anúncios ${brl(spend)} · fixas ${brl(fixed)} · variáveis ${brl(variable)}` : 'nenhum custo no período'}</div></section>
-      <section class="panel kx ${lucro < 0 ? 'neg' : 'ok'}"><span class="kx-l">Lucro líquido</span><div class="kx-vr"><span class="kx-v">${brl(lucro)}</span></div><div class="kx-s">margem ${faturamento ? pct(lucro, faturamento) : '—'}</div></section>
-      <section class="panel kx"><span class="kx-l">ROAS</span><div class="kx-vr"><span class="kx-v">${x2(ratio(revAds, spend))}</span></div><div class="kx-s">${spend ? `${brl(revAds)} em contratos de anúncio ÷ investimento` : 'sem investimento no período'}</div></section>
+      <section class="panel kx ${lucro < 0 ? 'neg' : lucro > 0 ? 'ok' : ''}"><span class="kx-l">Lucro líquido</span><div class="kx-vr"><span class="kx-v">${brl(lucro)}</span></div><div class="kx-s">margem ${faturamento ? pct(lucro, faturamento) : '—'}</div></section>
+      <section class="panel kx"><span class="kx-l">ROAS</span><div class="kx-vr"><span class="kx-v">${x2(ratio(revAds, spend))}</span></div><div class="kx-s">${spend ? `${brl(revAds)} em vendas de anúncio ÷ investimento` : 'sem investimento no período'}</div></section>
     </div>
     <div class="fin-mini">
-      <div><span>Ticket médio</span><b>${money(ratio(salesValue, nSales))}</b><small>por contrato fechado</small></div>
+      <div><span>Ticket médio</span><b>${money(ratio(salesRev, nSales))}</b><small>${REVENUE.mode === 'contrato' ? 'por contrato' : 'por venda'}</small></div>
       <div><span>CAC</span><b>${money(ratio(spend, adsSales.length))}</b><small>${nSales && custos ? `com todos os custos ${brl(custos / nSales)}` : 'investimento ÷ clientes de anúncio'}</small></div>
       <div><span>ROI</span><b>${ratio(lucro, custos) == null ? '—' : pct(lucro, custos)}</b><small>lucro ÷ custos</small></div>
       <div><span>Custo fixo mensal</span><b>${brl(fixedMonthly)}</b><small><a class="link" href="#" data-go="despesas">ver despesas</a></small></div>
     </div>
 
-    <section class="panel chart-card" style="margin-top:12px"><h3>Faturamento × custos por dia</h3><p class="sub">O que entrou em cada dia (mensalidades, marketplace e receitas), contra anúncios e despesas</p>
+    <section class="panel chart-card" style="margin-top:12px"><h3>Faturamento × custos por dia</h3><p class="sub">Vendas pela data do fechamento e outras receitas, contra anúncios e despesas</p>
       <div class="legend"><span><i style="background:var(--viz-1)"></i>Faturamento</span><span><i style="background:var(--viz-neutral)"></i>Custos</span></div>
       <div class="chart" data-chart></div></section>
 
     <div class="fin-split">
       <section class="panel ex-card">
-        <div class="ex-h"><div><h3>Faturamento por serviço</h3><p class="help">O que entrou no período (marketplace inteiro na venda)</p></div><a class="link" href="#" data-go="clientes">ver clientes</a></div>
+        <div class="ex-h"><div><h3>Faturamento por serviço</h3><p class="help">Vendas do período${REVENUE.mode === 'contrato' ? ' pelo contrato inteiro' : ' (marketplace inteiro, marketing 1ª mensalidade)'}</p></div><a class="link" href="#" data-go="clientes">ver clientes</a></div>
         ${svcRows.length ? `<div class="ex-bars">${bars(svcRows.map((x) => [x.name, x.value, `${x.n} cliente${x.n === 1 ? '' : 's'}`]), svcRows.reduce((a, x) => a + x.value, 0), (n) => (n === 'Marketplace' ? 'mkp' : n.startsWith('Sem') ? 'ads' : ''))}</div>` : '<p class="muted empty-line">Nenhuma venda no período.</p>'}
       </section>
       <section class="panel ex-card">
@@ -179,6 +180,7 @@ export async function renderFinance(el, swap = false) {
   bindTabs(el);
   if (swap) el.querySelector('.tab-body').classList.add('swap-in');
   el.querySelectorAll('[data-go]').forEach((a) => a.addEventListener('click', (e) => { e.preventDefault(); F.tab = a.dataset.go; renderFinance(el, true); }));
+  el.querySelectorAll('[data-rev]').forEach((b) => b.addEventListener('click', () => { if (REVENUE.mode === b.dataset.rev) return; setRevenueMode(b.dataset.rev); reload(); }));
   el.querySelector('[data-more-entries]')?.addEventListener('click', () => { F.allEntries = !F.allEntries; reload(); });
   el.querySelector('[data-date]').addEventListener('click', (e) => datePicker(e.currentTarget, F, (st) => { Object.assign(F, st); Object.assign(PERIOD, st); reload(); }));
   el.querySelector('[data-entry]').addEventListener('click', () => entryModal(reload));
@@ -224,7 +226,7 @@ async function renderCampaigns(host) {
   const leads = S.leads.filter((l) => inRange(l.created_at, r));
   // vendas do período com a campanha de origem; valor = contrato fechado (mesma conta do ROAS do Dashboard)
   const [ra, rb] = [new Date(r[0] + 'T00:00'), new Date(r[1] + 'T23:59:59')];
-  const tblSales = contracts(entries, months).filter((c) => c.start >= ra && c.start <= rb).map((c) => ({ ...c.origin, __v: c.value }));
+  const tblSales = contracts(entries, months).filter((c) => c.start >= ra && c.start <= rb).map((c) => ({ ...c.origin, __v: saleRevenue(c) }));
   const tblValue = (x) => x.__v;
 
   host.innerHTML = `
@@ -321,7 +323,7 @@ async function renderAccounts(el, swap) {
   const soonest = accounts.filter((a) => a.connected_via === 'facebook' && a.token_expires_at).map((a) => daysLeft(a.token_expires_at)).sort((a, b) => a - b)[0];
 
   el.innerHTML = `
-    <div class="topline"><h1>Financeiro</h1><div class="grow"></div>${accounts.length ? dateBtn(F) : ''}</div>
+    <div class="topline"><h1>Financeiro</h1><div class="grow"></div>${accounts.length ? revenueToggle() + dateBtn(F) : ''}</div>
     ${tabBar()}
     <div class="tab-body">
     <div data-camps></div>
@@ -366,6 +368,7 @@ async function renderAccounts(el, swap) {
   if (swap) el.querySelector('.tab-body').classList.add('swap-in');
   // campanhas no topo, com o mesmo período do Dashboard
   renderCampaigns(el.querySelector('[data-camps]'));
+  el.querySelectorAll('[data-rev]').forEach((b) => b.addEventListener('click', () => { if (REVENUE.mode === b.dataset.rev) return; setRevenueMode(b.dataset.rev); el.querySelectorAll('[data-rev]').forEach((x) => { x.classList.toggle('on', x === b); x.setAttribute('aria-checked', x === b); }); renderCampaigns(el.querySelector('[data-camps]')); }));
   el.querySelector('[data-date]')?.addEventListener('click', (e) => datePicker(e.currentTarget, F, (st) => { Object.assign(F, st); Object.assign(PERIOD, st); renderFinance(el); }));
 
   el.querySelector('[data-fb]')?.addEventListener('click', async (e) => {
@@ -823,7 +826,7 @@ function dailyChart(host, r, ins, list, entries) {
     const a = new Date(d + 'T00:00'); const b = new Date(d + 'T23:59:59');
     return {
       d,
-      rev: list.reduce((s2, c) => s2 + received(c, a, b), 0) + entries.filter((e) => e.kind === 'receita' && !SALE_CATS.includes(e.category) && e.date === d).reduce((s2, e) => s2 + Number(e.amount), 0),
+      rev: list.filter((c) => c.start >= a && c.start <= b).reduce((s2, c) => s2 + saleRevenue(c), 0) + entries.filter((e) => e.kind === 'receita' && !SALE_CATS.includes(e.category) && e.date === d).reduce((s2, e) => s2 + Number(e.amount), 0),
       exp: ins.filter((x) => x.date === d).reduce((s2, x) => s2 + Number(x.spend), 0) + entries.filter((e) => e.kind === 'despesa' && e.date === d).reduce((s2, e) => s2 + Number(e.amount), 0)
     };
   });

@@ -1,6 +1,6 @@
 // Campos de contrato usados em todo lugar que lança venda: serviço (marketing/marketplace),
 // tipo (mensal, semestral, anual, pagamento único), duração e valores.
-import { esc, brl } from './util.js?v=2609291926';
+import { esc, brl } from './util.js?v=2609291931';
 
 export const SERVICES = [['marketing', 'Marketing'], ['marketplace', 'Marketplace']];
 // meses padrão de cada tipo (mensal renova todo mês até cancelar; usa a previsão só pra estimar o valor do contrato)

@@ -1565,3 +1565,8 @@ input.inp.dp-native{display:none !important;}
 .dp-link:hover:not(:disabled){background:var(--amber-soft);}
 .dp-link:disabled{opacity:.3;cursor:default;}
 .pill.pipe{background:rgba(61,220,132,.12);color:#3DDC84;}
+/* lucro positivo verde, negativo vermelho (em qualquer tela, claro e escuro) */
+.kx.ok .kx-v,.cf-pos,.adt .pos{color:var(--fg-green);}
+.kx.neg .kx-v,.cf-neg,.adt .neg{color:var(--fg-red);}
+.rev-seg{flex-wrap:nowrap;}
+@media (max-width:760px){.topline .rev-seg{order:3;width:100%;display:grid;grid-template-columns:1fr 1fr;}}

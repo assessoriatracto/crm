@@ -1,7 +1,7 @@
 // Dashboard: visão executiva e enxuta da saúde do negócio.
 // O detalhe (campanhas, lançamentos, gráficos por dia) fica no Financeiro e na Central de leads.
 import { DB } from '@shared/db.js';
-import { PERIOD, dateRange, datePicker, dateBtn, S, $, $$, esc, ICON, brl, num, isDue, isInactive, fail, fmtDays } from './util.js?v=2609291926';
+import { PERIOD, REVENUE, setRevenueMode, revenueToggle, dateRange, datePicker, dateBtn, S, $, $$, esc, ICON, brl, num, isDue, isInactive, fail, fmtDays } from './util.js?v=2609291931';
 
 const D = PERIOD;
 const DAY = 86400000;
@@ -55,6 +55,8 @@ export function received(c, a, b) {
   return sum;
 }
 // a venda veio de anúncio? (tudo que não foi marcado como indicação/orgânico; a captação da Tracto é por anúncio)
+// valor que a venda conta no faturamento: contrato inteiro, ou 1ª mensalidade (marketplace e único: sempre o valor inteiro)
+export const saleRevenue = (c, mode = REVENUE.mode) => (mode === 'contrato' || c.upfront ? c.value : c.monthly);
 export const isOrganic = (c) => (c.kind === 'entry' ? c.entry?.source === 'organico' : c.lead?.source === 'organico' || c.lead?.source === 'manual');
 export const hasOrigin = (c) => !!(c.origin?.utm_campaign || c.origin?.utm_id);
 export const fromAds = (c) => !isOrganic(c);
@@ -73,8 +75,8 @@ function metrics(ins, leads, a, b, contractsList, useMeta) {
   const cohortWon = cohort.filter((l) => l.won_at || clientLeadIds.has(l.id)).length;
   const nLeads = useMeta ? metaLeads : crmLeads; // mesma fonte nos dois períodos (comparação justa)
   const news = contractsList.filter((c) => inR(c.start));
-  const cValue = (c) => c.value;
-  const newValue = news.reduce((s, c) => s + cValue(c), 0);
+  const cValue = (c) => saleRevenue(c);
+  const newValue = news.reduce((s, c) => s + c.value, 0);
   // CAC e ROAS só com vendas que vieram de anúncio (venda por indicação/fora do tráfego não entra)
   const adsNews = news.filter(fromAds);
   const adsValue = adsNews.reduce((s, c) => s + cValue(c), 0);
@@ -105,11 +107,14 @@ function metrics(ins, leads, a, b, contractsList, useMeta) {
 
 // resultado do período: o que entrou (mensalidades de marketing no dia de cada mês, marketplace e pagamentos únicos
 // inteiros na venda, outras receitas) menos anúncios e despesas lançadas (fixas e variáveis)
-export function result(ins, entries, list, a, b) {
+// mode 'mensal' | 'contrato': cada venda fechada no período conta 1ª mensalidade ou contrato inteiro (marketplace e único: inteiro).
+// mode 'caixa' (Fluxo de caixa): o que entra de verdade em cada mês (mensalidades na data de cada mês, marketplace inteiro na venda).
+export function result(ins, entries, list, a, b, mode = REVENUE.mode) {
   const inR = (d) => d >= a && d <= b;
   const dIso = (x) => new Date(x + 'T12:00');
-  const recurring = list.filter((c) => !c.upfront).reduce((s, c) => s + received(c, a, b), 0);
-  const once = list.filter((c) => c.upfront).reduce((s, c) => s + received(c, a, b), 0);
+  const rev = (c) => (mode === 'caixa' ? received(c, a, b) : inR(c.start) ? saleRevenue(c, mode) : 0);
+  const recurring = list.filter((c) => !c.upfront).reduce((s, c) => s + rev(c), 0);
+  const once = list.filter((c) => c.upfront).reduce((s, c) => s + rev(c), 0);
   const other = entries.filter((e) => e.kind === 'receita' && !SALE_CATS.includes(e.category) && inR(dIso(e.date))).reduce((s, e) => s + Number(e.amount), 0);
   const exp = entries.filter((e) => e.kind === 'despesa' && inR(dIso(e.date)));
   const fixed = exp.filter((e) => e.expense_type === 'fixa' || e.recurring_id).reduce((s, e) => s + Number(e.amount), 0);
@@ -208,7 +213,7 @@ export async function renderDashboard(el) {
 
   const fmtDate = (d) => d.toLocaleDateString('pt-BR', { day: '2-digit', month: 'short' });
   el.innerHTML = `
-    <div class="topline"><h1>Dashboard</h1><div class="grow"></div>${dateBtn(D)}</div>
+    <div class="topline"><h1>Dashboard</h1><div class="grow"></div>${canMoney ? revenueToggle() : ''}${dateBtn(D)}</div>
     ${canMoney ? `
     <h2 class="dash-h">Receita recorrente <span>carteira ${endLabel} · entradas e saídas no período</span></h2>
     <div class="kx-grid kx-4">
@@ -217,9 +222,9 @@ export async function renderDashboard(el) {
       ${kpi('Ticket médio', money(cur.ticket), ltv ? `LTV estimado ${brl(ltv)}` : 'por cliente, ao mês', delta(cur.ticket, prev.ticket))}
       ${kpi('Churn', pctTxt(cur.churn), cur.churnN ? `${num(cur.churnN)} cancelamento${cur.churnN === 1 ? '' : 's'} no período` : 'nenhum cancelamento no período', delta(cur.churn, prev.churn, 'down', true))}
     </div>
-    <h2 class="dash-h">Resultado <span>no período · o que entrou menos anúncios e despesas</span></h2>
+    <h2 class="dash-h">Resultado <span>no período · vendas pela ${REVENUE.mode === 'contrato' ? 'contrato inteiro' : '1ª mensalidade (marketplace inteiro)'} menos anúncios e despesas</span></h2>
     <div class="kx-grid kx-4">
-      ${kpi('Lucro líquido', brl(res.profit), `margem ${pctTxt(res.margin)} · receita ${brl(res.revenue)}`, delta(res.profit, resPrev.profit), res.profit < 0 ? 'neg' : '')}
+      ${kpi('Lucro líquido', brl(res.profit), `margem ${pctTxt(res.margin)} · receita ${brl(res.revenue)}`, delta(res.profit, resPrev.profit), res.profit < 0 ? 'neg' : res.profit > 0 ? 'ok' : '')}
       ${kpi('Custos do período', brl(res.costs), res.costs ? `anúncios ${brl(res.ads)} · fixas ${brl(res.fixed)} · variáveis ${brl(res.variable)}` : 'nenhum custo no período', delta(res.costs, resPrev.costs, 'down'))}
       ${kpi('Custo fixo mensal', brl(fixedMonthly), fixedMonthly ? `${num(recur.filter((r) => r.active).length)} despesa${recur.filter((r) => r.active).length === 1 ? '' : 's'} fixa${recur.filter((r) => r.active).length === 1 ? '' : 's'} ativa${recur.filter((r) => r.active).length === 1 ? '' : 's'}` : 'cadastre em Financeiro › Despesas')}
       ${kpi('Ponto de equilíbrio', need == null ? '—' : `${num(need)} cliente${need === 1 ? '' : 's'}`, need == null ? (fixedMonthly ? 'sem ticket médio ainda' : 'precisa das despesas fixas') : `pra cobrir os custos fixos · você tem ${num(cur.active)} ativo${cur.active === 1 ? '' : 's'}`, '', need != null ? (cur.active >= need ? 'ok' : 'warn') : '')}
@@ -233,7 +238,7 @@ export async function renderDashboard(el) {
       ${kpi('Taxa de conversão', pctTxt(cur.conv), cur.nLeads ? `${num(cur.newClients)} cliente${cur.newClients === 1 ? '' : 's'} de ${num(cur.nLeads)} leads no período` : 'nenhum lead no período', delta(cur.conv, prev.conv, 'up', true))}
       ${kpi('Tempo até a venda', cur.ttcAvg == null ? '—' : fmtDays(cur.ttcAvg), cur.ttcAvg == null ? (cur.newClients ? 'ligue o contato do cliente em Financeiro › Clientes' : 'média de lead a venda') : `média · mediana ${fmtDays(cur.ttcMed)} · ${num(cur.ttcN)} venda${cur.ttcN === 1 ? '' : 's'}`, delta(cur.ttcAvg, prev.ttcAvg, 'down'))}
       ${kpi('CAC', money(cur.cac), cur.cac == null ? (cur.spend ? 'nenhum cliente de anúncio no período' : 'sem investimento no período') : `${ltv ? `LTV:CAC ${(ltv / cur.cac).toLocaleString('pt-BR', { maximumFractionDigits: 1 })}x · ` : ''}investimento ÷ ${num(cur.adsClients)} cliente${cur.adsClients === 1 ? '' : 's'}${cacFull ? ` · com todos os custos ${brl(cacFull)}` : ''}`, delta(cur.cac, prev.cac, 'down'))}
-      ${kpi('ROAS', cur.roas == null ? '—' : cur.roas.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + 'x', cur.adsClients ? `${brl(cur.adsValue)} em contratos ÷ investimento${cur.noOrigin ? ` · ${num(cur.noOrigin)} sem campanha definida` : ''}` : 'contratos fechados ÷ investimento', delta(cur.roas, prev.roas))}
+      ${kpi('ROAS', cur.roas == null ? '—' : cur.roas.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + 'x', cur.adsClients ? `${brl(cur.adsValue)} em ${REVENUE.mode === 'contrato' ? 'contratos' : 'vendas'} de anúncio ÷ investimento${cur.noOrigin ? ` · ${num(cur.noOrigin)} sem campanha definida` : ''}` : 'contratos fechados ÷ investimento', delta(cur.roas, prev.roas))}
     </div>` : ''}
     <div class="dash-row ${canMoney ? '' : 'two'}">
       <section class="panel dcard">
@@ -263,6 +268,7 @@ export async function renderDashboard(el) {
       </section>` : ''}
     </div>`;
   el.querySelector('[data-date]').addEventListener('click', (e) => datePicker(e.currentTarget, D, (st) => { Object.assign(D, st); renderDashboard(el); }));
+  el.querySelectorAll('[data-rev]').forEach((b) => b.addEventListener('click', () => { if (REVENUE.mode === b.dataset.rev) return; setRevenueMode(b.dataset.rev); renderDashboard(el); }));
   el.querySelector('[data-go-clients]')?.addEventListener('click', () => { try { sessionStorage.setItem('tracto_fin_tab', 'clientes'); } catch (e) {} });
 }
 
