@@ -1,8 +1,7 @@
 // Página "Ajustes": estágios, rótulos, equipe, times e auditoria
 import { DB, LIVE } from '@shared/db.js';
-import { S, $, $$, esc, ICON, COLORS, num, pct, ago, toast, fail, confirmBox } from './util.js?v=2609290922';
-import { openProfile } from './profile.js?v=2609290922';
-import { stageModal, moveStage, deleteStageFlow } from './app.js?v=2609290922';
+import { S, $, $$, esc, ICON, COLORS, num, pct, ago, toast, fail, confirmBox } from './util.js?v=2609290946';
+import { stageModal, moveStage, deleteStageFlow } from './app.js?v=2609290946';
 
 // ============================================================
 // AJUSTES
@@ -19,7 +18,7 @@ export async function renderSettings(el, reload) {
   const ENT = { profiles: 'usuário', tracking_pixels: 'pixel', ad_accounts: 'conta de anúncio', api_keys: 'chave de API', webhooks: 'webhook', forms: 'formulário', leads: 'lead' };
 
   el.innerHTML = `
-    <div class="topline"><h1>Ajustes</h1><div class="grow"></div><button class="b" data-profile>Meu perfil</button></div>
+    <div class="topline"><h1>Ajustes</h1><div class="grow"></div><a class="b" href="/perfil">${ICON.user}Meu perfil</a></div>
     <div class="settings">
       ${isManager ? `<section class="panel">
         <h3>Estágios do pipeline</h3>
@@ -82,7 +81,6 @@ export async function renderSettings(el, reload) {
     </div>`;
 
   const refresh = async () => { await reload(); renderSettings(el, reload); };
-  el.querySelector('[data-profile]').addEventListener('click', () => openProfile());
   el.querySelector('[data-invite]')?.addEventListener('click', async () => {
     try { await navigator.clipboard.writeText(location.origin + '/cadastro'); toast('Link de cadastro copiado'); } catch (e) { toast('Não consegui copiar', true); }
   });

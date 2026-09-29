@@ -3,16 +3,16 @@ import {
   go, routeName, S, $, $$, esc, ICON, FAT, COLORS, initials, isHot, stageOf, profileOf, labelOf, isInactive, isDue, fatShort, brl, pct, num,
   fmtPhone, fullDate, longDate, addedAt, ago, sourceLabel, formName, waLink, toast, fail, popover, closePop, menu, multiSelect,
   modal, confirmBox, downloadCSV, dateRange, datePicker, dateBtn, daysToSale, fmtDays
-} from './util.js?v=2609290922';
-import { importModal } from './import.js?v=2609290922';
-import { renderDashboard } from './dashboard.js?v=2609290922';
-import { renderSettings } from './admin.js?v=2609290922';
-import { renderIntegrations, renderPixel, leadMetaEvents, statusPill } from './integrations.js?v=2609290922';
-import { renderRecovery, loadPartials } from './recovery.js?v=2609290922';
-import { showSignIn, showSignUp, showForgot, showReset, showMfa, showPending, watchIdle, AUTH_ROUTES } from './auth.js?v=2609290922';
-import { openProfile } from './profile.js?v=2609290922';
-import { renderBuilder } from './builder.js?v=2609290922';
-import { renderFinance } from './finance.js?v=2609290922';
+} from './util.js?v=2609290946';
+import { importModal } from './import.js?v=2609290946';
+import { renderDashboard } from './dashboard.js?v=2609290946';
+import { renderSettings } from './admin.js?v=2609290946';
+import { renderIntegrations, renderPixel, leadMetaEvents, statusPill } from './integrations.js?v=2609290946';
+import { renderRecovery, loadPartials } from './recovery.js?v=2609290946';
+import { showSignIn, showSignUp, showForgot, showReset, showMfa, showPending, watchIdle, AUTH_ROUTES } from './auth.js?v=2609290946';
+import { openProfile, renderProfile } from './profile.js?v=2609290946';
+import { renderBuilder } from './builder.js?v=2609290946';
+import { renderFinance } from './finance.js?v=2609290946';
 
 // ============================================================
 // preferências locais (por navegador)
@@ -108,14 +108,14 @@ window.addEventListener('popstate', () => window.dispatchEvent(new Event('tracto
 if (LIVE) DB.onAuth((event) => { if (event === 'PASSWORD_RECOVERY') { go('redefinir', { replace: true }); } if (event === 'SIGNED_OUT' && started) location.reload(); });
 
 // o menu mostra só o que o papel permite (o banco também bloqueia)
-const ROLE_ROUTES = { admin: null, gestor: ['leads', 'recuperacao', 'dashboard', 'financeiro', 'formularios', 'ajustes'], sdr: ['leads', 'recuperacao', 'dashboard', 'ajustes'] };
+const ROLE_ROUTES = { admin: null, gestor: ['leads', 'recuperacao', 'dashboard', 'financeiro', 'formularios', 'ajustes', 'perfil'], sdr: ['leads', 'recuperacao', 'dashboard', 'ajustes', 'perfil'] };
 export const can = (routeName) => !ROLE_ROUTES[S.me?.role || 'sdr'] || ROLE_ROUTES[S.me?.role || 'sdr'].includes(routeName);
 function applyRole() {
   $$('.side a[data-route]').forEach((a) => { a.hidden = !can(a.dataset.route); });
   const av = $('#meBtn');
   if (av) {
     const role = ({ admin: 'Admin', gestor: 'Gestor', sdr: 'SDR' })[S.me?.role] || '';
-    av.querySelector('.me-av').textContent = (S.me?.nome || '?').split(/\s+/).slice(0, 2).map((w) => w[0]).join('').toUpperCase();
+    av.querySelector('.me-av').textContent = ((S.me?.nome || '').split(/\s+/).map((w) => w.replace(/[^\p{L}\p{N}]/gu, '')).filter(Boolean).slice(0, 2).map((w) => w[0]).join('').toUpperCase() || '?');
     av.querySelector('[data-me-name]').textContent = S.me?.nome || '';
     av.querySelector('[data-me-role]').textContent = role;
     av.title = `${S.me?.nome} · ${role}`;
@@ -197,7 +197,6 @@ function confirmLogout() {
   });
 }
 $('#logoutBtn').addEventListener('click', (e) => { e.preventDefault(); confirmLogout(); });
-$('#meBtn')?.addEventListener('click', (e) => { e.preventDefault(); openProfile(); });
 
 // contador vermelho: leads no primeiro estágio (novos, esperando contato)
 function refreshNewBadge() {
@@ -240,10 +239,12 @@ function route() {
     clearTimeout(route._t); route._t = setTimeout(() => v.classList.remove('view-enter'), 700);
   }
   $$('.side a[data-route]').forEach((a) => a.classList.toggle('on', a.dataset.route === r));
+  $('#meBtn')?.classList.toggle('on', r === 'perfil');
   const view = $('#view');
   if (r === 'dashboard') renderDashboard(view);
   else if (r === 'formularios') renderBuilder(view);
   else if (r === 'financeiro') renderFinance(view);
+  else if (r === 'perfil') renderProfile(view, applyRole);
   else if (r === 'ajustes') renderSettings(view, async () => { await loadAll(false); });
   else if (r === 'integracoes') renderIntegrations(view);
   else if (r === 'pixel') renderPixel(view);

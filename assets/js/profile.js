@@ -1,104 +1,242 @@
-// "Meu perfil": dados pessoais, Pushcut, e-mail, senha e verificação em duas etapas
+// "Meu perfil": página própria (/perfil) com dados pessoais, notificações e segurança
 import { DB, LIVE } from '@shared/db.js';
-import { S, esc, toast, fail, modal } from './util.js?v=2609290922';
-import { passwordCheck } from './auth.js?v=2609290922';
+import { S, esc, toast, fail, modal, ICON } from './util.js?v=2609290946';
+import { passwordCheck } from './auth.js?v=2609290946';
 
 const ROLE = { admin: 'Admin', gestor: 'Gestor', sdr: 'SDR' };
+const ROLE_HELP = { admin: 'Acesso total ao CRM, incluindo usuários e integrações.', gestor: 'Gerencia leads, financeiro, formulários e ajustes da equipe.', sdr: 'Atende e move os leads atribuídos no pipeline.' };
+const I = {
+  shield: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3 4 6v6c0 4.5 3.2 8.3 8 9 4.8-.7 8-4.5 8-9V6l-8-3z"/><path d="m9 12 2 2 4-4"/></svg>',
+  lock: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4" y="10" width="16" height="11" rx="2"/><path d="M8 10V7a4 4 0 0 1 8 0v3"/></svg>',
+  eye: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7S1 12 1 12z"/><circle cx="12" cy="12" r="3"/></svg>',
+};
+const initials = (n) => (n || '').split(/\s+/).map((w) => w.replace(/[^\p{L}\p{N}]/gu, '')).filter(Boolean).slice(0, 2).map((w) => w[0]).join('').toUpperCase() || '?';
+const fmtPhone = (v) => {
+  const d = String(v || '').replace(/\D/g, '').slice(0, 11);
+  if (d.length <= 2) return d;
+  if (d.length <= 6) return `(${d.slice(0, 2)}) ${d.slice(2)}`;
+  if (d.length <= 10) return `(${d.slice(0, 2)}) ${d.slice(2, 6)}-${d.slice(6)}`;
+  return `(${d.slice(0, 2)}) ${d.slice(2, 7)}-${d.slice(7)}`;
+};
+const pwField = (k, label, ac) => `<div class="row"><label class="lbl" for="pf-${k}">${label}</label>
+  <div class="pw-field"><input class="inp" id="pf-${k}" type="password" data-${k} autocomplete="${ac}"><button type="button" class="pw-eye" data-eye="pf-${k}" aria-label="Mostrar senha">${I.eye}</button></div></div>`;
 
-export async function openProfile() {
+let tab = 'perfil';
+
+export async function renderProfile(el, onSaved) {
   let factors = [];
   try { factors = (await DB.mfaFactors()).filter((f) => f.status === 'verified'); } catch (e) {}
+  if (!el.isConnected) return;
   const me = S.me || {};
-  modal(`<h3>Meu perfil</h3>
-    <p class="help">${esc(me.email || '')} · ${ROLE[me.role] || ''}</p>
-    <div class="row"><label class="lbl">Nome</label><input class="inp" data-f="nome" maxlength="120" value="${esc(me.nome || '')}"></div>
-    <div class="row"><label class="lbl">Telefone</label><input class="inp" data-f="phone" inputmode="tel" value="${esc(me.phone || '')}" placeholder="(62) 99999-9999"></div>
-    <div class="row"><label class="lbl">Notificação no celular (Pushcut)</label>
-      <input class="inp" data-f="pushcut_url" value="${esc(me.pushcut_url || '')}" placeholder="https://api.pushcut.io/…/notifications/…">
-      <p class="help" style="margin-top:6px">No app Pushcut: Notifications &gt; + &gt; crie "Novo lead" &gt; Webhook &gt; copie a URL e cole aqui. Você recebe um push sempre que um lead for atribuído a você.</p></div>
-    <div class="modal-foot" style="justify-content:space-between;margin-top:6px"><span></span><button class="b b-primary" data-save>Salvar</button></div>
-    <hr class="sep">
-    <h4 class="px-h">Segurança</h4>
-    <div class="sec-row"><div><b>Verificação em duas etapas</b><p class="help" style="margin:2px 0 0">${factors.length ? 'Ativa. Pedimos o código do app autenticador a cada login.' : 'Protege sua conta mesmo se a senha vazar. Recomendado pra quem vê dados de leads.'}</p></div>
-      ${factors.length ? '<button class="b b-danger b-sm" data-mfa-off>Desativar</button>' : '<button class="b b-sm" data-mfa-on>Ativar</button>'}</div>
-    <div class="sec-row"><div><b>E-mail de acesso</b><p class="help" style="margin:2px 0 0">${esc(me.email || '')}</p></div><button class="b b-sm" data-email>Alterar e-mail</button></div>
-    <div class="sec-row"><div><b>Senha</b><p class="help" style="margin:2px 0 0">Troque se suspeitar que alguém sabe a sua.</p></div><button class="b b-sm" data-pass>Trocar senha</button></div>
-    <div class="modal-foot"><button class="b" data-close>Fechar</button></div>`, (c, close) => {
-    c.querySelector('[data-save]').addEventListener('click', async () => {
-      const v = Object.fromEntries([...c.querySelectorAll('[data-f]')].map((i) => [i.dataset.f, i.value.trim() || null]));
-      if (!v.nome || v.nome.length < 2) return toast('Informe seu nome', true);
+  const mfaOn = factors.length > 0;
+  const nav = [['perfil', 'Perfil', ICON.user], ['notificacoes', 'Notificações', ICON.bell], ['seguranca', 'Segurança', I.shield]];
+
+  el.innerHTML = `
+    <div class="topline"><h1>Meu perfil</h1></div>
+    <div class="pf">
+      <aside class="pf-side">
+        <div class="pf-id"><span class="pf-av">${esc(initials(me.nome))}</span>
+          <div class="pf-id-t"><b>${esc(me.nome || '')}</b><small>${esc(me.email || '')}</small></div></div>
+        <nav class="pf-nav" role="tablist" aria-label="Seções do perfil">${nav.map(([k, t, ic]) => `<button type="button" role="tab" data-tab="${k}" aria-selected="${tab === k}" class="${tab === k ? 'on' : ''}">${ic}<span>${t}</span>${k === 'seguranca' && !mfaOn ? '<i class="pf-dot" title="Verificação em duas etapas desligada"></i>' : ''}</button>`).join('')}</nav>
+      </aside>
+
+      <div class="pf-main">
+        <section class="panel pf-sec" data-sec="perfil">
+          <header><h3>Informações pessoais</h3><p class="help">Seu nome aparece para a equipe nos leads atribuídos a você.</p></header>
+          <div class="pf-grid">
+            <div class="row"><label class="lbl" for="pf-nome">Nome</label><input class="inp" id="pf-nome" data-f="nome" maxlength="120" autocomplete="name" value="${esc(me.nome || '')}"></div>
+            <div class="row"><label class="lbl" for="pf-phone">Telefone</label><input class="inp" id="pf-phone" data-f="phone" inputmode="tel" autocomplete="tel" value="${esc(fmtPhone(me.phone))}" placeholder="(62) 99999-9999"></div>
+          </div>
+          <div class="pf-ro">
+            <div><span class="lbl">E-mail de acesso</span><p>${esc(me.email || '')}</p></div>
+            <button type="button" class="b b-sm" data-go="seguranca">Alterar</button>
+          </div>
+          <div class="pf-ro">
+            <div><span class="lbl">Função</span><p><span class="pill">${ROLE[me.role] || ''}</span><span class="pf-muted">${ROLE_HELP[me.role] || ''}</span></p></div>
+          </div>
+          <footer class="pf-foot"><span class="pf-muted" data-dirty-msg hidden>Alterações não salvas</span><button class="b" data-reset hidden>Descartar</button><button class="b b-primary" data-save disabled>Salvar alterações</button></footer>
+        </section>
+
+        <section class="panel pf-sec" data-sec="notificacoes">
+          <header><h3>Notificação no celular</h3><p class="help">Receba um push no celular sempre que um lead for atribuído a você. Usa o app Pushcut (iPhone).</p></header>
+          <div class="row"><label class="lbl" for="pf-push">URL do webhook do Pushcut</label><input class="inp" id="pf-push" data-f="pushcut_url" value="${esc(me.pushcut_url || '')}" placeholder="https://api.pushcut.io/…/notifications/…"></div>
+          <ol class="pf-steps">
+            <li>No app Pushcut, abra <b>Notifications</b> e toque em <b>+</b>.</li>
+            <li>Crie uma notificação chamada <b>Novo lead</b>.</li>
+            <li>Em <b>Webhook</b>, copie a URL e cole no campo acima.</li>
+          </ol>
+          <footer class="pf-foot"><span class="pf-status ${me.pushcut_url ? 'ok' : ''}">${me.pushcut_url ? `${ICON.check}Ativa` : 'Desligada'}</span><span class="grow"></span><button class="b" data-reset hidden>Descartar</button><button class="b b-primary" data-save disabled>Salvar alterações</button></footer>
+        </section>
+
+        <section class="panel pf-sec" data-sec="seguranca">
+          <header><h3>Segurança</h3><p class="help">Proteja o acesso aos dados dos leads e clientes.</p></header>
+          <div class="pf-item" data-item="mfa">
+            <span class="pf-ic ${mfaOn ? 'ok' : ''}">${I.shield}</span>
+            <div class="pf-item-t"><b>Verificação em duas etapas <span class="pf-badge ${mfaOn ? 'ok' : 'off'}">${mfaOn ? 'Ativa' : 'Desligada'}</span></b>
+              <p class="help">${mfaOn ? 'Pedimos o código do app autenticador a cada login.' : 'Protege sua conta mesmo se a senha vazar. Recomendado.'}</p></div>
+            ${mfaOn ? '<button class="b b-sm b-danger" data-mfa-off>Desativar</button>' : '<button class="b b-sm b-primary" data-open="mfa">Ativar</button>'}
+            <div class="pf-exp" data-exp="mfa" hidden></div>
+          </div>
+          <div class="pf-item" data-item="email">
+            <span class="pf-ic">${ICON.mail}</span>
+            <div class="pf-item-t"><b>E-mail de acesso</b><p class="help">${esc(me.email || '')}</p></div>
+            <button class="b b-sm" data-open="email">Alterar e-mail</button>
+            <div class="pf-exp" data-exp="email" hidden>
+              <div class="pf-grid">
+                <div class="row"><label class="lbl" for="pf-e1">Novo e-mail</label><input class="inp" id="pf-e1" type="email" data-e1 autocomplete="email"></div>
+                <div class="row"><label class="lbl" for="pf-e2">Confirmar novo e-mail</label><input class="inp" id="pf-e2" type="email" data-e2 autocomplete="off"></div>
+              </div>
+              <p class="help">Enviamos um link de confirmação para o novo e-mail e para o atual. A troca vale depois que os dois forem confirmados.</p>
+              <div class="pf-actions"><button class="b" data-cancel>Cancelar</button><button class="b b-primary" data-email-ok>Enviar confirmação</button></div>
+            </div>
+          </div>
+          <div class="pf-item" data-item="pass">
+            <span class="pf-ic">${I.lock}</span>
+            <div class="pf-item-t"><b>Senha</b><p class="help">Troque se suspeitar que alguém sabe a sua.</p></div>
+            <button class="b b-sm" data-open="pass">Trocar senha</button>
+            <div class="pf-exp" data-exp="pass" hidden>
+              <div class="pf-grid">${pwField('p1', 'Nova senha', 'new-password')}${pwField('p2', 'Confirmar nova senha', 'new-password')}</div>
+              <div class="pw-meter" data-score="0"><i></i><i></i><i></i><i></i></div>
+              <p class="help" data-hint>Mínimo de 10 caracteres, misturando letras, números e símbolos.</p>
+              <div class="pf-actions"><button class="b" data-cancel>Cancelar</button><button class="b b-primary" data-pass-ok>Salvar senha</button></div>
+            </div>
+          </div>
+        </section>
+      </div>
+    </div>`;
+
+  const $ = (s) => el.querySelector(s);
+  const $$ = (s) => [...el.querySelectorAll(s)];
+
+  // seções: no computador ficam lado a lado com o menu; o menu leva até a seção
+  const show = (k, scroll = true) => {
+    tab = k;
+    $$('[data-tab]').forEach((b) => { const on = b.dataset.tab === k; b.classList.toggle('on', on); b.setAttribute('aria-selected', on); });
+    $$('[data-sec]').forEach((s) => s.classList.toggle('on', s.dataset.sec === k));
+    if (scroll) $(`[data-sec="${k}"]`)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  };
+  $$('[data-tab]').forEach((b) => b.addEventListener('click', () => show(b.dataset.tab)));
+  $$('[data-go]').forEach((b) => b.addEventListener('click', () => { show(b.dataset.go); openExp('email'); }));
+  show(tab, false);
+
+  // dados do perfil: salvar só aparece quando algo muda
+  $('#pf-phone').addEventListener('input', (e) => { e.target.value = fmtPhone(e.target.value); });
+  const orig = { nome: me.nome || '', phone: fmtPhone(me.phone), pushcut_url: me.pushcut_url || '' };
+  $$('[data-sec="perfil"], [data-sec="notificacoes"]').forEach((sec) => {
+    const fields = [...sec.querySelectorAll('[data-f]')];
+    const dirty = () => fields.some((i) => i.value.trim() !== orig[i.dataset.f]);
+    const sync = () => {
+      const d = dirty();
+      sec.querySelector('[data-save]').disabled = !d;
+      sec.querySelector('[data-reset]').hidden = !d;
+      const msg = sec.querySelector('[data-dirty-msg]'); if (msg) msg.hidden = !d;
+    };
+    fields.forEach((i) => i.addEventListener('input', sync));
+    sec.querySelector('[data-reset]').addEventListener('click', () => { fields.forEach((i) => { i.value = orig[i.dataset.f]; }); sync(); });
+    sec.querySelector('[data-save]').addEventListener('click', async (e) => {
+      const v = Object.fromEntries(fields.map((i) => [i.dataset.f, i.value.trim() || null]));
+      if ('nome' in v && (!v.nome || v.nome.length < 2)) return toast('Informe seu nome', true);
+      if ('phone' in v && v.phone && v.phone.replace(/\D/g, '').length < 10) return toast('Telefone incompleto', true);
       if (v.pushcut_url && !/^https:\/\/api\.pushcut\.io\/\S+$/.test(v.pushcut_url)) return toast('A URL do Pushcut começa com https://api.pushcut.io/', true);
-      try { S.me = { ...S.me, ...(await DB.updateMyProfile(v)) }; toast('Perfil salvo'); close(); } catch (e) { fail(e); }
-    });
-    c.querySelector('[data-pass]').addEventListener('click', () => { close(); changePassword(); });
-    c.querySelector('[data-email]').addEventListener('click', () => { close(); changeEmail(); });
-    c.querySelector('[data-mfa-on]')?.addEventListener('click', () => { close(); enrollMfa(); });
-    c.querySelector('[data-mfa-off]')?.addEventListener('click', async () => {
-      if (!confirm('Desativar a verificação em duas etapas?')) return;
-      try { for (const f of factors) await DB.mfaUnenroll(f.id); toast('Verificação em duas etapas desativada'); close(); } catch (e) { fail(e); }
+      if ('phone' in v && v.phone) v.phone = v.phone.replace(/\D/g, '');
+      const btn = e.currentTarget; btn.disabled = true;
+      try { S.me = { ...S.me, ...(await DB.updateMyProfile(v)) }; toast('Perfil salvo'); onSaved?.(); renderProfile(el, onSaved); }
+      catch (err) { btn.disabled = false; fail(err); }
     });
   });
-}
 
-function changeEmail() {
-  modal(`<h3>Alterar e-mail</h3>
-    <p class="help" style="margin-top:-4px">E-mail atual: <b>${esc(S.me?.email || '')}</b></p>
-    <div class="row"><label class="lbl">Novo e-mail</label><input class="inp" type="email" data-e1 autocomplete="email"></div>
-    <div class="row"><label class="lbl">Confirmar novo e-mail</label><input class="inp" type="email" data-e2 autocomplete="off"></div>
-    <p class="help">Por segurança, enviamos um link de confirmação para o novo e-mail e para o atual. A troca vale depois que os dois forem confirmados.</p>
-    <div class="modal-foot"><button class="b" data-close>Cancelar</button><button class="b b-primary" data-ok>Enviar confirmação</button></div>`, (c, close) => {
-    c.querySelector('[data-e2]').addEventListener('paste', (e) => e.preventDefault());
-    c.querySelector('[data-ok]').addEventListener('click', async (e) => {
-      const btn = e.currentTarget;
-      const e1 = c.querySelector('[data-e1]').value.trim().toLowerCase(); const e2 = c.querySelector('[data-e2]').value.trim().toLowerCase();
-      if (!/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(e1)) return toast('E-mail inválido', true);
-      if (e1 !== e2) return toast('Os e-mails não conferem', true);
-      if (e1 === (S.me?.email || '').toLowerCase()) return toast('Esse já é o seu e-mail', true);
-      btn.disabled = true;
-      try {
-        await DB.updateEmail(e1);
-        close();
-        modal(`<h3>Confira sua caixa de entrada</h3><p class="help">Enviamos os links de confirmação para <b>${esc(e1)}</b> e para <b>${esc(S.me?.email || '')}</b>. Abra os dois e clique no link. Até lá, continue entrando com o e-mail atual.</p><div class="modal-foot"><button class="b b-primary" data-close>Entendi</button></div>`);
-      } catch (err) {
-        btn.disabled = false;
-        toast(/already|registered|exists/i.test(err.message) ? 'Esse e-mail já está em uso' : /rate|many/i.test(err.message) ? 'Muitas tentativas. Aguarde alguns minutos.' : 'Não foi possível alterar o e-mail agora', true);
-      }
+  // segurança: cada ação abre no próprio item, sem janela por cima
+  function openExp(k) {
+    $$('[data-exp]').forEach((x) => {
+      const on = x.dataset.exp === k && x.hidden;
+      x.hidden = !on;
+      x.closest('.pf-item').classList.toggle('open', on);
+      x.closest('.pf-item').querySelector('[data-open]')?.toggleAttribute('hidden', on);
     });
-  });
-}
+    if (k === 'mfa' && !$('[data-exp="mfa"]').hidden) startMfa();
+    setTimeout(() => $(`[data-exp="${k}"]:not([hidden]) input`)?.focus(), 60);
+  }
+  const closeExp = (k) => { const x = $(`[data-exp="${k}"]`); if (!x.hidden) openExp(k); x.querySelectorAll('input').forEach((i) => { i.value = ''; }); };
+  $$('[data-open]').forEach((b) => b.addEventListener('click', () => openExp(b.dataset.open)));
+  $$('[data-exp] [data-cancel]').forEach((b) => b.addEventListener('click', () => closeExp(b.closest('[data-exp]').dataset.exp)));
+  $$('[data-eye]').forEach((b) => b.addEventListener('click', () => { const i = el.querySelector('#' + b.dataset.eye); i.type = i.type === 'password' ? 'text' : 'password'; }));
 
-function changePassword() {
-  modal(`<h3>Trocar senha</h3>
-    <div class="row"><label class="lbl">Nova senha</label><input class="inp" type="password" data-p1 autocomplete="new-password"></div>
-    <div class="row"><label class="lbl">Confirmar</label><input class="inp" type="password" data-p2 autocomplete="new-password"></div>
-    <p class="help" data-hint>Mínimo de 10 caracteres, misturando letras, números e símbolos.</p>
-    <div class="modal-foot"><button class="b" data-close>Cancelar</button><button class="b b-primary" data-ok>Salvar senha</button></div>`, (c, close) => {
-    c.querySelector('[data-ok]').addEventListener('click', async () => {
-      const p1 = c.querySelector('[data-p1]').value;
-      const r = passwordCheck(p1, { email: S.me?.email, nome: S.me?.nome });
-      if (!r.ok) return toast('Senha fraca: ' + r.issues.join(', '), true);
-      if (p1 !== c.querySelector('[data-p2]').value) return toast('As senhas não conferem', true);
-      try { await DB.updatePassword(p1); toast('Senha alterada'); close(); } catch (e) { fail(e); }
-    });
+  // e-mail
+  $('[data-e2]').addEventListener('paste', (e) => e.preventDefault());
+  $('[data-email-ok]').addEventListener('click', async (e) => {
+    const btn = e.currentTarget;
+    const e1 = $('[data-e1]').value.trim().toLowerCase(); const e2 = $('[data-e2]').value.trim().toLowerCase();
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(e1)) return toast('E-mail inválido', true);
+    if (e1 !== e2) return toast('Os e-mails não conferem', true);
+    if (e1 === (me.email || '').toLowerCase()) return toast('Esse já é o seu e-mail', true);
+    btn.disabled = true;
+    try {
+      await DB.updateEmail(e1);
+      $('[data-exp="email"]').innerHTML = `<div class="pf-note">${ICON.mailOpen}<p>Enviamos os links de confirmação para <b>${esc(e1)}</b> e para <b>${esc(me.email || '')}</b>. Abra os dois e clique no link. Até lá, continue entrando com o e-mail atual.</p></div>`;
+    } catch (err) {
+      btn.disabled = false;
+      toast(/already|registered|exists/i.test(err.message) ? 'Esse e-mail já está em uso' : /rate|many/i.test(err.message) ? 'Muitas tentativas. Aguarde alguns minutos.' : 'Não foi possível alterar o e-mail agora', true);
+    }
   });
-}
 
-async function enrollMfa() {
-  let f;
-  try { f = await DB.mfaEnroll(); } catch (e) { return fail(e); }
-  modal(`<h3>Ativar verificação em duas etapas</h3>
-    <p class="help">1. Abra um app autenticador (Google Authenticator, 1Password, Authy) e escaneie o QR code.</p>
-    <div class="qr">${f.totp.qr_code ? `<img src="${esc(f.totp.qr_code)}" alt="QR code">` : '<span class="muted">Modo demo: sem QR code</span>'}</div>
-    <p class="help">Ou digite a chave: <code class="wrap">${esc(f.totp.secret)}</code></p>
-    <p class="help">2. Digite o código de 6 dígitos que aparece no app.</p>
-    <div class="row"><input class="inp otp" data-code inputmode="numeric" maxlength="6" placeholder="000000" autocomplete="one-time-code"></div>
-    <div class="modal-foot"><button class="b" data-close data-cancel>Cancelar</button><button class="b b-primary" data-ok>Ativar</button></div>`, (c, close) => {
-    const i = c.querySelector('[data-code]');
+  // senha, com medidor de força
+  const p1 = $('[data-p1]'); const meterEl = $('[data-exp="pass"] .pw-meter'); const hint = $('[data-hint]');
+  p1.addEventListener('input', () => {
+    const r = passwordCheck(p1.value, { email: me.email, nome: me.nome });
+    meterEl.dataset.score = r.score;
+    meterEl.querySelectorAll('i').forEach((b, k) => b.classList.toggle('on', !!p1.value && k < Math.max(1, r.score)));
+    hint.textContent = !p1.value ? 'Mínimo de 10 caracteres, misturando letras, números e símbolos.' : r.ok ? 'Senha forte.' : 'Falta: ' + r.issues.join(', ') + '.';
+  });
+  $('[data-pass-ok]').addEventListener('click', async (e) => {
+    const r = passwordCheck(p1.value, { email: me.email, nome: me.nome });
+    if (!r.ok) return toast('Senha fraca: ' + r.issues.join(', '), true);
+    if (p1.value !== $('[data-p2]').value) return toast('As senhas não conferem', true);
+    const btn = e.currentTarget; btn.disabled = true;
+    try { await DB.updatePassword(p1.value); toast('Senha alterada'); closeExp('pass'); meterEl.dataset.score = 0; meterEl.querySelectorAll('i').forEach((b) => b.classList.remove('on')); }
+    catch (err) { fail(err); }
+    btn.disabled = false;
+  });
+
+  // verificação em duas etapas
+  let pending = null;
+  async function startMfa() {
+    const box = $('[data-exp="mfa"]');
+    box.innerHTML = '<div class="pf-load"><span class="spin"></span></div>';
+    try { pending = await DB.mfaEnroll(); } catch (err) { box.hidden = true; box.closest('.pf-item').classList.remove('open'); $('[data-open="mfa"]').hidden = false; return fail(err); }
+    const f = pending;
+    box.innerHTML = `<div class="pf-mfa">
+        <div class="qr">${f.totp.qr_code ? `<img src="${esc(f.totp.qr_code)}" alt="QR code">` : '<span class="muted">Modo demo: sem QR code</span>'}</div>
+        <ol class="pf-steps">
+          <li>Abra um app autenticador (Google Authenticator, 1Password, Authy) e escaneie o QR code.</li>
+          <li>Se preferir, digite a chave: <code class="wrap">${esc(f.totp.secret)}</code></li>
+          <li>Digite o código de 6 dígitos que aparece no app.</li>
+        </ol>
+      </div>
+      <div class="pf-otp"><input class="inp otp" data-code inputmode="numeric" maxlength="6" placeholder="000000" autocomplete="one-time-code" aria-label="Código de 6 dígitos"></div>
+      <div class="pf-actions"><button class="b" data-mfa-cancel>Cancelar</button><button class="b b-primary" data-mfa-ok>Ativar</button></div>`;
+    const i = box.querySelector('[data-code]');
     i.addEventListener('input', () => { i.value = i.value.replace(/\D/g, '').slice(0, 6); });
-    c.querySelector('[data-cancel]').addEventListener('click', () => { if (LIVE) DB.mfaUnenroll(f.id).catch(() => {}); });
-    c.querySelector('[data-ok]').addEventListener('click', async () => {
-      try { await DB.mfaVerify(f.id, i.value); toast('Verificação em duas etapas ativada'); close(); }
-      catch (e) { toast('Código inválido. Confira o horário do celular e tente de novo.', true); }
+    i.addEventListener('keydown', (e) => { if (e.key === 'Enter') box.querySelector('[data-mfa-ok]').click(); });
+    setTimeout(() => i.focus(), 60);
+    box.querySelector('[data-mfa-cancel]').addEventListener('click', () => { if (LIVE) DB.mfaUnenroll(f.id).catch(() => {}); pending = null; openExp('mfa'); });
+    box.querySelector('[data-mfa-ok]').addEventListener('click', async () => {
+      try { await DB.mfaVerify(f.id, i.value); pending = null; toast('Verificação em duas etapas ativada'); renderProfile(el, onSaved); }
+      catch (err) { toast('Código inválido. Confira o horário do celular e tente de novo.', true); }
+    });
+  }
+  $('[data-mfa-off]')?.addEventListener('click', () => {
+    modal(`<h3>Desativar verificação em duas etapas?</h3><p class="help">Sua conta passa a pedir só a senha para entrar.</p>
+      <div class="modal-foot"><button class="b" data-close>Cancelar</button><button class="b b-danger-solid" data-ok>Desativar</button></div>`, (c, close) => {
+      c.querySelector('[data-ok]').addEventListener('click', async () => {
+        try { for (const f of factors) await DB.mfaUnenroll(f.id); toast('Verificação em duas etapas desativada'); close(); renderProfile(el, onSaved); } catch (e) { fail(e); }
+      });
     });
   });
+}
+
+// atalho usado por outras telas
+export function openProfile(section) {
+  if (section) tab = section;
+  history.pushState(null, '', '/perfil');
+  window.dispatchEvent(new Event('tracto:nav'));
 }
