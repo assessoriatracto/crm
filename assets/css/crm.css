@@ -1485,3 +1485,10 @@ select.inp.dd-native{display:none !important;}
 .ptabs::-webkit-scrollbar{display:none;}
 .ptab{flex:none;white-space:nowrap;}
 @media (max-width:860px){.ptab{padding:10px 10px;gap:6px;}}
+/* campanhas no topo de Contas de anúncio */
+[data-camps] > .adt-card{margin:0 0 12px;}
+.adt-top{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;padding:18px 20px 4px;}
+.adt-top h3{margin:0 0 2px;font-size:17px;}
+.adt-top .help{margin:0;font-size:13px;color:var(--gray-3);line-height:1.5;}
+.adt-top .b-refresh{flex:none;}
+@media (max-width:560px){.adt-top{padding:16px 16px 4px;flex-wrap:wrap;}}

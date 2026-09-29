@@ -1,10 +1,10 @@
 // Financeiro (estilo UTMify): gasto da Meta Ads × leads e vendas do CRM × receitas e despesas lançadas
 import { DB } from '@shared/db.js';
-import { renderClients } from './clients.js?v=2609291412';
-import { renderExpenses } from './expenses.js?v=2609291412';
-import { renderCashflow } from './cashflow.js?v=2609291412';
-import { contractFields, bindContract, contractTags } from './contract.js?v=2609291412';
-import { PERIOD, BRAND, popover, dateRange, datePicker, dateBtn, S, $, $$, esc, ICON, brl, num, pct, fullDate, ago, toast, fail, modal, confirmBox } from './util.js?v=2609291412';
+import { renderClients } from './clients.js?v=2609291415';
+import { renderExpenses } from './expenses.js?v=2609291415';
+import { renderCashflow } from './cashflow.js?v=2609291415';
+import { contractFields, bindContract, contractTags } from './contract.js?v=2609291415';
+import { PERIOD, BRAND, popover, dateRange, datePicker, dateBtn, S, $, $$, esc, ICON, brl, num, pct, fullDate, ago, toast, fail, modal, confirmBox } from './util.js?v=2609291415';
 
 const F = { period: '30', from: '', to: '', level: 'campaign', revenue: 'mensal', sort: 'spend', tab: 'geral' };
 const GRAPH = 'v21.0';
@@ -94,8 +94,6 @@ export async function renderFinance(el, swap = false) {
   try {
     await Promise.all([DB.processAds(), DB.runRecurring?.()]);
     [ins, entries, accounts, settings, OBJS] = await Promise.all([DB.listInsights(r[0], r[1]), DB.listFinance(r[0], r[1]), DB.listAdAccounts().catch(() => []), DB.getTracking().catch(() => null), DB.listMetaObjects().then((l) => new Map(l.map((o) => [o.id, o]))).catch(() => new Map())]);
-    // primeira vez: busca status e orçamento na Meta em segundo plano
-    if (!OBJS.size && accounts.some((a) => a.enabled) && !renderFinance._objSync) { renderFinance._objSync = true; syncObjects().then((n) => { if (n && el.isConnected && F.tab === 'geral') renderFinance(el); }); }
   } catch (e) { fail(e); }
   if (!el.isConnected) return;
   const months = settings?.contract_months || 12;
@@ -165,7 +163,6 @@ export async function renderFinance(el, swap = false) {
     <div class="fin-actions">
       <div class="seg"><button class="b b-sm ${F.revenue === 'mensal' ? 'on' : ''}" data-rev="mensal">Receita: 1ª mensalidade</button><button class="b b-sm ${F.revenue === 'contrato' ? 'on' : ''}" data-rev="contrato">Receita: contrato</button></div>
       <div class="grow"></div>
-      ${accounts.length ? `<button class="b b-refresh" data-sync>${ICON.refresh}Sincronizar Meta Ads</button>` : ''}
     </div>
     <div class="fin-tiles">${tiles.map(([l, v, sub, cls]) => `<section class="panel ftile ${cls || ''}"><div class="t-label">${l}</div><div class="t-value">${v}</div><div class="t-sub">${esc(sub)}</div></section>`).join('')}</div>
 
@@ -173,18 +170,6 @@ export async function renderFinance(el, swap = false) {
       <div class="legend"><span><i style="background:var(--viz-1)"></i>Faturamento</span><span><i style="background:var(--viz-neutral)"></i>Gastos</span></div>
       <div class="chart" data-chart></div></section>
 
-    <section class="panel adt-card">
-      <div class="adt-head">
-        <nav class="adt-tabs" role="tablist">${[['campaign', 'Campanhas'], ['adset', 'Conjuntos de anúncios'], ['ad', 'Anúncios']].map(([k, n]) => `<button role="tab" aria-selected="${F.level === k}" class="adt-tab ${F.level === k ? 'on' : ''}" data-level="${k}">${LVL_IC[k]}<span>${n}</span></button>`).join('')}</nav>
-        <div class="adt-tools"><label class="adt-search">${ICON.search}<input type="search" data-adt-q placeholder="Buscar por nome" value="${esc(F.q || '')}"></label>
-          <button class="b b-ic adt-colbtn" data-cols data-pop-anchor><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M9 4v16M15 4v16"/></svg><span>Colunas</span></button></div>
-      </div>
-      <div class="adt-wrap" data-table></div>
-      <p class="adt-note">Resultados, gasto e cliques vêm da Meta (mesma atribuição do Gerenciador). Vendas e faturamento vêm do CRM, ligados pelas UTMs dos anúncios.</p>
-      <details class="docs"><summary>Parâmetros de URL pra colar nos anúncios</summary>
-        <p class="help">No Gerenciador de Anúncios, em cada anúncio: Rastreamento &gt; Parâmetros de URL. É assim que o CRM liga cada lead e venda à campanha, conjunto e anúncio que trouxe.</p>
-        <div class="code"><div class="code-h"><span>Parâmetros de URL</span><button class="b b-sm b-ghost" data-copy-utm>Copiar</button></div><pre>${esc(UTM_TEMPLATE)}</pre></div></details>
-    </section>
 
     <div class="int-grid" style="margin-top:12px">
       <section class="panel int-card">
@@ -201,10 +186,6 @@ export async function renderFinance(el, swap = false) {
     </div>
     </div>`;
 
-  // tabela por nível
-  renderTable(el.querySelector('[data-table]'), ins, leads, tblSales, tblValue);
-  el.querySelector('[data-cols]').addEventListener('click', (e) => colsPicker(e.currentTarget));
-  let qT; el.querySelector('[data-adt-q]').addEventListener('input', (e) => { clearTimeout(qT); qT = setTimeout(() => { F.q = e.target.value; renderTable(el.querySelector('[data-table]'), ins, leads, tblSales, tblValue); }, 150); });
   dailyChart(el.querySelector('[data-chart]'), r, ins, sales, entries, saleValue);
 
   const reload = () => renderFinance(el);
@@ -213,15 +194,6 @@ export async function renderFinance(el, swap = false) {
   el.querySelector('[data-go-acc]').addEventListener('click', () => { F.tab = 'contas'; renderFinance(el, true); });
   el.querySelector('[data-date]').addEventListener('click', (e) => datePicker(e.currentTarget, F, (st) => { Object.assign(F, st); Object.assign(PERIOD, st); reload(); }));
   el.querySelectorAll('[data-rev]').forEach((b) => b.addEventListener('click', () => { F.revenue = b.dataset.rev; reload(); }));
-  el.querySelectorAll('[data-level]').forEach((b) => b.addEventListener('click', () => {
-    if (F.level === b.dataset.level) return;
-    F.level = b.dataset.level;
-    el.querySelectorAll('[data-level]').forEach((x) => { x.classList.toggle('on', x === b); x.setAttribute('aria-selected', x === b); });
-    const host = el.querySelector('[data-table]');
-    renderTable(host, ins, leads, tblSales, tblValue);
-    host.classList.remove('swap-in'); void host.offsetWidth; host.classList.add('swap-in');
-  }));
-  el.querySelector('[data-copy-utm]').addEventListener('click', async () => { try { await navigator.clipboard.writeText(UTM_TEMPLATE); toast('Parâmetros copiados'); } catch (e) { toast('Não consegui copiar', true); } });
   el.querySelector('[data-entry]').addEventListener('click', () => entryModal(reload));
   el.querySelectorAll('tr[data-id]').forEach((tr) => tr.addEventListener('click', (e) => {
     if (e.target.closest('[data-edel]')) return;
@@ -231,14 +203,69 @@ export async function renderFinance(el, swap = false) {
     if (!(await confirmBox('Excluir este lançamento?', 'Excluir'))) return;
     try { await DB.deleteFinance(b.closest('tr').dataset.id); reload(); } catch (e) { fail(e); }
   }));
-  el.querySelector('[data-sync]')?.addEventListener('click', async (e) => {
+}
+
+// ================= Campanhas (topo de Contas de anúncio): métricas por nível + gerenciar na Meta =================
+async function renderCampaigns(host) {
+  host.innerHTML = '<section class="panel adt-card"><div class="loading">Carregando campanhas…</div></section>';
+  const r = range();
+  let ins = [], entries = [], settings = null, accounts = [];
+  try {
+    await DB.processAds();
+    [ins, entries, settings, accounts, OBJS] = await Promise.all([DB.listInsights(r[0], r[1]), DB.listFinance(r[0], r[1]), DB.getTracking().catch(() => null), DB.listAdAccounts().catch(() => []), DB.listMetaObjects().then((l) => new Map(l.map((o) => [o.id, o]))).catch(() => new Map())]);
+  } catch (e) { fail(e); }
+  if (!host.isConnected) return;
+  if (!accounts.length) { host.innerHTML = ''; return; }
+  LEAD_TYPES = Array.isArray(settings?.meta_lead_actions) && settings.meta_lead_actions.length ? settings.meta_lead_actions : null;
+  const months = settings?.contract_months || 12;
+  const leads = S.leads.filter((l) => inRange(l.created_at, r));
+  const sales = S.leads.filter((l) => l.won_at && inRange(l.won_at, r));
+  const saleValue = (l) => Number(l.valor || 0) * (F.revenue === 'contrato' ? months : 1);
+  const tblSales = [...sales, ...entries.filter(isSaleEntry).map((e) => {
+    const l = e.lead_id ? S.leads.find((x) => x.id === e.lead_id) : null;
+    const own = e.utm_campaign || e.utm_id;
+    return { utm_campaign: own ? e.utm_campaign : l?.utm_campaign, utm_term: own ? e.utm_term : l?.utm_term, utm_content: own ? e.utm_content : l?.utm_content, utm_id: own ? e.utm_id : l?.utm_id, __entry: e };
+  })];
+  const tblValue = (x) => (x.__entry ? entrySale(x.__entry) : saleValue(x));
+
+  host.innerHTML = `
+    <section class="panel adt-card">
+      <div class="adt-top"><div><h3>Campanhas</h3><p class="help">Resultados, gasto, vendas e faturamento de cada campanha, conjunto e anúncio no período.${canManage() ? ' Pause, ative, renomeie e mude o orçamento direto aqui.' : ''}</p></div>
+        <button class="b b-refresh" data-sync>${ICON.refresh}Sincronizar</button></div>
+      <div class="adt-head">
+        <nav class="adt-tabs" role="tablist">${[['campaign', 'Campanhas'], ['adset', 'Conjuntos de anúncios'], ['ad', 'Anúncios']].map(([k, n]) => `<button role="tab" aria-selected="${F.level === k}" class="adt-tab ${F.level === k ? 'on' : ''}" data-level="${k}">${LVL_IC[k]}<span>${n}</span></button>`).join('')}</nav>
+        <div class="adt-tools"><label class="adt-search">${ICON.search}<input type="search" data-adt-q placeholder="Buscar por nome" value="${esc(F.q || '')}"></label>
+          <button class="b b-ic adt-colbtn" data-cols data-pop-anchor><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M9 4v16M15 4v16"/></svg><span>Colunas</span></button></div>
+      </div>
+      <div class="adt-wrap" data-table></div>
+      <p class="adt-note">Resultados, gasto e cliques vêm da Meta (mesma atribuição do Gerenciador). Vendas e faturamento vêm do CRM, ligados pelas UTMs dos anúncios.</p>
+      <details class="docs"><summary>Parâmetros de URL pra colar nos anúncios</summary>
+        <p class="help">No Gerenciador de Anúncios, em cada anúncio: Rastreamento &gt; Parâmetros de URL. É assim que o CRM liga cada lead e venda à campanha, conjunto e anúncio que trouxe.</p>
+        <div class="code"><div class="code-h"><span>Parâmetros de URL</span><button class="b b-sm b-ghost" data-copy-utm>Copiar</button></div><pre>${esc(UTM_TEMPLATE)}</pre></div></details>
+    </section>
+`;
+  renderTable(host.querySelector('[data-table]'), ins, leads, tblSales, tblValue);
+  host.querySelector('[data-cols]').addEventListener('click', (e) => colsPicker(e.currentTarget));
+  let qT; host.querySelector('[data-adt-q]').addEventListener('input', (e) => { clearTimeout(qT); qT = setTimeout(() => { F.q = e.target.value; renderTable(host.querySelector('[data-table]'), ins, leads, tblSales, tblValue); }, 150); });
+  host.querySelectorAll('[data-level]').forEach((b) => b.addEventListener('click', () => {
+    if (F.level === b.dataset.level) return;
+    F.level = b.dataset.level;
+    host.querySelectorAll('[data-level]').forEach((x) => { x.classList.toggle('on', x === b); x.setAttribute('aria-selected', x === b); });
+    const tbl = host.querySelector('[data-table]');
+    renderTable(tbl, ins, leads, tblSales, tblValue);
+    tbl.classList.remove('swap-in'); void tbl.offsetWidth; tbl.classList.add('swap-in');
+  }));
+  host.querySelector('[data-copy-utm]').addEventListener('click', async () => { try { await navigator.clipboard.writeText(UTM_TEMPLATE); toast('Parâmetros copiados'); } catch (e) { toast('Não consegui copiar', true); } });
+  host.querySelector('[data-sync]')?.addEventListener('click', async (e) => {
     const btn = e.currentTarget; btn.disabled = true; btn.classList.add('is-spinning');
     try {
       await DB.syncAds(null, 30); await DB.metaObjectsSync().catch(() => 0);
       for (const wait of [3000, 4000, 6000]) { await new Promise((ok) => setTimeout(ok, wait)); await DB.processAds(); await DB.metaObjectsProcess().catch(() => 0); }
-      toast('Meta Ads atualizado'); reload();
+      toast('Meta Ads atualizado'); renderCampaigns(host);
     } catch (err) { fail(err); btn.disabled = false; btn.classList.remove('is-spinning'); }
   });
+  // primeira vez: busca status e orçamento na Meta em segundo plano
+  if (!OBJS.size && accounts.some((a) => a.enabled) && !renderCampaigns._objSync) { renderCampaigns._objSync = true; syncObjects().then((n) => { if (n && host.isConnected) renderCampaigns(host); }); }
 }
 
 // ================= Contas de anúncio: login do Facebook + contas ativas =================
@@ -295,9 +322,10 @@ async function renderAccounts(el, swap) {
   const soonest = accounts.filter((a) => a.connected_via === 'facebook' && a.token_expires_at).map((a) => daysLeft(a.token_expires_at)).sort((a, b) => a - b)[0];
 
   el.innerHTML = `
-    <div class="topline"><h1>Financeiro</h1><div class="grow"></div></div>
+    <div class="topline"><h1>Financeiro</h1><div class="grow"></div>${accounts.length ? dateBtn(F) : ''}</div>
     ${tabBar()}
     <div class="tab-body">
+    <div data-camps></div>
     <section class="panel int-card fb-card">
       <div class="fb-hero">
         <span class="fb-badge">${FB_ICON}</span>
@@ -337,6 +365,9 @@ async function renderAccounts(el, swap) {
   bindMetaLeads(el, reload);
   bindTabs(el);
   if (swap) el.querySelector('.tab-body').classList.add('swap-in');
+  // campanhas no topo, com o mesmo período do Dashboard
+  renderCampaigns(el.querySelector('[data-camps]'));
+  el.querySelector('[data-date]')?.addEventListener('click', (e) => datePicker(e.currentTarget, F, (st) => { Object.assign(F, st); Object.assign(PERIOD, st); renderFinance(el); }));
 
   el.querySelector('[data-fb]')?.addEventListener('click', async (e) => {
     const btn = e.currentTarget; btn.disabled = true; btn.classList.add('is-busy');
