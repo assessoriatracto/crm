@@ -1,7 +1,7 @@
 // Financeiro > Clientes: contratos ativos, cancelamentos (churn) e origem de cada venda (campanha › conjunto › anúncio).
 import { DB } from '@shared/db.js';
-import { S, esc, ICON, brl, num, toast, fail, modal, menu, dateRange } from './util.js?v=2609290901';
-import { contracts, activeAt } from './dashboard.js?v=2609290901';
+import { S, esc, ICON, brl, num, toast, fail, modal, menu, dateRange } from './util.js?v=2609290906';
+import { contracts, activeAt } from './dashboard.js?v=2609290906';
 
 const C = { status: 'ativos', q: '' };
 const REASONS = ['Preço', 'Resultado abaixo do esperado', 'Atendimento', 'Fechou ou vendeu a loja', 'Cortou custos', 'Foi para outra agência', 'Outro'];

@@ -3,16 +3,16 @@ import {
   go, routeName, S, $, $$, esc, ICON, FAT, COLORS, initials, isHot, stageOf, profileOf, labelOf, isInactive, isDue, fatShort, brl, pct, num,
   fmtPhone, fullDate, longDate, addedAt, ago, sourceLabel, formName, waLink, toast, fail, popover, closePop, menu, multiSelect,
   modal, confirmBox, downloadCSV, dateRange, datePicker, dateBtn, daysToSale, fmtDays
-} from './util.js?v=2609290901';
-import { importModal } from './import.js?v=2609290901';
-import { renderDashboard } from './dashboard.js?v=2609290901';
-import { renderSettings } from './admin.js?v=2609290901';
-import { renderIntegrations, renderPixel, leadMetaEvents, statusPill } from './integrations.js?v=2609290901';
-import { renderRecovery, loadPartials } from './recovery.js?v=2609290901';
-import { showSignIn, showSignUp, showForgot, showReset, showMfa, showPending, watchIdle, AUTH_ROUTES } from './auth.js?v=2609290901';
-import { openProfile } from './profile.js?v=2609290901';
-import { renderBuilder } from './builder.js?v=2609290901';
-import { renderFinance } from './finance.js?v=2609290901';
+} from './util.js?v=2609290906';
+import { importModal } from './import.js?v=2609290906';
+import { renderDashboard } from './dashboard.js?v=2609290906';
+import { renderSettings } from './admin.js?v=2609290906';
+import { renderIntegrations, renderPixel, leadMetaEvents, statusPill } from './integrations.js?v=2609290906';
+import { renderRecovery, loadPartials } from './recovery.js?v=2609290906';
+import { showSignIn, showSignUp, showForgot, showReset, showMfa, showPending, watchIdle, AUTH_ROUTES } from './auth.js?v=2609290906';
+import { openProfile } from './profile.js?v=2609290906';
+import { renderBuilder } from './builder.js?v=2609290906';
+import { renderFinance } from './finance.js?v=2609290906';
 
 // ============================================================
 // preferências locais (por navegador)
@@ -264,7 +264,7 @@ function filtered() {
   const junkStage = S.stages.find((x) => x.name === 'Descarte')?.id;
   const showJunk = V.showJunk || f.stages.includes(junkStage);
   return S.leads.filter((l) => {
-    if (!showJunk && junkStage && l.stage_id === junkStage) return false;
+    if (!showJunk && V.view === 'table' && junkStage && l.stage_id === junkStage) return false;
     const c = new Date(l.created_at);
     if (from && c < from) return false;
     if (to && c > to) return false;
@@ -331,13 +331,13 @@ function renderLeads() {
         <span class="vsep tb-desk"></span>
         <label class="search">${ICON.search}<input class="inp" data-q type="search" placeholder="Buscar nome, @, WhatsApp, e-mail" value="${esc(V.f.q)}"></label>
         ${filterBtn('campaigns', 'Campanha')}${filterBtn('forms', 'Formulários')}${filterBtn('period', 'Selecionar datas')}${filterBtn('stages', 'Estágio')}${filterBtn('sources', 'Fonte')}${filterBtn('assignees', 'Atribuído a')}${filterBtn('labels', 'Rótulos')}
-        ${junkN ? `<button class="b ${V.showJunk ? 'on' : ''}" data-act="junk" title="Leads com dados falsos, separados automaticamente">${V.showJunk ? 'Ocultar descarte' : 'Ver descarte'}<span class="count-badge">${num(junkN)}</span></button>` : ''}
+        ${junkN && V.view === 'table' ? `<button class="b ${V.showJunk ? 'on' : ''}" data-act="junk" title="Leads com dados falsos, separados automaticamente">${V.showJunk ? 'Ocultar descarte' : 'Ver descarte'}<span class="count-badge">${num(junkN)}</span></button>` : ''}
         ${anyFilter ? '<button class="b b-ghost" data-act="clear">Limpar filtros</button>' : ''}
         <button class="b" data-act="more" data-pop-anchor aria-label="Mais ações">${ICON.dotsH}</button>
       </div>
     </section>
     <section class="panel kpis">
-      <div class="k"><span>Leads${anyFilter ? ' filtrados' : ''}:</span><b>${num(list.length)}</b></div>
+      <div class="k"><span>Leads${anyFilter ? ' filtrados' : ''}:</span><b>${num(list.filter((l) => l.stage_id !== junkId).length)}</b></div>
       <div class="k"><span>Novos leads:</span><b>${num(list.filter((l) => l.stage_id === first?.id).length)}</b></div>
       <div class="k hot"><span>Quentes (50k+):</span><b>${num(list.filter(isHot).length)}</b></div>
       <div class="k"><span>Leads convertidos:</span><b>${won.length ? num(won.length) : '--'}</b></div>
@@ -383,15 +383,38 @@ function cardHtml(l) {
   </article>`;
 }
 function boardHtml(list) {
-  return `<div class="board">${S.stages.filter((s) => s.name !== 'Descarte' || V.showJunk || V.f.stages.includes(s.id)).map((s) => {
+  const mins = minCols();
+  return `<div class="board">${S.stages.map((s) => {
     const items = list.filter((l) => l.stage_id === s.id);
+    if (mins.has(s.id)) {
+      return `<div class="col col-min" data-stage="${s.id}" data-act="col-min" title="${esc(s.name)} · ${items.length} lead${items.length === 1 ? '' : 's'}">
+        <button class="col-tog" data-act="col-min" aria-label="Expandir ${esc(s.name)}" title="Expandir">${ICON.caret}</button>
+        <span class="col-count">${items.length}</span>
+        <span class="dot" style="background:${s.color}"></span>
+        <span class="col-vname">${esc(s.name)}</span>
+        <div class="col-body"></div>
+      </div>`;
+    }
     const soma = items.reduce((a, l) => a + Number(l.valor || 0), 0);
     return `<div class="col" data-stage="${s.id}">
-      <div class="col-head"><span class="dot" style="background:${s.color}"></span><span class="col-name" title="${esc(s.name)}">${esc(s.name)}</span><span class="col-count">${items.length}</span><button class="card-menu" data-act="col-menu" data-pop-anchor aria-label="Opções do estágio">${ICON.dotsH}</button></div>
+      <div class="col-head"><span class="dot" style="background:${s.color}"></span><span class="col-name" title="${esc(s.name)}">${esc(s.name)}</span><span class="col-count">${items.length}</span><button class="col-tog" data-act="col-min" aria-label="Minimizar ${esc(s.name)}" title="Minimizar">${ICON.caret}</button><button class="card-menu" data-act="col-menu" data-pop-anchor aria-label="Opções do estágio">${ICON.dotsH}</button></div>
       ${s.kind !== 'open' || soma ? `<div class="col-kind">${s.kind === 'won' ? 'Ganho' : s.kind === 'lost' ? 'Perdido' : ''}${soma ? (s.kind !== 'open' ? ' · ' : '') + brl(soma) + '/mês' : ''}</div>` : ''}
       <div class="col-body">${items.length ? items.map(cardHtml).join('') : `<div class="col-empty">${ICON.empty}<b style="color:var(--c-text);font-size:14px">Nenhum lead no estágio<br>${esc(s.name)}</b></div>`}</div>
     </div>`;
   }).join('')}<button class="col-add" data-act="add-stage">+ Adicionar estágio</button></div>`;
+}
+
+// colunas do pipeline minimizadas (fica salvo neste navegador)
+const MIN_KEY = 'tracto_min_cols';
+function minCols() {
+  let ids = null;
+  try { ids = JSON.parse(localStorage.getItem(MIN_KEY)); } catch (e) {}
+  if (!Array.isArray(ids)) ids = [];
+  return new Set(ids);
+}
+function toggleMinCol(id) {
+  const set = minCols(); set.has(id) ? set.delete(id) : set.add(id);
+  try { localStorage.setItem(MIN_KEY, JSON.stringify([...set])); } catch (e) {}
 }
 
 // ---------- tabela ----------
@@ -535,6 +558,7 @@ view.addEventListener('click', async (e) => {
   if (act === 'sel-all') { const list = filtered(); const all = list.every((l) => V.sel.has(l.id)); list.forEach((l) => (all ? V.sel.delete(l.id) : V.sel.add(l.id))); renderLeads(); return; }
   if (act === 'sel' && row) { toggleSel(row.dataset.id); return; }
   if (act === 'col-menu') { colMenu(a, a.closest('.col').dataset.stage); return; }
+  if (act === 'col-min') { toggleMinCol(a.closest('.col').dataset.stage); renderLeads(); return; }
   if (act === 'card-menu' && card) { cardMenu(a, card.dataset.id); return; }
 
   if (card) { if (V.bulkMode) toggleSel(card.dataset.id); else openDrawer(card.dataset.id); return; }
