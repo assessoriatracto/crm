@@ -1,10 +1,10 @@
 // Financeiro (estilo UTMify): gasto da Meta Ads × leads e vendas do CRM × receitas e despesas lançadas
 import { DB } from '@shared/db.js';
-import { renderClients } from './clients.js?v=2609291856';
-import { renderExpenses } from './expenses.js?v=2609291856';
-import { renderCashflow } from './cashflow.js?v=2609291856';
-import { contractFields, bindContract, contractTags } from './contract.js?v=2609291856';
-import { PERIOD, BRAND, popover, dateRange, datePicker, dateBtn, S, $, $$, esc, ICON, brl, num, pct, fullDate, ago, toast, fail, modal, confirmBox } from './util.js?v=2609291856';
+import { renderClients } from './clients.js?v=2609291903';
+import { renderExpenses } from './expenses.js?v=2609291903';
+import { renderCashflow } from './cashflow.js?v=2609291903';
+import { contractFields, bindContract, contractTags } from './contract.js?v=2609291903';
+import { PERIOD, BRAND, popover, dateRange, datePicker, dateBtn, S, $, $$, esc, ICON, brl, num, pct, fullDate, ago, toast, fail, modal, confirmBox } from './util.js?v=2609291903';
 
 const F = { period: '30', from: '', to: '', level: 'campaign', revenue: 'mensal', sort: 'spend', tab: 'geral' };
 const GRAPH = 'v21.0';
@@ -772,7 +772,7 @@ function renderTable(host, ins, leads, sales, saleValue) {
       case 'budget': {
         const o = OBJS.get(r.id); if (!o || o.level === 'ad') return dash;
         const txt = o.daily_budget ? `${money2(o.daily_budget / 100)}<small>por dia</small>` : o.lifetime_budget ? `${money2(o.lifetime_budget / 100)}<small>total</small>` : `<span class="adt-dash">—</span><small>${o.level === 'campaign' ? 'no conjunto' : 'na campanha'}</small>`;
-        return canManage() && (o.daily_budget || o.lifetime_budget) ? `<button class="adt-edit" data-budget="${esc(o.id)}" title="Alterar orçamento">${txt}</button>` : txt;
+        return canManage() && (o.daily_budget || o.lifetime_budget) ? `<button class="adt-edit" data-budget="${esc(o.id)}" title="Alterar orçamento" aria-label="Alterar orçamento"><span class="adt-pen">${ICON.edit}</span><span>${txt}</span></button>` : txt;
       }
       case 'connect': return v == null ? dash : `<span class="roas ${v >= 0.7 ? 'good' : v < 0.5 ? 'bad' : ''}">${pctv(v)}</span>`;
       case 'conv': return pctv(v);

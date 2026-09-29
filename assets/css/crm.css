@@ -1514,3 +1514,23 @@ select.inp.dd-native{display:none !important;}
 }
 @media (max-width:760px){.fin-mini small{white-space:normal;}}
 .ctr [data-vals].one{grid-template-columns:1fr;}
+
+/* orçamento editável: lápis sempre à vista */
+.adt-edit{display:inline-flex;align-items:center;gap:8px;}
+.adt-pen{flex:none;width:24px;height:24px;border-radius:7px;display:grid;place-items:center;color:var(--gray-3);transition:color 120ms ease,background-color 120ms ease;}
+.adt-pen svg{width:13px;height:13px;}
+.adt-edit:hover .adt-pen,.adt-edit:focus-visible .adt-pen{color:var(--amber-ink);background:var(--amber-soft);}
+/* celular não tem hover: lápis do nome também fica à vista */
+@media (hover:none){.adt-rn{opacity:1;}}
+
+/* ---------- alinhamento: cards lado a lado sempre com a mesma altura ---------- */
+.settings{align-items:stretch;}
+.ex-grid{align-items:stretch;}
+.ex-side > .ex-card:last-child{flex:1;}
+.ex-card,.int-card,.dcard,.settings > .panel{display:flex;flex-direction:column;}
+.ex-card > .ex-h,.int-card > .int-h{flex:none;}
+/* estado vazio centralizado no espaço que sobra */
+.ex-card > .ex-empty,.ex-card > .empty-line:last-child,.int-card > .empty-line:last-child,.dcard > .empty-line:last-child{flex:1;display:flex;align-items:center;margin:0;}
+.ex-empty p{margin:0;}
+/* textos de apoio dos indicadores alinhados na base */
+.kx .kx-s,.ftile .t-sub{margin-top:auto;}

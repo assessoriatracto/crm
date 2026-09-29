@@ -3,17 +3,17 @@ import {
   go, routeName, S, $, $$, esc, ICON, FAT, COLORS, initials, isHot, stageOf, profileOf, labelOf, isInactive, isDue, fatShort, brl, pct, num,
   fmtPhone, fullDate, longDate, addedAt, ago, sourceLabel, formName, waLink, toast, fail, popover, closePop, menu, multiSelect,
   modal, confirmBox, downloadCSV, dateRange, datePicker, dateBtn, daysToSale, fmtDays
-} from './util.js?v=2609291856';
-import { importModal } from './import.js?v=2609291856';
-import { renderDashboard } from './dashboard.js?v=2609291856';
-import { renderSettings } from './admin.js?v=2609291856';
-import { renderIntegrations, renderPixel, leadMetaEvents, statusPill } from './integrations.js?v=2609291856';
-import { renderRecovery, loadPartials } from './recovery.js?v=2609291856';
-import { showSignIn, showSignUp, showForgot, showReset, showMfa, showPending, watchIdle, AUTH_ROUTES } from './auth.js?v=2609291856';
-import { SERVICES, PLANS, planMonths, planFactor, VALUE_LABEL } from './contract.js?v=2609291856';
-import { openProfile, renderProfile } from './profile.js?v=2609291856';
-import { renderBuilder } from './builder.js?v=2609291856';
-import { renderFinance } from './finance.js?v=2609291856';
+} from './util.js?v=2609291903';
+import { importModal } from './import.js?v=2609291903';
+import { renderDashboard } from './dashboard.js?v=2609291903';
+import { renderSettings } from './admin.js?v=2609291903';
+import { renderIntegrations, renderPixel, leadMetaEvents, statusPill } from './integrations.js?v=2609291903';
+import { renderRecovery, loadPartials } from './recovery.js?v=2609291903';
+import { showSignIn, showSignUp, showForgot, showReset, showMfa, showPending, watchIdle, AUTH_ROUTES } from './auth.js?v=2609291903';
+import { SERVICES, PLANS, planMonths, planFactor, VALUE_LABEL } from './contract.js?v=2609291903';
+import { openProfile, renderProfile } from './profile.js?v=2609291903';
+import { renderBuilder } from './builder.js?v=2609291903';
+import { renderFinance } from './finance.js?v=2609291903';
 
 // ============================================================
 // preferências locais (por navegador)
