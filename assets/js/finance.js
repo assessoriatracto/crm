@@ -1,7 +1,7 @@
 // Financeiro (estilo UTMify): gasto da Meta Ads × leads e vendas do CRM × receitas e despesas lançadas
 import { DB } from '@shared/db.js';
-import { renderClients } from './clients.js?v=2609290857';
-import { PERIOD, BRAND, popover, dateRange, datePicker, dateBtn, S, $, $$, esc, ICON, brl, num, pct, fullDate, ago, toast, fail, modal, confirmBox } from './util.js?v=2609290857';
+import { renderClients } from './clients.js?v=2609290901';
+import { PERIOD, BRAND, popover, dateRange, datePicker, dateBtn, S, $, $$, esc, ICON, brl, num, pct, fullDate, ago, toast, fail, modal, confirmBox } from './util.js?v=2609290901';
 
 const F = { period: '30', from: '', to: '', level: 'campaign', revenue: 'mensal', sort: 'spend', tab: 'geral' };
 const GRAPH = 'v21.0';
@@ -98,7 +98,8 @@ export async function renderFinance(el, swap = false) {
   const cohortWon = leadsOk.filter((l) => l.won_at || linked.has(l.id)).length;
   const tblValue = (x) => (x.__entry ? entrySale(x.__entry) : saleValue(x));
   // vendas que vieram de anúncio (campanha na venda/contato, ou contato de tráfego pago)
-  const isAds = (x) => !!(x.utm_campaign || x.utm_id || (x.__entry ? S.leads.find((l) => l.id === x.__entry.lead_id)?.source === 'pago' : x.source === 'pago' || x.fbclid || x.fbc));
+  // venda de anúncio: tudo que não foi marcado como indicação/orgânico
+  const isAds = (x) => (x.__entry ? x.__entry.source !== 'organico' : !['organico', 'manual'].includes(x.source));
   const adsSales = tblSales.filter(isAds);
   const revAds = adsSales.reduce((a2, x) => a2 + tblValue(x), 0);
   const nSales = sales.length + manualSales.length;
@@ -129,7 +130,7 @@ export async function renderFinance(el, swap = false) {
     ['CAC', money(ratio(spend, adsSales.length)), adsSales.length ? `com todas as despesas: ${money(ratio(despesas, nSales))}` : 'nenhuma venda de anúncio no período'],
     ['Leads', num(leadsN), hasMeta ? `pela Meta · ${num(leads.length)} no CRM` : `${num(paidLeads.length)} de anúncios`],
     ['CPL', money(ratio(spend, hasMeta ? metaLeads : (paidLeads.length || leads.length))), hasMeta ? 'gasto ÷ leads da Meta' : 'gasto ÷ leads de anúncio'],
-    ['Conversão', leadsOk.length ? pct(cohortWon, leadsOk.length) : '—', leadsOk.length ? `${num(cohortWon)} de ${num(leadsOk.length)} leads do período viraram clientes` : 'nenhum lead no período'],
+    ['Conversão', leadsN ? pct(nSales, leadsN) : '—', leadsN ? `${num(nSales)} cliente${nSales === 1 ? '' : 's'} de ${num(leadsN)} leads` : 'nenhum lead no período'],
     ['CTR', imp ? pct(linkClicks || clicks, imp) : '—', `CPC ${money(ratio(spend, linkClicks || clicks))}${linkClicks ? ' · cliques no link' : ''}`],
     ['CPM', money(imp ? (spend / imp) * 1000 : null), `${num(linkClicks || clicks)} cliques${linkClicks ? ' no link' : ''}`]
   ];

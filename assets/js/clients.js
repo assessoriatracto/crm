@@ -1,7 +1,7 @@
 // Financeiro > Clientes: contratos ativos, cancelamentos (churn) e origem de cada venda (campanha › conjunto › anúncio).
 import { DB } from '@shared/db.js';
-import { S, esc, ICON, brl, num, toast, fail, modal, menu, dateRange } from './util.js?v=2609290857';
-import { contracts, activeAt } from './dashboard.js?v=2609290857';
+import { S, esc, ICON, brl, num, toast, fail, modal, menu, dateRange } from './util.js?v=2609290901';
+import { contracts, activeAt } from './dashboard.js?v=2609290901';
 
 const C = { status: 'ativos', q: '' };
 const REASONS = ['Preço', 'Resultado abaixo do esperado', 'Atendimento', 'Fechou ou vendeu a loja', 'Cortou custos', 'Foi para outra agência', 'Outro'];
@@ -30,7 +30,8 @@ export async function renderClients(host, F, reload) {
   const mrr = active.reduce((s, c) => s + c.monthly, 0);
   const lostMrr = canceledR.reduce((s, c) => s + c.monthly, 0);
   const churn = activeStart.length ? canceledR.length / activeStart.length : null;
-  const noOrigin = list.filter((c) => !c.origin?.utm_campaign && !c.origin?.utm_id).length;
+  const org = (c) => (c.kind === 'entry' ? c.entry?.source === 'organico' : c.lead?.source === 'organico');
+  const noOrigin = list.filter((c) => !c.origin?.utm_campaign && !c.origin?.utm_id && !org(c)).length;
 
   const q = C.q.trim().toLowerCase();
   const rows = list.filter((c) => {
@@ -38,11 +39,11 @@ export async function renderClients(host, F, reload) {
     if (C.status === 'ativos' && st !== 'ativo') return false;
     if (C.status === 'cancelados' && st !== 'cancelado') return false;
     if (C.status === 'encerrados' && st !== 'encerrado') return false;
-    if (C.status === 'sem_origem' && (c.origin?.utm_campaign || c.origin?.utm_id)) return false;
+    if (C.status === 'sem_origem' && (c.origin?.utm_campaign || c.origin?.utm_id || c.entry?.source === 'organico' || c.lead?.source === 'organico')) return false;
     if (C.status === 'periodo' && !(c.start >= a && c.start <= b)) return false;
     return !q || `${c.name} ${originTxt(c.origin)}`.toLowerCase().includes(q);
   }).sort((x, y) => (statusOf(x) === 'ativo' ? 0 : 1) - (statusOf(y) === 'ativo' ? 0 : 1) || y.start - x.start);
-  const count = (k) => list.filter((c) => (k === 'periodo' ? c.start >= a && c.start <= b : k === 'todos' ? true : k === 'sem_origem' ? !c.origin?.utm_campaign && !c.origin?.utm_id : statusOf(c) === ({ ativos: 'ativo', cancelados: 'cancelado', encerrados: 'encerrado' })[k])).length;
+  const count = (k) => list.filter((c) => (k === 'periodo' ? c.start >= a && c.start <= b : k === 'todos' ? true : k === 'sem_origem' ? !c.origin?.utm_campaign && !c.origin?.utm_id && !org(c) : statusOf(c) === ({ ativos: 'ativo', cancelados: 'cancelado', encerrados: 'encerrado' })[k])).length;
   const PILL = { ativo: '<span class="pill good">Ativo</span>', cancelado: '<span class="pill bad">Cancelado</span>', encerrado: '<span class="pill">Encerrado</span>', futuro: '<span class="pill wait">A começar</span>' };
 
   host.innerHTML = `
@@ -65,7 +66,7 @@ export async function renderClients(host, F, reload) {
           <td class="num">${brl(c.monthly)}</td>
           <td class="nowrap">${fmt(c.start)}${c.kind === 'entry' && c.entry.created_at && iso(new Date(c.entry.created_at)) !== iso(c.start) ? `<small class="muted">lançado em ${fmt(new Date(c.entry.created_at))}</small>` : ''}</td>
           <td class="nowrap">${fmt(st === 'cancelado' ? c.canceled : c.end)}</td>
-          <td>${originTxt(c.origin) ? `<span class="cl-origin" title="${esc(originTxt(c.origin))}">${esc(originTxt(c.origin))}</span>${c.lead ? '' : '<small class="muted">sem lead: não vai pra Meta</small>'}` : '<button class="b b-sm" data-origin>Definir origem</button>'}</td>
+          <td>${(c.kind === 'entry' ? c.entry.source === 'organico' : c.lead?.source === 'organico') ? '<span class="pill">Indicação / orgânico</span>' : originTxt(c.origin) ? `<span class="cl-origin" title="${esc(originTxt(c.origin))}">${esc(originTxt(c.origin))}</span>${c.lead ? '' : '<small class="muted">sem lead: não vai pra Meta</small>'}` : '<button class="b b-sm" data-origin>Definir origem</button>'}</td>
           <td class="cl-act"><button class="b b-sm b-ghost" data-more aria-label="Ações">${ICON.dotsH}</button></td></tr>`; }).join('')}
       </tbody></table></div>` : `<p class="muted empty-line">${list.length ? 'Nenhum cliente nesse filtro.' : 'Ainda não há vendas. Elas aparecem aqui quando um lead vai pra "Venda realizada" com mensalidade, ou quando você lança uma venda no Financeiro.'}</p>`}
     </section>`;
@@ -199,7 +200,7 @@ function originModal(c, ins, done) {
     ${needLead ? `<div class="row"><label class="lbl">Contato do cliente</label><input class="inp" list="clLeads" data-lead placeholder="Busque pelo nome ou WhatsApp" value="${esc(c.lead ? `${c.lead.nome} · ${c.lead.whatsapp || c.lead.email || ''}` : '')}">
       <datalist id="clLeads">${leadOpts.slice(0, 800).map((l) => `<option value="${esc(`${l.nome} · ${l.whatsapp || l.email || ''}`)}"></option>`).join('')}</datalist>
       <p class="help">Com o lead ligado, a venda vai pra Meta com os dados dele (e-mail e telefone criptografados), o valor do contrato e a campanha. É isso que ensina a Meta a buscar quem compra.</p></div>` : ''}
-    <div class="row"><label class="lbl">Campanha</label><select class="inp" data-cp><option value="">Selecione</option>${clist.map((cp, i) => `<option value="${i}" ${(o.utm_id && o.utm_id === cp.id) || o.utm_campaign === cp.name ? 'selected' : ''}>${esc(cp.name)}</option>`).join('')}<option value="manual">Outra (digitar)</option></select></div>
+    <div class="row"><label class="lbl">Campanha</label><select class="inp" data-cp><option value="">Selecione</option>${clist.map((cp, i) => `<option value="${i}" ${(o.utm_id && o.utm_id === cp.id) || o.utm_campaign === cp.name ? 'selected' : ''}>${esc(cp.name)}</option>`).join('')}<option value="manual">Outra (digitar)</option><option value="organico" ${c.kind === 'entry' ? (c.entry.source === 'organico' ? 'selected' : '') : (c.lead?.source === 'organico' ? 'selected' : '')}>Não veio de anúncio (indicação, orgânico)</option></select></div>
     <div class="row" data-manual hidden><label class="lbl">Nome da campanha</label><input class="inp" data-cpn maxlength="200" value="${esc(o.utm_campaign || '')}"></div>
     <div class="grid2">
       <div class="row"><label class="lbl">Conjunto (opcional)</label><select class="inp" data-st></select></div>
@@ -210,6 +211,7 @@ function originModal(c, ins, done) {
     const fill = () => {
       const v = $m('[data-cp]').value; const cp = clist[+v];
       $m('[data-manual]').hidden = v !== 'manual';
+      $m('[data-st]').closest('.grid2').hidden = v === 'organico' || v === 'manual';
       const sets = cp ? [...cp.sets.values()] : [];
       $m('[data-st]').innerHTML = `<option value="">—</option>${sets.map((st, i) => `<option value="${i}" ${o.utm_term === st.name ? 'selected' : ''}>${esc(st.name)}</option>`).join('')}`;
       fillAds();
@@ -230,11 +232,12 @@ function originModal(c, ins, done) {
           if (txt && !l) return toast('Escolha um lead da lista', true);
           leadId = l?.id || null;
         }
+        const organic = !!org.__organic; delete org.__organic;
         if (c.kind === 'lead') {
-          await DB.updateLeads([c.lead.id], { ...org, ...(org.utm_campaign ? { utm_source: c.lead.utm_source || 'facebook', source: 'pago' } : {}) });
-          Object.assign(c.lead, org);
+          await DB.updateLeads([c.lead.id], { ...org, ...(organic ? { source: 'organico' } : org.utm_campaign ? { utm_source: c.lead.utm_source || 'facebook', source: 'pago' } : {}) });
+          Object.assign(c.lead, org, organic ? { source: 'organico' } : {});
         } else {
-          await DB.saveFinance({ id: c.entry.id, ...org, lead_id: leadId });
+          await DB.saveFinance({ id: c.entry.id, ...org, lead_id: leadId, source: organic ? 'organico' : 'pago' });
         }
         close(); toast(needLead && leadId && !c.entry.meta_sent_at ? 'Origem salva e venda enviada pra Meta' : 'Origem da venda salva');
         window.dispatchEvent(new Event('tracto:reload-leads'));
@@ -245,6 +248,7 @@ function originModal(c, ins, done) {
     $m('[data-ok]').addEventListener('click', () => {
       const v = $m('[data-cp]').value;
       if (!v) return toast('Escolha a campanha', true);
+      if (v === 'organico') return save({ utm_campaign: null, utm_term: null, utm_content: null, utm_id: null, __organic: true });
       if (v === 'manual') { const n = $m('[data-cpn]').value.trim(); if (!n) return toast('Digite o nome da campanha', true); return save({ utm_campaign: n, utm_term: null, utm_content: null, utm_id: null }); }
       const cp = clist[+v]; const st = [...cp.sets.values()][+$m('[data-st]').value];
       save({ utm_campaign: cp.name, utm_id: cp.id || null, utm_term: st?.name || null, utm_content: $m('[data-ad]').value || null });
