@@ -315,6 +315,8 @@ export function downloadCSV(name, rows) {
 }
 
 // ---------- filtro de datas (atalhos + período personalizado com calendário nativo) ----------
+// período escolhido no Dashboard e no Financeiro (o mesmo nas duas telas)
+export const PERIOD = { period: '30', from: '', to: '' };
 export const DATE_PRESETS = [
   ['hoje', 'Hoje'], ['ontem', 'Ontem'], ['7', 'Últimos 7 dias'], ['14', 'Últimos 14 dias'], ['30', 'Últimos 30 dias'],
   ['90', 'Últimos 90 dias'], ['mes', 'Este mês'], ['mespassado', 'Mês passado'], ['ano', 'Este ano'], ['tudo', 'Todo o período']

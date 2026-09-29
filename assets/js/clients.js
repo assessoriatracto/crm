@@ -1,7 +1,7 @@
 // Financeiro > Clientes: contratos ativos, cancelamentos (churn) e origem de cada venda (campanha › conjunto › anúncio).
 import { DB } from '@shared/db.js';
-import { S, esc, ICON, brl, num, toast, fail, modal, menu, dateRange } from './util.js?v=2609282300';
-import { contracts, activeAt } from './dashboard.js?v=2609282300';
+import { S, esc, ICON, brl, num, toast, fail, modal, menu, dateRange } from './util.js?v=2609282307';
+import { contracts, activeAt } from './dashboard.js?v=2609282307';
 
 const C = { status: 'ativos', q: '' };
 const REASONS = ['Preço', 'Resultado abaixo do esperado', 'Atendimento', 'Fechou ou vendeu a loja', 'Cortou custos', 'Foi para outra agência', 'Outro'];
@@ -39,21 +39,22 @@ export async function renderClients(host, F, reload) {
     if (C.status === 'cancelados' && st !== 'cancelado') return false;
     if (C.status === 'encerrados' && st !== 'encerrado') return false;
     if (C.status === 'sem_origem' && (c.origin?.utm_campaign || c.origin?.utm_id)) return false;
+    if (C.status === 'periodo' && !(c.start >= a && c.start <= b)) return false;
     return !q || `${c.name} ${originTxt(c.origin)}`.toLowerCase().includes(q);
   }).sort((x, y) => (statusOf(x) === 'ativo' ? 0 : 1) - (statusOf(y) === 'ativo' ? 0 : 1) || y.start - x.start);
-  const count = (k) => list.filter((c) => (k === 'todos' ? true : k === 'sem_origem' ? !c.origin?.utm_campaign && !c.origin?.utm_id : statusOf(c) === ({ ativos: 'ativo', cancelados: 'cancelado', encerrados: 'encerrado' })[k])).length;
+  const count = (k) => list.filter((c) => (k === 'periodo' ? c.start >= a && c.start <= b : k === 'todos' ? true : k === 'sem_origem' ? !c.origin?.utm_campaign && !c.origin?.utm_id : statusOf(c) === ({ ativos: 'ativo', cancelados: 'cancelado', encerrados: 'encerrado' })[k])).length;
   const PILL = { ativo: '<span class="pill good">Ativo</span>', cancelado: '<span class="pill bad">Cancelado</span>', encerrado: '<span class="pill">Encerrado</span>', futuro: '<span class="pill wait">A começar</span>' };
 
   host.innerHTML = `
     <div class="kx-grid kx-4 cl-kpis">
-      <section class="panel kx accent"><span class="kx-l">Clientes ativos</span><div class="kx-vr"><span class="kx-v">${num(active.length)}</span></div><div class="kx-s">MRR ${brl(mrr)}</div></section>
+      <section class="panel kx accent"><span class="kx-l">Clientes ativos hoje</span><div class="kx-vr"><span class="kx-v">${num(active.length)}</span></div><div class="kx-s">MRR ${brl(mrr)}</div></section>
       <section class="panel kx"><span class="kx-l">Cancelamentos no período</span><div class="kx-vr"><span class="kx-v">${num(canceledR.length)}</span></div><div class="kx-s">${lostMrr ? `−${brl(lostMrr)}/mês de receita` : 'nenhuma receita perdida'}</div></section>
       <section class="panel kx"><span class="kx-l">Churn do período</span><div class="kx-vr"><span class="kx-v">${churn == null ? '—' : (churn * 100).toLocaleString('pt-BR', { maximumFractionDigits: 1 }) + '%'}</span></div><div class="kx-s">cancelados ÷ ativos no início</div></section>
       <section class="panel kx"><span class="kx-l">Vendas sem origem</span><div class="kx-vr"><span class="kx-v">${num(noOrigin)}</span></div><div class="kx-s">${noOrigin ? 'defina a campanha pra medir o ROAS' : 'todas com campanha definida'}</div></section>
     </div>
     <section class="panel cl-card">
       <div class="cl-head">
-        <div class="seg cl-seg">${[['ativos', 'Ativos'], ['cancelados', 'Cancelados'], ['encerrados', 'Encerrados'], ['sem_origem', 'Sem origem'], ['todos', 'Todos']].map(([k, n]) => `<button class="b b-sm ${C.status === k ? 'on' : ''}" data-cs="${k}">${n}<span class="cl-n">${num(count(k))}</span></button>`).join('')}</div>
+        <div class="seg cl-seg">${[['periodo', 'Fechados no período'], ['ativos', 'Ativos'], ['cancelados', 'Cancelados'], ['encerrados', 'Encerrados'], ['sem_origem', 'Sem origem'], ['todos', 'Todos']].map(([k, n]) => `<button class="b b-sm ${C.status === k ? 'on' : ''}" data-cs="${k}">${n}<span class="cl-n">${num(count(k))}</span></button>`).join('')}</div>
         <label class="adt-search">${ICON.search}<input type="search" data-cq placeholder="Buscar cliente ou campanha" value="${esc(C.q)}"></label>
         <button class="b b-primary" data-new-client>+ Novo cliente</button>
       </div>
@@ -62,7 +63,7 @@ export async function renderClients(host, F, reload) {
           <td><b class="ellip-1" title="${esc(c.name)}">${esc(c.name)}</b><small class="muted">${c.kind === 'lead' ? 'Venda pelo pipeline' : 'Venda lançada'} · ${c.months} ${c.months === 1 ? 'mês' : 'meses'}</small></td>
           <td>${PILL[st]}${st === 'cancelado' ? `<small class="muted cl-why">${fmt(c.canceled)}${c.reason ? ' · ' + esc(c.reason) : ''}</small>` : ''}</td>
           <td class="num">${brl(c.monthly)}</td>
-          <td class="nowrap">${fmt(c.start)}</td>
+          <td class="nowrap">${fmt(c.start)}${c.kind === 'entry' && c.entry.created_at && iso(new Date(c.entry.created_at)) !== iso(c.start) ? `<small class="muted">lançado em ${fmt(new Date(c.entry.created_at))}</small>` : ''}</td>
           <td class="nowrap">${fmt(st === 'cancelado' ? c.canceled : c.end)}</td>
           <td>${originTxt(c.origin) ? `<span class="cl-origin" title="${esc(originTxt(c.origin))}">${esc(originTxt(c.origin))}</span>${c.lead ? '' : '<small class="muted">sem lead: não vai pra Meta</small>'}` : '<button class="b b-sm" data-origin>Definir origem</button>'}</td>
           <td class="cl-act"><button class="b b-sm b-ghost" data-more aria-label="Ações">${ICON.dotsH}</button></td></tr>`; }).join('')}
@@ -130,7 +131,7 @@ function clientModal(c, months, done) {
     <div class="grid3">
       <div class="row"><label class="lbl">Mensalidade (R$)</label><input class="inp" data-m inputmode="decimal" value="${fmtN(c?.monthly)}" placeholder="0,00"></div>
       <div class="row"><label class="lbl">Meses de contrato</label><input class="inp" data-mo inputmode="numeric" value="${c?.months || months}"></div>
-      <div class="row"><label class="lbl">Contrato fechado em</label><input class="inp" type="date" data-d value="${c ? iso(c.start) : iso(new Date())}" max="${iso(new Date())}"></div>
+      <div class="row"><label class="lbl">Contrato fechado em</label><input class="inp" type="date" data-d value="${c ? iso(c.start) : ''}" max="${iso(new Date())}" required></div>
     </div>
     <p class="help" data-tot></p>
     ${!c ? `<div class="row"><label class="lbl">Contato do cliente (opcional)</label><input class="inp" list="clNewLeads" data-lead placeholder="Busque pelo nome ou WhatsApp">

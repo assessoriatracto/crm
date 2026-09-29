@@ -1,7 +1,7 @@
 // Financeiro (estilo UTMify): gasto da Meta Ads × leads e vendas do CRM × receitas e despesas lançadas
 import { DB } from '@shared/db.js';
-import { renderClients } from './clients.js?v=2609282300';
-import { BRAND, popover, dateRange, datePicker, dateBtn, S, $, $$, esc, ICON, brl, num, pct, fullDate, ago, toast, fail, modal, confirmBox } from './util.js?v=2609282300';
+import { renderClients } from './clients.js?v=2609282307';
+import { PERIOD, BRAND, popover, dateRange, datePicker, dateBtn, S, $, $$, esc, ICON, brl, num, pct, fullDate, ago, toast, fail, modal, confirmBox } from './util.js?v=2609282307';
 
 const F = { period: '30', from: '', to: '', level: 'campaign', revenue: 'mensal', sort: 'spend', tab: 'geral' };
 const GRAPH = 'v21.0';
@@ -57,12 +57,14 @@ function bindTabs(el) {
 }
 
 export async function renderFinance(el, swap = false) {
+  // mesmo período do Dashboard
+  F.period = PERIOD.period; F.from = PERIOD.from; F.to = PERIOD.to;
   try { const t = sessionStorage.getItem('tracto_fin_tab'); if (t) { F.tab = t; sessionStorage.removeItem('tracto_fin_tab'); } } catch (e) {}
   if (F.tab === 'contas') return renderAccounts(el, swap);
   if (F.tab === 'clientes') {
     el.innerHTML = `<div class="topline"><h1>Financeiro</h1><div class="grow"></div>${dateBtn(F)}</div>${tabBar()}<div class="tab-body ${swap ? 'swap-in' : ''}" data-clients></div>`;
     bindTabs(el);
-    el.querySelector('[data-date]').addEventListener('click', (e) => datePicker(e.currentTarget, F, (st) => { Object.assign(F, st); renderFinance(el); }));
+    el.querySelector('[data-date]').addEventListener('click', (e) => datePicker(e.currentTarget, F, (st) => { Object.assign(F, st); Object.assign(PERIOD, st); renderFinance(el); }));
     return renderClients(el.querySelector('[data-clients]'), F, () => renderFinance(el));
   }
   el.innerHTML = '<div class="loading">Carregando…</div>';
@@ -178,7 +180,7 @@ export async function renderFinance(el, swap = false) {
   bindTabs(el);
   if (swap) el.querySelector('.tab-body').classList.add('swap-in');
   el.querySelector('[data-go-acc]').addEventListener('click', () => { F.tab = 'contas'; renderFinance(el, true); });
-  el.querySelector('[data-date]').addEventListener('click', (e) => datePicker(e.currentTarget, F, (st) => { Object.assign(F, st); reload(); }));
+  el.querySelector('[data-date]').addEventListener('click', (e) => datePicker(e.currentTarget, F, (st) => { Object.assign(F, st); Object.assign(PERIOD, st); reload(); }));
   el.querySelectorAll('[data-rev]').forEach((b) => b.addEventListener('click', () => { F.revenue = b.dataset.rev; reload(); }));
   el.querySelectorAll('[data-level]').forEach((b) => b.addEventListener('click', () => {
     if (F.level === b.dataset.level) return;
@@ -695,7 +697,7 @@ function entryModal(done, entry = null) {
   modal(`<h3>${entry ? (SALE_CATS.includes(entry.category) ? 'Editar venda' : 'Editar lançamento') : 'Novo lançamento'}</h3>
     <div class="row"><div class="seg"><button type="button" class="b ${kind === 'receita' ? 'on' : ''}" data-k="receita">Receita</button><button type="button" class="b ${kind === 'despesa' ? 'on' : ''}" data-k="despesa">Despesa</button></div></div>
     <div class="grid2"><div class="row"><label class="lbl">Categoria</label><select class="inp" data-cat>${cats()}</select></div>
-      <div class="row"><label class="lbl" data-date-l>Contrato fechado em</label><input class="inp" type="date" data-date value="${entry?.date || iso(new Date())}"></div></div>
+      <div class="row"><label class="lbl" data-date-l>Contrato fechado em</label><input class="inp" type="date" data-date value="${entry?.date || ''}" max="${iso(new Date())}"></div></div>
     <div data-sale>
       <div class="grid3">
         <div class="row"><label class="lbl">Meses de contrato</label><input class="inp" data-months inputmode="numeric" value="${entry?.months || 12}"></div>
@@ -745,6 +747,7 @@ function entryModal(done, entry = null) {
       const btn = e.currentTarget;
       const base = { ...(entry ? { id: entry.id } : {}), kind, date: $c('[data-date]').value, category: $c('[data-cat]').value, description: $c('[data-desc]').value.trim() || null, ...(entry ? {} : { created_by: S.me?.id?.startsWith('demo') ? null : S.me?.id }) };
       let row;
+      if (!base.date) return toast(isSale() ? 'Informe quando o contrato foi fechado' : 'Informe a data', true);
       if (isSale()) {
         const months = Math.round(parseMoney($c('[data-months]').value)); const monthly = parseMoney($c('[data-monthly]').value); const total = parseMoney($c('[data-total]').value);
         if (!(months >= 1 && months <= 120)) return toast('Meses de contrato entre 1 e 120', true);

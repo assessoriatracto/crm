@@ -1,9 +1,9 @@
 // Dashboard: visão executiva e enxuta da saúde do negócio.
 // O detalhe (campanhas, lançamentos, gráficos por dia) fica no Financeiro e na Central de leads.
 import { DB } from '@shared/db.js';
-import { dateRange, datePicker, dateBtn, S, $, $$, esc, ICON, brl, num, isDue, isInactive, fail, fmtDays } from './util.js?v=2609282300';
+import { PERIOD, dateRange, datePicker, dateBtn, S, $, $$, esc, ICON, brl, num, isDue, isInactive, fail, fmtDays } from './util.js?v=2609282307';
 
-const D = { period: '30', from: '', to: '' };
+const D = PERIOD;
 const DAY = 86400000;
 const iso = (d) => new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 10);
 const SALE_CATS = ['Venda (contrato)', 'Contrato'];
@@ -105,6 +105,8 @@ export async function renderDashboard(el) {
   if (!el.isConnected) return;
 
   const months = settings?.contract_months || 12;
+  // MRR e clientes ativos são a carteira no fim do período (hoje, ou o último dia escolhido)
+  const endLabel = rb && iso(rb) < iso(new Date()) ? 'em ' + rb.toLocaleDateString('pt-BR', { day: '2-digit', month: 'short' }) : 'hoje';
   const list = contracts(entries, months);
   const useMeta = ins.length > 0;
   const cur = metrics(ins, S.leads, a, b, list, useMeta);
@@ -145,10 +147,10 @@ export async function renderDashboard(el) {
   el.innerHTML = `
     <div class="topline"><h1>Dashboard</h1><div class="grow"></div>${dateBtn(D)}</div>
     ${canMoney ? `
-    <h2 class="dash-h">Receita recorrente <span>no período</span></h2>
+    <h2 class="dash-h">Receita recorrente <span>carteira ${endLabel} · entradas e saídas no período</span></h2>
     <div class="kx-grid kx-4">
-      ${kpi('Receita mensal (MRR)', brl(cur.mrr), `${cur.newMrr ? '+' + brl(cur.newMrr) + ' em novos contratos' : 'sem contratos novos'}${cur.churnMrr ? ` · −${brl(cur.churnMrr)} cancelados` : ''}`, delta(cur.mrr, prev.mrr), 'accent')}
-      ${kpi('Clientes ativos', num(cur.active), `${cur.newClients ? '+' + num(cur.newClients) + ' novo' + (cur.newClients === 1 ? '' : 's') : 'nenhum cliente novo'}${cur.churnN ? ` · −${num(cur.churnN)} cancelado${cur.churnN === 1 ? '' : 's'}` : ''}`, delta(cur.active, prev.active))}
+      ${kpi(`Receita mensal (MRR) ${endLabel}`, brl(cur.mrr), `${cur.newMrr ? '+' + brl(cur.newMrr) + ' em contratos fechados no período' : 'nenhum contrato fechado no período'}${cur.churnMrr ? ` · −${brl(cur.churnMrr)} cancelados` : ''}`, delta(cur.mrr, prev.mrr), 'accent')}
+      ${kpi(`Clientes ativos ${endLabel}`, num(cur.active), `${cur.newClients ? '+' + num(cur.newClients) + ' novo' + (cur.newClients === 1 ? '' : 's') + ' no período' : 'nenhum cliente novo no período'}${cur.churnN ? ` · −${num(cur.churnN)} cancelado${cur.churnN === 1 ? '' : 's'}` : ''}`, delta(cur.active, prev.active))}
       ${kpi('Ticket médio', money(cur.ticket), ltv ? `LTV estimado ${brl(ltv)}` : 'por cliente, ao mês', delta(cur.ticket, prev.ticket))}
       ${kpi('Churn', pctTxt(cur.churn), cur.churnN ? `${num(cur.churnN)} cancelamento${cur.churnN === 1 ? '' : 's'} no período` : 'nenhum cancelamento no período', delta(cur.churn, prev.churn, 'down', true))}
     </div>
