@@ -1,10 +1,10 @@
 // Financeiro (estilo UTMify): gasto da Meta Ads × leads e vendas do CRM × receitas e despesas lançadas
 import { DB } from '@shared/db.js';
-import { renderClients } from './clients.js?v=2609291415';
-import { renderExpenses } from './expenses.js?v=2609291415';
-import { renderCashflow } from './cashflow.js?v=2609291415';
-import { contractFields, bindContract, contractTags } from './contract.js?v=2609291415';
-import { PERIOD, BRAND, popover, dateRange, datePicker, dateBtn, S, $, $$, esc, ICON, brl, num, pct, fullDate, ago, toast, fail, modal, confirmBox } from './util.js?v=2609291415';
+import { renderClients } from './clients.js?v=2609291611';
+import { renderExpenses } from './expenses.js?v=2609291611';
+import { renderCashflow } from './cashflow.js?v=2609291611';
+import { contractFields, bindContract, contractTags } from './contract.js?v=2609291611';
+import { PERIOD, BRAND, popover, dateRange, datePicker, dateBtn, S, $, $$, esc, ICON, brl, num, pct, fullDate, ago, toast, fail, modal, confirmBox } from './util.js?v=2609291611';
 
 const F = { period: '30', from: '', to: '', level: 'campaign', revenue: 'mensal', sort: 'spend', tab: 'geral' };
 const GRAPH = 'v21.0';
@@ -90,100 +90,94 @@ export async function renderFinance(el, swap = false) {
   }
   el.innerHTML = '<div class="loading">Carregando…</div>';
   const r = range();
-  let ins = [], entries = [], accounts = [], settings = null;
+  let ins = [], entries = [], settings = null, recur = [];
   try {
     await Promise.all([DB.processAds(), DB.runRecurring?.()]);
-    [ins, entries, accounts, settings, OBJS] = await Promise.all([DB.listInsights(r[0], r[1]), DB.listFinance(r[0], r[1]), DB.listAdAccounts().catch(() => []), DB.getTracking().catch(() => null), DB.listMetaObjects().then((l) => new Map(l.map((o) => [o.id, o]))).catch(() => new Map())]);
+    [ins, entries, settings, recur] = await Promise.all([DB.listInsights(r[0], r[1]), DB.listFinance(r[0], r[1]), DB.getTracking().catch(() => null), DB.listRecurring?.().catch(() => []) || []]);
   } catch (e) { fail(e); }
   if (!el.isConnected) return;
   const months = settings?.contract_months || 12;
-  const isAdmin = S.me?.role === 'admin';
-  LEAD_TYPES = Array.isArray(settings?.meta_lead_actions) && settings.meta_lead_actions.length ? settings.meta_lead_actions : null;
 
   // ---------- números ----------
-  const leads = S.leads.filter((l) => inRange(l.created_at, r));
-  const paidLeads = leads.filter((l) => l.source === 'pago');
   const sales = S.leads.filter((l) => l.won_at && inRange(l.won_at, r));
-  const saleValue = (l) => Number(l.valor || 0) * (F.revenue === 'contrato' ? months : 1);
+  const saleValue = (l) => Number(l.valor || 0) * (F.revenue === 'contrato' && l.plan !== 'unico' ? Number(l.contract_months || months) : 1);
   const manualSales = entries.filter(isSaleEntry);
-  const tblSales = [...sales, ...manualSales.map((e) => {
-    const l = e.lead_id ? S.leads.find((x) => x.id === e.lead_id) : null;
-    const own = e.utm_campaign || e.utm_id;
-    return { utm_campaign: own ? e.utm_campaign : l?.utm_campaign, utm_term: own ? e.utm_term : l?.utm_term, utm_content: own ? e.utm_content : l?.utm_content, utm_id: own ? e.utm_id : l?.utm_id, __entry: e };
-  })];
-  const junkId = S.stages.find((x) => x.name === 'Descarte')?.id;
-  const leadsOk = leads.filter((l) => l.stage_id !== junkId);
-  const linked = new Set(entries.filter((e) => e.lead_id).map((e) => e.lead_id));
-  const cohortWon = leadsOk.filter((l) => l.won_at || linked.has(l.id)).length;
-  const tblValue = (x) => (x.__entry ? entrySale(x.__entry) : saleValue(x));
-  // vendas que vieram de anúncio (campanha na venda/contato, ou contato de tráfego pago)
-  // venda de anúncio: tudo que não foi marcado como indicação/orgânico
-  const isAds = (x) => (x.__entry ? x.__entry.source !== 'organico' : !['organico', 'manual'].includes(x.source));
-  const adsSales = tblSales.filter(isAds);
-  const revAds = adsSales.reduce((a2, x) => a2 + tblValue(x), 0);
-  const nSales = sales.length + manualSales.length;
-  const revSales = sales.reduce((a, l) => a + saleValue(l), 0) + manualSales.reduce((a, e) => a + entrySale(e), 0);
-  const revManual = entries.filter((e) => e.kind === 'receita' && !isSaleEntry(e)).reduce((a, e) => a + Number(e.amount), 0);
-  const expManual = entries.filter((e) => e.kind === 'despesa').reduce((a, e) => a + Number(e.amount), 0);
+  // todas as vendas do período (pipeline + lançadas), com serviço e origem
+  const allSales = [
+    ...sales.map((l) => ({ name: l.nome, value: saleValue(l), service: l.service, plan: l.plan, ads: !['organico', 'manual'].includes(l.source) })),
+    ...manualSales.map((e) => ({ name: e.description, value: entrySale(e), service: e.service, plan: e.plan, ads: e.source !== 'organico' }))
+  ];
+  const nSales = allSales.length;
+  const revSales = allSales.reduce((a, x) => a + x.value, 0);
+  const adsSales = allSales.filter((x) => x.ads);
+  const revAds = adsSales.reduce((a, x) => a + x.value, 0);
+  const revOther = entries.filter((e) => e.kind === 'receita' && !isSaleEntry(e)).reduce((a, e) => a + Number(e.amount), 0);
+  const exp = entries.filter((e) => e.kind === 'despesa');
+  const isFixed = (e) => !!(e.recurring_id || e.expense_type === 'fixa');
+  const fixed = exp.filter(isFixed).reduce((a, e) => a + Number(e.amount), 0);
+  const variable = exp.filter((e) => !isFixed(e)).reduce((a, e) => a + Number(e.amount), 0);
   const spend = ins.reduce((a, x) => a + Number(x.spend), 0);
-  const imp = ins.reduce((a, x) => a + Number(x.impressions), 0);
-  const clicks = ins.reduce((a, x) => a + Number(x.clicks), 0);
-  const linkClicks = ins.reduce((a, x) => a + Number(x.link_clicks || 0), 0);
-  const metaLeads = ins.reduce((a, x) => a + rowLeads(x), 0);
-  const hasMeta = ins.length > 0;
-  const leadsN = hasMeta ? metaLeads : leads.length; // leads pela própria Meta quando há campanhas
-  const faturamento = revSales + revManual;
-  const despesas = spend + expManual;
-  const lucro = faturamento - despesas;
+  const faturamento = revSales + revOther;
+  const custos = spend + fixed + variable;
+  const lucro = faturamento - custos;
+  const fixedMonthly = recur.filter((x) => x.active && (!x.end_date || x.end_date >= iso(new Date()))).reduce((a, x) => a + Number(x.amount), 0);
   const ratio = (a, b) => (b ? a / b : null);
   const money = (v) => (v == null ? '—' : brl(v));
   const x2 = (v) => (v == null ? '—' : v.toLocaleString('pt-BR', { maximumFractionDigits: 2, minimumFractionDigits: 2 }) + 'x');
+  const pctOf = (v, t) => (t ? Math.round((v / t) * 100) : 0);
 
-  const tiles = [
-    ['Faturamento', brl(faturamento), `${num(nSales)} venda${nSales === 1 ? '' : 's'}${revManual ? ' + ' + brl(revManual) + ' em outras receitas' : ''}`, 'accent'],
-    ['Gastos com anúncios', brl(spend), accounts.length || ins.length ? `${num(imp)} impressões` : 'conecte na aba Contas de anúncio'],
-    ['Lucro', brl(lucro), `margem ${faturamento ? pct(lucro, faturamento) : '—'}`, lucro < 0 ? 'neg' : 'pos'],
-    ['ROAS', x2(ratio(revAds, spend)), adsSales.length ? `${num(adsSales.length)} venda${adsSales.length === 1 ? '' : 's'} de anúncio ÷ gasto` : 'só vendas que vieram de anúncio'],
-    ['ROI', ratio(lucro, despesas) == null ? '—' : pct(lucro, despesas), `despesas totais ${brl(despesas)}`],
-    ['Ticket médio', money(ratio(revSales, nSales)), F.revenue === 'contrato' ? 'valor total do contrato' : 'por mensalidade'],
-    ['CAC', money(ratio(spend, adsSales.length)), adsSales.length ? `com todas as despesas: ${money(ratio(despesas, nSales))}` : 'nenhuma venda de anúncio no período'],
-    ['Leads', num(leadsN), hasMeta ? `pela Meta · ${num(leads.length)} no CRM` : `${num(paidLeads.length)} de anúncios`],
-    ['CPL', money(ratio(spend, hasMeta ? metaLeads : (paidLeads.length || leads.length))), hasMeta ? 'gasto ÷ leads da Meta' : 'gasto ÷ leads de anúncio'],
-    ['Conversão', leadsN ? pct(nSales, leadsN) : '—', leadsN ? `${num(nSales)} cliente${nSales === 1 ? '' : 's'} de ${num(leadsN)} leads` : 'nenhum lead no período'],
-    ['CTR', imp ? pct(linkClicks || clicks, imp) : '—', `CPC ${money(ratio(spend, linkClicks || clicks))}${linkClicks ? ' · cliques no link' : ''}`],
-    ['CPM', money(imp ? (spend / imp) * 1000 : null), `${num(linkClicks || clicks)} cliques${linkClicks ? ' no link' : ''}`]
-  ];
+  // receita por serviço e custos por categoria
+  const svcRows = [['marketing', 'Marketing'], ['marketplace', 'Marketplace'], [null, 'Sem serviço definido']].map(([k, n]) => {
+    const list = allSales.filter((x) => (x.service || null) === k);
+    return { key: k, name: n, n: list.length, value: list.reduce((a, x) => a + x.value, 0) };
+  }).filter((x) => x.n);
+  const catMap = new Map(); if (spend) catMap.set('Anúncios (Meta)', spend);
+  exp.forEach((e) => catMap.set(e.category, (catMap.get(e.category) || 0) + Number(e.amount)));
+  const cats = [...catMap.entries()].sort((a, b) => b[1] - a[1]).slice(0, 6);
+  const bars = (rows, total, cls = () => '') => rows.map(([n, v, sub]) => `<div class="ex-bar"><span class="n" title="${esc(n)}">${esc(n)}</span><span class="track"><span class="fill ${cls(n)}" style="--w:${pctOf(v, rows[0][1] || 1)}%"></span></span><span class="v">${brl(v)}<small>${sub ?? pctOf(v, total) + '%'}</small></span></div>`).join('');
+  const shown = F.allEntries ? entries : entries.slice(0, 8);
 
   el.innerHTML = `
-    <div class="topline"><h1>Financeiro</h1><div class="grow"></div>
-      ${dateBtn(F)}
-    </div>
+    <div class="topline"><h1>Financeiro</h1><div class="grow"></div>${dateBtn(F)}</div>
     ${tabBar()}
     <div class="tab-body">
     <div class="fin-actions">
-      <div class="seg"><button class="b b-sm ${F.revenue === 'mensal' ? 'on' : ''}" data-rev="mensal">Receita: 1ª mensalidade</button><button class="b b-sm ${F.revenue === 'contrato' ? 'on' : ''}" data-rev="contrato">Receita: contrato</button></div>
-      <div class="grow"></div>
+      <div class="seg" role="radiogroup" aria-label="Como contar as vendas"><button class="b b-sm ${F.revenue === 'mensal' ? 'on' : ''}" data-rev="mensal">Vendas pela 1ª mensalidade</button><button class="b b-sm ${F.revenue === 'contrato' ? 'on' : ''}" data-rev="contrato">Vendas pelo contrato inteiro</button></div>
     </div>
-    <div class="fin-tiles">${tiles.map(([l, v, sub, cls]) => `<section class="panel ftile ${cls || ''}"><div class="t-label">${l}</div><div class="t-value">${v}</div><div class="t-sub">${esc(sub)}</div></section>`).join('')}</div>
+    <div class="kx-grid kx-4">
+      <section class="panel kx accent"><span class="kx-l">Faturamento</span><div class="kx-vr"><span class="kx-v">${brl(faturamento)}</span></div><div class="kx-s">${num(nSales)} venda${nSales === 1 ? '' : 's'}${revOther ? ` · ${brl(revOther)} em outras receitas` : ''}</div></section>
+      <section class="panel kx"><span class="kx-l">Custos</span><div class="kx-vr"><span class="kx-v">${brl(custos)}</span></div><div class="kx-s">${custos ? `anúncios ${brl(spend)} · fixas ${brl(fixed)} · variáveis ${brl(variable)}` : 'nenhum custo no período'}</div></section>
+      <section class="panel kx ${lucro < 0 ? 'neg' : 'ok'}"><span class="kx-l">Lucro líquido</span><div class="kx-vr"><span class="kx-v">${brl(lucro)}</span></div><div class="kx-s">margem ${faturamento ? pct(lucro, faturamento) : '—'}</div></section>
+      <section class="panel kx"><span class="kx-l">ROAS</span><div class="kx-vr"><span class="kx-v">${x2(ratio(revAds, spend))}</span></div><div class="kx-s">${spend ? `${num(adsSales.length)} venda${adsSales.length === 1 ? '' : 's'} de anúncio ÷ investimento` : 'sem investimento no período'}</div></section>
+    </div>
+    <div class="fin-mini">
+      <div><span>Ticket médio</span><b>${money(ratio(revSales, nSales))}</b><small>${F.revenue === 'contrato' ? 'por contrato' : 'por venda'}</small></div>
+      <div><span>CAC</span><b>${money(ratio(spend, adsSales.length))}</b><small>${nSales && custos ? `com todos os custos ${brl(custos / nSales)}` : 'investimento ÷ clientes de anúncio'}</small></div>
+      <div><span>ROI</span><b>${ratio(lucro, custos) == null ? '—' : pct(lucro, custos)}</b><small>lucro ÷ custos</small></div>
+      <div><span>Custo fixo mensal</span><b>${brl(fixedMonthly)}</b><small><a class="link" href="#" data-go="despesas">ver despesas</a></small></div>
+    </div>
 
-    <section class="panel chart-card" style="margin-top:12px"><h3>Faturamento × gastos por dia</h3><p class="sub">Vendas fechadas (pela data da venda) e lançamentos, contra gasto em anúncios e despesas</p>
-      <div class="legend"><span><i style="background:var(--viz-1)"></i>Faturamento</span><span><i style="background:var(--viz-neutral)"></i>Gastos</span></div>
+    <section class="panel chart-card" style="margin-top:12px"><h3>Faturamento × custos por dia</h3><p class="sub">Vendas pela data do fechamento e lançamentos, contra anúncios e despesas</p>
+      <div class="legend"><span><i style="background:var(--viz-1)"></i>Faturamento</span><span><i style="background:var(--viz-neutral)"></i>Custos</span></div>
       <div class="chart" data-chart></div></section>
 
-
-    <div class="int-grid" style="margin-top:12px">
-      <section class="panel int-card">
-        <div class="int-h"><div><h3>Lançamentos</h3><p class="help">Vendas feitas por fora do CRM, outras receitas e despesas do período.</p></div><button class="b b-primary b-sm" data-entry>+ Novo lançamento</button></div>
-        ${entries.length ? `<div class="table-wrap"><table class="int-table"><thead><tr><th>Data</th><th>Tipo</th><th>Categoria</th><th>Descrição</th><th class="num">Valor</th><th></th></tr></thead><tbody>
-          ${entries.map((e) => `<tr data-id="${e.id}" class="row-click" title="Clique para editar"><td class="nowrap">${new Date(e.date + 'T12:00').toLocaleDateString('pt-BR')}</td><td><span class="pill ${e.kind === 'receita' ? 'good' : 'bad'}">${e.kind === 'receita' ? 'Receita' : 'Despesa'}</span></td><td>${esc(e.category)}${e.kind === 'despesa' ? `<br><small class="muted">${e.recurring_id || e.expense_type === 'fixa' ? 'Fixa' : 'Variável'}</small>` : ''}</td><td>${esc(e.description || '')}${isSaleEntry(e) ? `<div class="ctr-tags">${contractTags(e.service, e.plan)}${e.plan !== 'unico' && e.months ? `<small class="muted">${e.months} × ${brl(e.monthly_amount || 0)}</small>` : ''}</div>` : ''}</td><td class="num">${brl(e.amount)}</td><td style="text-align:right"><span class="row-acts"><button class="b b-sm b-ghost" data-eedit aria-label="Editar">${ICON.edit}</button><button class="b b-sm b-ghost" data-edel aria-label="Excluir">${ICON.x}</button></span></td></tr>`).join('')}
-        </tbody></table></div>` : '<p class="muted empty-line">Nenhum lançamento no período.</p>'}
+    <div class="fin-split">
+      <section class="panel ex-card">
+        <div class="ex-h"><div><h3>Faturamento por serviço</h3><p class="help">Vendas do período</p></div><a class="link" href="#" data-go="clientes">ver clientes</a></div>
+        ${svcRows.length ? `<div class="ex-bars">${bars(svcRows.map((x) => [x.name, x.value, `${x.n} venda${x.n === 1 ? '' : 's'}`]), revSales, (n) => (n === 'Marketplace' ? 'mkp' : n.startsWith('Sem') ? 'ads' : ''))}</div>` : '<p class="muted empty-line">Nenhuma venda no período.</p>'}
       </section>
-      <section class="panel int-card">
-        <div class="int-h"><div><h3>Contas de anúncio</h3><p class="help">${accounts.length ? `${accounts.filter((a) => a.enabled).length} ativa${accounts.filter((a) => a.enabled).length === 1 ? '' : 's'} · gasto atualizado a cada 3 horas` : 'Conecte o perfil do Facebook pra puxar o gasto das campanhas.'}</p></div><button class="b b-sm" data-go-acc>Gerenciar</button></div>
-        ${accounts.length ? '' : '<p class="muted empty-line">Nenhuma conta conectada.</p>'}
-        ${accounts.slice(0, 4).map((a) => `<div class="srow">${META_ICON}<div class="grow"><b>${esc(a.name)}</b><div class="muted" style="font-size:12px">${accStatus(a)}</div></div>${a.enabled ? '<span class="pill good">Ativa</span>' : '<span class="pill">Pausada</span>'}</div>`).join('')}
+      <section class="panel ex-card">
+        <div class="ex-h"><div><h3>Para onde foi o dinheiro</h3><p class="help">Custos do período por categoria</p></div><a class="link" href="#" data-go="despesas">ver despesas</a></div>
+        ${cats.length ? `<div class="ex-bars">${bars(cats.map(([n, v]) => [n, v]), custos, (n) => (n === 'Anúncios (Meta)' ? 'ads' : ''))}</div>` : '<p class="muted empty-line">Nenhum custo no período.</p>'}
       </section>
     </div>
+
+    <section class="panel ex-card" style="margin-top:12px">
+      <div class="ex-h"><div><h3>Lançamentos</h3><p class="help">Vendas lançadas, outras receitas e despesas do período</p></div><button class="b b-primary b-sm" data-entry>+ Novo lançamento</button></div>
+      ${entries.length ? `<div class="table-wrap"><table class="int-table"><thead><tr><th>Data</th><th>Tipo</th><th>Descrição</th><th>Categoria</th><th class="num">Valor</th><th></th></tr></thead><tbody>
+        ${shown.map((e) => `<tr data-id="${e.id}" class="row-click" title="Clique para editar"><td class="nowrap">${new Date(e.date + 'T12:00').toLocaleDateString('pt-BR')}</td><td><span class="pill ${e.kind === 'receita' ? 'good' : 'bad'}">${e.kind === 'receita' ? 'Receita' : isFixed(e) ? 'Despesa fixa' : 'Despesa'}</span></td><td>${esc(e.description || '')}${isSaleEntry(e) ? `<div class="ctr-tags">${contractTags(e.service, e.plan)}${e.plan !== 'unico' && e.months ? `<small class="muted">${e.months} × ${brl(e.monthly_amount || 0)}</small>` : ''}</div>` : ''}</td><td>${esc(e.category)}</td><td class="num">${brl(e.amount)}</td><td style="text-align:right"><span class="row-acts"><button class="b b-sm b-ghost" data-eedit aria-label="Editar">${ICON.edit}</button><button class="b b-sm b-ghost" data-edel aria-label="Excluir">${ICON.x}</button></span></td></tr>`).join('')}
+      </tbody></table></div>${entries.length > 8 ? `<button class="b b-sm b-ghost fin-more" data-more-entries>${F.allEntries ? 'Mostrar menos' : `Mostrar todos (${entries.length})`}</button>` : ''}` : '<p class="muted empty-line">Nenhum lançamento no período.</p>'}
+    </section>
     </div>`;
 
   dailyChart(el.querySelector('[data-chart]'), r, ins, sales, entries, saleValue);
@@ -191,7 +185,8 @@ export async function renderFinance(el, swap = false) {
   const reload = () => renderFinance(el);
   bindTabs(el);
   if (swap) el.querySelector('.tab-body').classList.add('swap-in');
-  el.querySelector('[data-go-acc]').addEventListener('click', () => { F.tab = 'contas'; renderFinance(el, true); });
+  el.querySelectorAll('[data-go]').forEach((a) => a.addEventListener('click', (e) => { e.preventDefault(); F.tab = a.dataset.go; renderFinance(el, true); }));
+  el.querySelector('[data-more-entries]')?.addEventListener('click', () => { F.allEntries = !F.allEntries; reload(); });
   el.querySelector('[data-date]').addEventListener('click', (e) => datePicker(e.currentTarget, F, (st) => { Object.assign(F, st); Object.assign(PERIOD, st); reload(); }));
   el.querySelectorAll('[data-rev]').forEach((b) => b.addEventListener('click', () => { F.revenue = b.dataset.rev; reload(); }));
   el.querySelector('[data-entry]').addEventListener('click', () => entryModal(reload));
@@ -200,8 +195,9 @@ export async function renderFinance(el, swap = false) {
     const entry = entries.find((x) => x.id === tr.dataset.id); if (entry) entryModal(reload, entry);
   }));
   el.querySelectorAll('tr[data-id] [data-edel]').forEach((b) => b.addEventListener('click', async () => {
-    if (!(await confirmBox('Excluir este lançamento?', 'Excluir'))) return;
-    try { await DB.deleteFinance(b.closest('tr').dataset.id); reload(); } catch (e) { fail(e); }
+    const entry = entries.find((x) => x.id === b.closest('tr').dataset.id);
+    if (!(await confirmBox(entry?.recurring_id ? 'Excluir o lançamento deste mês? A despesa fixa continua nos próximos meses.' : 'Excluir este lançamento?', 'Excluir'))) return;
+    try { await DB.deleteFinance(entry.id); reload(); } catch (e) { fail(e); }
   }));
 }
 
@@ -834,7 +830,7 @@ function dailyChart(host, r, ins, sales, entries, saleValue) {
   const bar = (x, v, cls, i) => { if (!v) return ''; const top = y(v); const h = padT + ih - top; const rr = Math.min(3, barW / 2, h); return `<path class="bar ${cls}" data-i="${i}" d="M${x},${padT + ih} V${top + rr} Q${x},${top} ${x + rr},${top} H${x + barW - rr} Q${x + barW},${top} ${x + barW},${top + rr} V${padT + ih} Z"/>`; };
   const every = Math.ceil(data.length / Math.max(2, Math.floor(iw / 64)));
   const short = (v) => v >= 1000 ? 'R$' + (v / 1000).toLocaleString('pt-BR', { maximumFractionDigits: 1 }) + 'k' : 'R$' + Math.round(v);
-  host.innerHTML = `<svg viewBox="0 0 ${W} ${H}" height="${H}" role="img" aria-label="Faturamento e gastos por dia">
+  host.innerHTML = `<svg viewBox="0 0 ${W} ${H}" height="${H}" role="img" aria-label="Faturamento e custos por dia">
     ${[0, max / 2, max].map((t) => `<line class="gl" x1="${padL}" x2="${W}" y1="${y(t)}" y2="${y(t)}"/><text class="ax" x="${padL - 8}" y="${y(t) + 4}" text-anchor="end">${short(t)}</text>`).join('')}
     ${data.map((x, i) => { const cx = padL + i * bw + bw / 2; return bar(cx - barW - gap / 2, x.rev, 'hot', i) + bar(cx + gap / 2, x.exp, 'rest', i); }).join('')}
     ${data.map((x, i) => (i % every === 0 ? `<text class="ax" x="${padL + i * bw + bw / 2}" y="${H - 6}" text-anchor="middle">${x.d.slice(8, 10)}/${x.d.slice(5, 7)}</text>` : '')).join('')}
@@ -845,7 +841,7 @@ function dailyChart(host, r, ins, sales, entries, saleValue) {
     const h = e.target.closest('.hit'); if (!h) return;
     const i = +h.dataset.i; const x = data[i];
     host.querySelectorAll('.bar').forEach((b) => b.classList.toggle('dim', +b.dataset.i !== i));
-    tip.innerHTML = `<div class="muted">${new Date(x.d + 'T12:00').toLocaleDateString('pt-BR', { weekday: 'short', day: '2-digit', month: 'short' })}</div>Faturamento <b>${brl(x.rev)}</b><br>Gastos <b>${brl(x.exp)}</b><br><span class="muted">Resultado ${brl(x.rev - x.exp)}</span>`;
+    tip.innerHTML = `<div class="muted">${new Date(x.d + 'T12:00').toLocaleDateString('pt-BR', { weekday: 'short', day: '2-digit', month: 'short' })}</div>Faturamento <b>${brl(x.rev)}</b><br>Custos <b>${brl(x.exp)}</b><br><span class="muted">Resultado ${brl(x.rev - x.exp)}</span>`;
     tip.hidden = false;
     const scale = svg.getBoundingClientRect().width / W;
     tip.style.left = Math.min(Math.max((padL + i * bw + bw / 2) * scale, 80), host.clientWidth - 80) + 'px';
