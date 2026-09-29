@@ -1,10 +1,10 @@
 // Financeiro (estilo UTMify): gasto da Meta Ads × leads e vendas do CRM × receitas e despesas lançadas
 import { DB } from '@shared/db.js';
-import { renderClients } from './clients.js?v=2609291611';
-import { renderExpenses } from './expenses.js?v=2609291611';
-import { renderCashflow } from './cashflow.js?v=2609291611';
-import { contractFields, bindContract, contractTags } from './contract.js?v=2609291611';
-import { PERIOD, BRAND, popover, dateRange, datePicker, dateBtn, S, $, $$, esc, ICON, brl, num, pct, fullDate, ago, toast, fail, modal, confirmBox } from './util.js?v=2609291611';
+import { renderClients } from './clients.js?v=2609291856';
+import { renderExpenses } from './expenses.js?v=2609291856';
+import { renderCashflow } from './cashflow.js?v=2609291856';
+import { contractFields, bindContract, contractTags } from './contract.js?v=2609291856';
+import { PERIOD, BRAND, popover, dateRange, datePicker, dateBtn, S, $, $$, esc, ICON, brl, num, pct, fullDate, ago, toast, fail, modal, confirmBox } from './util.js?v=2609291856';
 
 const F = { period: '30', from: '', to: '', level: 'campaign', revenue: 'mensal', sort: 'spend', tab: 'geral' };
 const GRAPH = 'v21.0';
@@ -175,7 +175,7 @@ export async function renderFinance(el, swap = false) {
     <section class="panel ex-card" style="margin-top:12px">
       <div class="ex-h"><div><h3>Lançamentos</h3><p class="help">Vendas lançadas, outras receitas e despesas do período</p></div><button class="b b-primary b-sm" data-entry>+ Novo lançamento</button></div>
       ${entries.length ? `<div class="table-wrap"><table class="int-table"><thead><tr><th>Data</th><th>Tipo</th><th>Descrição</th><th>Categoria</th><th class="num">Valor</th><th></th></tr></thead><tbody>
-        ${shown.map((e) => `<tr data-id="${e.id}" class="row-click" title="Clique para editar"><td class="nowrap">${new Date(e.date + 'T12:00').toLocaleDateString('pt-BR')}</td><td><span class="pill ${e.kind === 'receita' ? 'good' : 'bad'}">${e.kind === 'receita' ? 'Receita' : isFixed(e) ? 'Despesa fixa' : 'Despesa'}</span></td><td>${esc(e.description || '')}${isSaleEntry(e) ? `<div class="ctr-tags">${contractTags(e.service, e.plan)}${e.plan !== 'unico' && e.months ? `<small class="muted">${e.months} × ${brl(e.monthly_amount || 0)}</small>` : ''}</div>` : ''}</td><td>${esc(e.category)}</td><td class="num">${brl(e.amount)}</td><td style="text-align:right"><span class="row-acts"><button class="b b-sm b-ghost" data-eedit aria-label="Editar">${ICON.edit}</button><button class="b b-sm b-ghost" data-edel aria-label="Excluir">${ICON.x}</button></span></td></tr>`).join('')}
+        ${shown.map((e) => `<tr data-id="${e.id}" class="row-click" title="Clique para editar"><td class="nowrap">${new Date(e.date + 'T12:00').toLocaleDateString('pt-BR')}</td><td><span class="pill ${e.kind === 'receita' ? 'good' : 'bad'}">${e.kind === 'receita' ? 'Receita' : isFixed(e) ? 'Despesa fixa' : 'Despesa'}</span></td><td>${esc(e.description || '')}${isSaleEntry(e) ? `<div class="ctr-tags">${contractTags(e.service, e.plan)}${(!e.plan || e.plan === 'mensal') && e.months ? `<small class="muted">${e.months} × ${brl(e.monthly_amount || 0)}</small>` : ''}</div>` : ''}</td><td>${esc(e.category)}</td><td class="num">${brl(e.amount)}</td><td style="text-align:right"><span class="row-acts"><button class="b b-sm b-ghost" data-eedit aria-label="Editar">${ICON.edit}</button><button class="b b-sm b-ghost" data-edel aria-label="Excluir">${ICON.x}</button></span></td></tr>`).join('')}
       </tbody></table></div>${entries.length > 8 ? `<button class="b b-sm b-ghost fin-more" data-more-entries>${F.allEntries ? 'Mostrar menos' : `Mostrar todos (${entries.length})`}</button>` : ''}` : '<p class="muted empty-line">Nenhum lançamento no período.</p>'}
     </section>
     </div>`;

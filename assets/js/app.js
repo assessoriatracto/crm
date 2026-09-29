@@ -3,17 +3,17 @@ import {
   go, routeName, S, $, $$, esc, ICON, FAT, COLORS, initials, isHot, stageOf, profileOf, labelOf, isInactive, isDue, fatShort, brl, pct, num,
   fmtPhone, fullDate, longDate, addedAt, ago, sourceLabel, formName, waLink, toast, fail, popover, closePop, menu, multiSelect,
   modal, confirmBox, downloadCSV, dateRange, datePicker, dateBtn, daysToSale, fmtDays
-} from './util.js?v=2609291611';
-import { importModal } from './import.js?v=2609291611';
-import { renderDashboard } from './dashboard.js?v=2609291611';
-import { renderSettings } from './admin.js?v=2609291611';
-import { renderIntegrations, renderPixel, leadMetaEvents, statusPill } from './integrations.js?v=2609291611';
-import { renderRecovery, loadPartials } from './recovery.js?v=2609291611';
-import { showSignIn, showSignUp, showForgot, showReset, showMfa, showPending, watchIdle, AUTH_ROUTES } from './auth.js?v=2609291611';
-import { SERVICES, PLANS, planMonths } from './contract.js?v=2609291611';
-import { openProfile, renderProfile } from './profile.js?v=2609291611';
-import { renderBuilder } from './builder.js?v=2609291611';
-import { renderFinance } from './finance.js?v=2609291611';
+} from './util.js?v=2609291856';
+import { importModal } from './import.js?v=2609291856';
+import { renderDashboard } from './dashboard.js?v=2609291856';
+import { renderSettings } from './admin.js?v=2609291856';
+import { renderIntegrations, renderPixel, leadMetaEvents, statusPill } from './integrations.js?v=2609291856';
+import { renderRecovery, loadPartials } from './recovery.js?v=2609291856';
+import { showSignIn, showSignUp, showForgot, showReset, showMfa, showPending, watchIdle, AUTH_ROUTES } from './auth.js?v=2609291856';
+import { SERVICES, PLANS, planMonths, planFactor, VALUE_LABEL } from './contract.js?v=2609291856';
+import { openProfile, renderProfile } from './profile.js?v=2609291856';
+import { renderBuilder } from './builder.js?v=2609291856';
+import { renderFinance } from './finance.js?v=2609291856';
 
 // ============================================================
 // preferências locais (por navegador)
@@ -764,8 +764,9 @@ function renderDrawer() {
           <div><label class="lbl">Serviço</label><select class="inp" data-field="service"><option value="">Não definido</option>${SERVICES.map(([k, n]) => `<option value="${k}" ${l.service === k ? 'selected' : ''}>${n}</option>`).join('')}</select></div>
           <div><label class="lbl">Tipo de contrato</label><select class="inp" data-field="plan"><option value="">Não definido</option>${PLANS.map(([k, n]) => `<option value="${k}" ${l.plan === k ? 'selected' : ''}>${n}</option>`).join('')}</select></div>
         </div>
-        <div class="grid2" style="margin-top:10px"><div><label class="lbl">${l.plan === 'unico' ? 'Valor do pagamento (R$)' : 'Mensalidade (R$)'}</label><input class="inp" data-field="valor" inputmode="decimal" value="${l.valor ?? ''}" placeholder="0"></div>
-          ${l.plan === 'unico' ? '' : `<div><label class="lbl">${l.plan === 'mensal' ? 'Previsão (meses)' : 'Meses de contrato'}</label><input class="inp" data-field="contract_months" inputmode="numeric" value="${l.contract_months ?? planMonths(l.plan, 12) ?? ''}" placeholder="12"></div>`}</div>
+        <div class="${!l.plan || l.plan === 'mensal' ? 'grid2' : ''}" style="margin-top:10px"><div><label class="lbl">${VALUE_LABEL[l.plan || 'mensal']}</label><input class="inp" data-field="valor" data-factor="${planFactor(l.plan)}" inputmode="decimal" value="${l.valor != null && l.valor !== '' ? (Math.round(Number(l.valor) * planFactor(l.plan) * 100) / 100).toLocaleString('pt-BR', { maximumFractionDigits: 2 }) : ''}" placeholder="0,00"></div>
+          ${!l.plan || l.plan === 'mensal' ? `<div><label class="lbl">Previsão (meses)</label><input class="inp" data-field="contract_months" inputmode="numeric" value="${l.contract_months ?? ''}" placeholder="12"></div>` : ''}</div>
+        ${l.valor && ['semestral', 'anual'].includes(l.plan) ? `<p class="help" style="margin:6px 0 0">Equivale a ${brl(Number(l.valor))} por mês, por ${planMonths(l.plan)} meses.</p>` : ''}
         ${l.won_at && l.plan !== 'unico' ? `<div style="margin-top:10px"><label class="lbl">Contrato cancelado em</label><input class="inp" type="date" data-field="canceled_at" value="${l.canceled_at || ''}"></div>` : ''}
         <p class="ttc-line">${l.won_at ? (daysToSale(l) < 1 ? 'Virou venda <b>no mesmo dia</b> em que chegou como lead' : `Virou venda <b>${fmtDays(daysToSale(l))}</b> depois de chegar como lead`) : ((Date.now() - new Date(l.created_at)) / 86400000 < 1 ? 'Chegou como lead <b>hoje</b>' : `Lead há <b>${fmtDays((Date.now() - new Date(l.created_at)) / 86400000)}</b>`)}</p>
       </div>
@@ -849,7 +850,8 @@ drawer.addEventListener('change', async (e) => {
   }
   if (!f) return;
   let v = e.target.value.trim();
-  if (f === 'valor') { v = v ? Number(v.replace(/\./g, '').replace(',', '.')) : null; if (v !== null && Number.isNaN(v)) return toast('Valor inválido', true); }
+  // o campo mostra o valor do formato (semestre, ano); guardamos o equivalente mensal
+  if (f === 'valor') { v = v ? Number(v.replace(/[^\d,.-]/g, '').replace(/\./g, '').replace(',', '.')) : null; if (v !== null && Number.isNaN(v)) return toast('Valor inválido', true); if (v !== null) v = Math.round((v / (Number(e.target.dataset.factor) || 1)) * 100) / 100; }
   else if (f === 'contract_months') { v = v ? Math.round(Number(v)) : null; if (v !== null && !(v >= 1 && v <= 120)) return toast('Meses entre 1 e 120', true); }
   else v = v || null;
   // tipo de contrato ajusta os meses sozinho (semestral 6, anual 12, pagamento único 1)

@@ -1,8 +1,8 @@
 // Financeiro > Clientes: contratos ativos, cancelamentos (churn) e origem de cada venda (campanha › conjunto › anúncio).
 import { DB } from '@shared/db.js';
-import { S, esc, ICON, brl, num, toast, fail, modal, menu, dateRange } from './util.js?v=2609291611';
-import { contracts, activeAt } from './dashboard.js?v=2609291611';
-import { contractFields, bindContract, contractTags, SERVICES } from './contract.js?v=2609291611';
+import { S, esc, ICON, brl, num, toast, fail, modal, menu, dateRange } from './util.js?v=2609291856';
+import { contracts, activeAt } from './dashboard.js?v=2609291856';
+import { contractFields, bindContract, contractTags, SERVICES, planFactor } from './contract.js?v=2609291856';
 
 const C = { status: 'ativos', q: '', svc: '' };
 const REASONS = ['Preço', 'Resultado abaixo do esperado', 'Atendimento', 'Fechou ou vendeu a loja', 'Cortou custos', 'Foi para outra agência', 'Outro'];
@@ -67,7 +67,7 @@ export async function renderClients(host, F, reload) {
           <td><b class="ellip-1" title="${esc(c.name)}">${esc(c.name)}</b><small class="muted">${c.kind === 'lead' ? 'Venda pelo pipeline' : 'Venda lançada'}${c.oneTime || c.plan === 'mensal' ? '' : ` · ${c.months} ${c.months === 1 ? 'mês' : 'meses'}`}</small></td>
           <td>${PILL[st]}${st === 'cancelado' ? `<small class="muted cl-why">${fmt(c.canceled)}${c.reason ? ' · ' + esc(c.reason) : ''}</small>` : ''}</td>
           <td><div class="ctr-tags">${contractTags(c.service, c.plan) || '<span class="muted">—</span>'}</div></td>
-          <td class="num">${brl(c.monthly)}${c.oneTime ? '' : '<small class="muted">/mês</small>'}</td>
+          <td class="num">${brl(c.monthly * planFactor(c.plan))}${c.oneTime ? '' : `<small class="muted">${({ semestral: '/semestre', anual: '/ano' })[c.plan] || '/mês'}</small>`}</td>
           <td class="nowrap">${fmt(c.start)}${c.kind === 'entry' && c.entry.created_at && iso(new Date(c.entry.created_at)) !== iso(c.start) ? `<small class="muted">lançado em ${fmt(new Date(c.entry.created_at))}</small>` : ''}</td>
           <td class="nowrap">${c.oneTime ? '<span class="muted">—</span>' : c.plan === 'mensal' && st !== 'cancelado' ? '<span class="muted">até cancelar</span>' : fmt(st === 'cancelado' ? c.canceled : c.end)}</td>
           <td>${(c.kind === 'entry' ? c.entry.source === 'organico' : c.lead?.source === 'organico') ? '<span class="pill">Indicação / orgânico</span>' : originTxt(c.origin) ? `<span class="cl-origin" title="${esc(originTxt(c.origin))}">${esc(originTxt(c.origin))}</span>${c.lead ? '' : '<small class="muted">sem lead: não vai pra Meta</small>'}` : '<button class="b b-sm" data-origin>Definir origem</button>'}</td>
