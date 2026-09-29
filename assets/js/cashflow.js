@@ -1,7 +1,7 @@
 // Financeiro > Fluxo de caixa: resultado mês a mês (DRE simples) e previsão dos próximos 3 meses
 import { DB } from '@shared/db.js';
-import { esc, brl, fail } from './util.js?v=2609291913';
-import { contracts, activeAt, result } from './dashboard.js?v=2609291913';
+import { esc, brl, fail } from './util.js?v=2609291922';
+import { contracts, received, result } from './dashboard.js?v=2609291922';
 
 const CF = { months: 6 };
 const iso = (d) => new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 10);
@@ -39,8 +39,8 @@ export async function renderCashflow(host) {
   for (let k = 1; k <= 3; k++) {
     const a = new Date(now.getFullYear(), now.getMonth() + k, 1);
     const b = new Date(a.getFullYear(), a.getMonth() + 1, 0, 23, 59, 59);
-    const mid = new Date(a.getFullYear(), a.getMonth(), 15);
-    const recurring = list.filter((c) => activeAt(c, mid)).reduce((s, c) => s + c.monthly, 0);
+    // mensalidades que vencem no mês (contratos ativos; mensal renova até cancelar)
+    const recurring = list.filter((c) => !c.upfront).reduce((s, c) => s + received(c, a, b), 0);
     const fixed = recur.filter((r) => r.active && r.start_date <= iso(b) && (!r.end_date || r.end_date >= iso(a))).reduce((s, r) => s + Number(r.amount), 0);
     const costs = adsAvg + fixed + varAvg;
     months.push({ a, b, label: MONTH(a), forecast: true, revenue: recurring, recurring, once: 0, other: 0, ads: adsAvg, fixed, variable: varAvg, costs, profit: recurring - costs, margin: recurring ? (recurring - costs) / recurring : null });
@@ -54,7 +54,7 @@ export async function renderCashflow(host) {
 
   const ROWS = [
     ['Entradas', 'revenue', 'head'],
-    ['Mensalidades', 'recurring'], ['Pagamentos únicos', 'once'], ['Outras receitas', 'other'],
+    ['Mensalidades (marketing)', 'recurring'], ['Pagamentos integrais (marketplace e únicos)', 'once'], ['Outras receitas', 'other'],
     ['Saídas', 'costs', 'head neg'],
     ['Anúncios (Meta)', 'ads'], ['Despesas fixas', 'fixed'], ['Despesas variáveis', 'variable'],
     ['Resultado', 'profit', 'total'], ['Margem', 'margin', 'pct'], ['Acumulado', 'acc', 'acc']
@@ -83,12 +83,12 @@ export async function renderCashflow(host) {
     </section>
 
     <section class="panel cf-card">
-      <div class="cf-head"><div><h3>Demonstrativo mensal</h3><p class="sub">Receita dos contratos no mês (mensalidade proporcional aos dias ativos), pagamentos únicos e lançamentos, menos anúncios e despesas</p></div></div>
+      <div class="cf-head"><div><h3>Demonstrativo mensal</h3><p class="sub">O que entrou no mês: mensalidades de marketing na data de cada mês, marketplace e pagamentos únicos inteiros na data da venda, e outras receitas. Menos anúncios e despesas</p></div></div>
       <div class="table-wrap cf-wrap"><table class="int-table cf-table">
         <thead><tr><th></th>${months.map((m) => `<th class="num ${m.forecast ? 'cf-fc' : ''} ${m.current ? 'cf-cur' : ''}">${esc(m.label)}${m.forecast ? '<small>previsão</small>' : m.current ? '<small>em andamento</small>' : ''}</th>`).join('')}</tr></thead>
         <tbody>${ROWS.map(([n, k, cls = '']) => `<tr class="cf-${cls.split(' ')[0] || 'row'}"><th scope="row">${n}</th>${months.map((m) => `<td class="num ${m.forecast ? 'cf-fc' : ''} ${m.current ? 'cf-cur' : ''}">${cell(m, k, cls)}</td>`).join('')}</tr>`).join('')}</tbody>
       </table></div>
-      <p class="adt-note">A previsão usa os contratos ativos (mensais renovam até o cancelamento), as despesas fixas cadastradas e a média dos últimos 3 meses de anúncios e despesas variáveis.</p>
+      <p class="adt-note">A previsão usa as mensalidades dos contratos ativos de marketing (mensais renovam até o cancelamento), as despesas fixas cadastradas e a média dos últimos 3 meses de anúncios e despesas variáveis.</p>
     </section>`;
 
   host.querySelectorAll('[data-cfm]').forEach((b) => b.addEventListener('click', () => { CF.months = Number(b.dataset.cfm); renderCashflow(host); }));

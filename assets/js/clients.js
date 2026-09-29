@@ -1,8 +1,9 @@
 // Financeiro > Clientes: contratos ativos, cancelamentos (churn) e origem de cada venda (campanha › conjunto › anúncio).
 import { DB } from '@shared/db.js';
-import { S, esc, ICON, brl, num, toast, fail, modal, menu, dateRange } from './util.js?v=2609291913';
-import { contracts, activeAt } from './dashboard.js?v=2609291913';
-import { contractFields, bindContract, contractTags, SERVICES, planFactor } from './contract.js?v=2609291913';
+import { S, esc, ICON, brl, num, toast, fail, modal, menu, dateRange } from './util.js?v=2609291922';
+import { contracts, activeAt } from './dashboard.js?v=2609291922';
+import { entryModal } from './entry.js?v=2609291922';
+import { contractTags, SERVICES } from './contract.js?v=2609291922';
 
 const C = { status: 'ativos', q: '', svc: '' };
 const REASONS = ['Preço', 'Resultado abaixo do esperado', 'Atendimento', 'Fechou ou vendeu a loja', 'Cortou custos', 'Foi para outra agência', 'Outro'];
@@ -60,14 +61,14 @@ export async function renderClients(host, F, reload) {
         <div class="seg cl-seg">${[['periodo', 'Fechados no período'], ['ativos', 'Ativos'], ['cancelados', 'Cancelados'], ['encerrados', 'Encerrados'], ['sem_origem', 'Sem origem'], ['todos', 'Todos']].map(([k, n]) => `<button class="b b-sm ${C.status === k ? 'on' : ''}" data-cs="${k}">${n}<span class="cl-n">${num(count(k))}</span></button>`).join('')}</div>
         <select class="inp cl-svc" data-csvc aria-label="Serviço"><option value="">Todos os serviços</option>${SERVICES.map(([k, n]) => `<option value="${k}" ${C.svc === k ? 'selected' : ''}>${n}</option>`).join('')}</select>
         <label class="adt-search">${ICON.search}<input type="search" data-cq placeholder="Buscar cliente ou campanha" value="${esc(C.q)}"></label>
-        <button class="b b-primary" data-new-client>+ Novo cliente</button>
+        <button class="b b-primary" data-new-client>+ Nova venda</button>
       </div>
       ${rows.length ? `<div class="table-wrap"><table class="int-table cl-table"><thead><tr><th>Cliente</th><th>Status</th><th>Contrato</th><th class="num">Valor</th><th>Fechado em</th><th>Término</th><th>Origem da venda</th><th></th></tr></thead><tbody>
         ${rows.map((c) => { const st = statusOf(c); return `<tr data-c="${c.id}">
-          <td><b class="ellip-1" title="${esc(c.name)}">${esc(c.name)}</b><small class="muted">${c.kind === 'lead' ? 'Venda pelo pipeline' : 'Venda lançada'}${c.oneTime || c.plan === 'mensal' ? '' : ` · ${c.months} ${c.months === 1 ? 'mês' : 'meses'}`}</small></td>
+          <td><b class="ellip-1" title="${esc(c.name)}">${esc(c.name)}</b><small class="muted">${c.pipeline ? 'Central de leads' : 'Lançada no Financeiro'}${c.oneTime || c.plan === 'mensal' ? '' : ` · ${c.months} ${c.months === 1 ? 'mês' : 'meses'}`}</small></td>
           <td>${PILL[st]}${st === 'cancelado' ? `<small class="muted cl-why">${fmt(c.canceled)}${c.reason ? ' · ' + esc(c.reason) : ''}</small>` : ''}</td>
           <td><div class="ctr-tags">${contractTags(c.service, c.plan) || '<span class="muted">—</span>'}</div></td>
-          <td class="num">${brl(['semestral', 'anual'].includes(c.plan) && c.value ? c.value : c.monthly * planFactor(c.plan))}${c.oneTime ? '' : `<small class="muted">${({ semestral: '/semestre', anual: '/ano' })[c.plan] || '/mês'}</small>`}</td>
+          <td class="num">${brl(['semestral', 'anual'].includes(c.plan) || c.oneTime ? c.value : c.monthly)}${c.oneTime ? '' : `<small class="muted">${({ semestral: '/semestre', anual: '/ano' })[c.plan] || '/mês'}</small>`}</td>
           <td class="nowrap">${fmt(c.start)}${c.kind === 'entry' && c.entry.created_at && iso(new Date(c.entry.created_at)) !== iso(c.start) ? `<small class="muted">lançado em ${fmt(new Date(c.entry.created_at))}</small>` : ''}</td>
           <td class="nowrap">${c.oneTime ? '<span class="muted">—</span>' : c.plan === 'mensal' && st !== 'cancelado' ? '<span class="muted">até cancelar</span>' : fmt(st === 'cancelado' ? c.canceled : c.end)}</td>
           <td>${(c.kind === 'entry' ? c.entry.source === 'organico' : c.lead?.source === 'organico') ? '<span class="pill">Indicação / orgânico</span>' : originTxt(c.origin) ? `<span class="cl-origin" title="${esc(originTxt(c.origin))}">${esc(originTxt(c.origin))}</span>${c.lead ? '' : '<small class="muted">sem lead: não vai pra Meta</small>'}` : '<button class="b b-sm" data-origin>Definir origem</button>'}</td>
@@ -79,17 +80,21 @@ export async function renderClients(host, F, reload) {
   host.querySelectorAll('[data-cs]').forEach((btn) => btn.addEventListener('click', () => { C.status = btn.dataset.cs; renderClients(host, F, reload); }));
   let t; host.querySelector('[data-cq]').addEventListener('input', (e) => { clearTimeout(t); t = setTimeout(() => { C.q = e.target.value; renderClients(host, F, reload).then(() => { const i = host.querySelector('[data-cq]'); i.focus(); i.setSelectionRange(i.value.length, i.value.length); }); }, 200); });
   const done = () => renderClients(host, F, reload);
-  host.querySelector('[data-new-client]').addEventListener('click', () => clientModal(null, months, done));
+  const refresh = () => { window.dispatchEvent(new Event('tracto:reload-leads')); done(); };
+  const openLead = (id) => { history.pushState(null, '', '/leads'); window.dispatchEvent(new Event('tracto:nav')); setTimeout(() => window.dispatchEvent(new CustomEvent('tracto:open-lead', { detail: id })), 150); };
+  // um modal só pra venda (o mesmo de Lançamentos); venda sem lançamento ainda é editada na ficha do lead
+  const editSale = (c) => (c.kind === 'entry' ? entryModal(refresh, c.entry) : openLead(c.lead.id));
+  host.querySelector('[data-new-client]').addEventListener('click', () => entryModal(refresh, null, { kind: 'venda' }));
   host.querySelectorAll('tr[data-c]').forEach((tr) => {
     const c = list.find((x) => x.id === tr.dataset.c); if (!c) return;
     tr.querySelector('[data-origin]')?.addEventListener('click', () => originModal(c, ins, done));
     tr.querySelector('[data-more]').addEventListener('click', (e) => {
       const st = statusOf(c);
       menu(e.currentTarget, [
-        { label: 'Editar cliente', action: () => clientModal(c, months, done) },
+        { label: 'Editar venda', action: () => editSale(c) },
         ...(c.oneTime ? [] : [st === 'cancelado' ? { label: 'Desfazer cancelamento', action: () => saveCancel(c, null, null, done) } : { label: 'Registrar cancelamento', action: () => cancelModal(c, done) }]),
         { label: originTxt(c.origin) ? 'Alterar origem da venda' : 'Definir origem da venda', action: () => originModal(c, ins, done) },
-        ...(c.lead ? [{ label: 'Abrir lead', action: () => { history.pushState(null, '', '/leads'); window.dispatchEvent(new Event('tracto:nav')); setTimeout(() => window.dispatchEvent(new CustomEvent('tracto:open-lead', { detail: c.lead.id })), 150); } }] : [])
+        ...(c.lead ? [{ label: 'Abrir na Central de leads', action: () => openLead(c.lead.id) }] : [])
       ]);
     });
   });
@@ -120,59 +125,6 @@ function cancelModal(c, done) {
       if (new Date(d + 'T12:00') < c.start) return toast('A data é antes do início do contrato', true);
       const o = m.querySelector('[data-o]').value.trim();
       close(); saveCancel(c, d, m.querySelector('[data-r]').value + (o ? ' · ' + o : ''), done);
-    });
-  });
-}
-
-// novo cliente / editar cliente (nome, mensalidade, meses e data em que o contrato foi fechado)
-function clientModal(c, months, done) {
-  const isLead = c?.kind === 'lead';
-  const e = c?.entry;
-  const leadOpts = S.leads.filter((l) => !l.won_at).sort((x, y) => x.nome.localeCompare(y.nome));
-  modal(`<h3>${c ? 'Editar cliente' : 'Novo cliente'}</h3>
-    <p class="help" style="margin-top:-4px">${c ? 'As mudanças valem pro MRR, churn e ticket médio.' : 'Use pra clientes que fecharam fora do pipeline ou antes do CRM.'}</p>
-    <div class="row"><label class="lbl">Nome do cliente</label><input class="inp" data-n maxlength="120" value="${esc(c?.name || '')}" placeholder="Ex: Ferragista Silva"></div>
-    <div class="row"><label class="lbl">Contrato fechado em</label><input class="inp" type="date" data-d value="${c ? iso(c.start) : ''}" max="${iso(new Date())}" required></div>
-    ${contractFields({ service: c?.service, plan: c?.plan || (c ? (c.months === 6 ? 'semestral' : c.months === 12 ? 'anual' : 'mensal') : 'mensal'), months: c && !c.oneTime ? c.months : null, monthly: c?.monthly, total: c ? (c.kind === 'entry' ? c.entry.amount : Number(c.lead.contract_value) || c.monthly * c.months) : null }, { defaultMonths: months })}
-    ${!c ? `<div class="row"><label class="lbl">Contato do cliente (opcional)</label><input class="inp" list="clNewLeads" data-lead placeholder="Busque pelo nome ou WhatsApp">
-      <datalist id="clNewLeads">${leadOpts.slice(0, 800).map((l) => `<option value="${esc(`${l.nome} · ${l.whatsapp || l.email || ''}`)}"></option>`).join('')}</datalist>
-      <p class="help">Ligando ao lead, a venda vai pra Meta com os dados dele e a campanha de origem.</p></div>` : ''}
-    <div class="modal-foot"><button class="b" data-close>Cancelar</button><button class="b b-primary" data-ok>${c ? 'Salvar' : 'Adicionar cliente'}</button></div>`, (m, close) => {
-    const $m = (x) => m.querySelector(x);
-    const ctr = bindContract(m);
-    if (!c) {
-      $m('[data-lead]').addEventListener('change', (ev) => {
-        const l = S.leads.find((x) => `${x.nome} · ${x.whatsapp || x.email || ''}` === ev.target.value);
-        if (l && !$m('[data-n]').value.trim()) $m('[data-n]').value = l.nome;
-      });
-    }
-    $m('[data-ok]').addEventListener('click', async (ev) => {
-      const btn = ev.currentTarget;
-      const name = $m('[data-n]').value.trim(); const d = $m('[data-d]').value;
-      if (name.length < 2) return toast('Informe o nome do cliente', true);
-      if (!d) return toast('Informe quando o contrato foi fechado', true);
-      const v = ctr.read(); if (v.error) return toast(v.error, true);
-      let leadId = null;
-      if (!c) {
-        const txt = $m('[data-lead]').value.trim();
-        const l = txt ? S.leads.find((x) => `${x.nome} · ${x.whatsapp || x.email || ''}` === txt) : null;
-        if (txt && !l) return toast('Escolha um lead da lista ou deixe em branco', true);
-        leadId = l?.id || null;
-      }
-      btn.disabled = true;
-      try {
-        if (isLead) {
-          const lp = { nome: name, valor: v.monthly_amount, contract_value: ['semestral', 'anual', 'unico'].includes(v.plan) ? v.amount : null, contract_months: v.months === months ? null : v.months, service: v.service, plan: v.plan, won_at: new Date(d + 'T12:00').toISOString(), ...(v.plan === 'unico' ? { canceled_at: null } : {}) };
-          await DB.updateLeads([c.lead.id], lp);
-          Object.assign(c.lead, lp);
-        } else {
-          await DB.saveFinance({ ...(e ? { id: e.id } : { kind: 'receita', category: 'Venda (contrato)', lead_id: leadId, created_by: S.me?.id?.startsWith('demo') ? null : S.me?.id }),
-            description: name, date: d, ...v, ...(v.plan === 'unico' ? { canceled_at: null } : {}) });
-        }
-        close(); toast(c ? 'Cliente atualizado' : 'Cliente adicionado');
-        window.dispatchEvent(new Event('tracto:reload-leads'));
-        done();
-      } catch (err) { btn.disabled = false; fail(err); }
     });
   });
 }

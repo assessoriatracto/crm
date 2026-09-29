@@ -1,41 +1,60 @@
 // Dashboard: visão executiva e enxuta da saúde do negócio.
 // O detalhe (campanhas, lançamentos, gráficos por dia) fica no Financeiro e na Central de leads.
 import { DB } from '@shared/db.js';
-import { PERIOD, dateRange, datePicker, dateBtn, S, $, $$, esc, ICON, brl, num, isDue, isInactive, fail, fmtDays } from './util.js?v=2609291913';
+import { PERIOD, dateRange, datePicker, dateBtn, S, $, $$, esc, ICON, brl, num, isDue, isInactive, fail, fmtDays } from './util.js?v=2609291922';
 
 const D = PERIOD;
 const DAY = 86400000;
 const iso = (d) => new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 10);
 const SALE_CATS = ['Venda (contrato)', 'Contrato'];
 
-// ---------- contratos (clientes): vendas do CRM + vendas lançadas no Financeiro ----------
-// contratos (clientes): vendas do CRM + vendas lançadas no Financeiro. Usado também na aba Clientes do Financeiro.
+// ---------- contratos (clientes) ----------
+// Uma venda = um lançamento de venda no Financeiro. As vendas feitas na Central de leads viram lançamento
+// sozinhas (o banco sincroniza os dois lados). Lead ganho ainda sem lançamento entra como reserva, sem duplicar.
+export const isSale = (e) => e.kind === 'receita' && SALE_CATS.includes(e.category);
 export function contracts(entries, months) {
   const out = [];
   const org = (x) => ({ utm_campaign: x?.utm_campaign || null, utm_term: x?.utm_term || null, utm_content: x?.utm_content || null, utm_id: x?.utm_id || null });
-  S.leads.filter((l) => l.won_at && Number(l.valor) > 0).forEach((l) => out.push({
-    id: l.id, kind: 'lead', lead: l, name: l.nome, start: new Date(l.won_at), monthly: Number(l.valor), months: l.plan === 'unico' ? 1 : Number(l.contract_months || months), plan: l.plan || null, service: l.service || null, value: Number(l.contract_value) || null,
-    canceled: l.canceled_at ? new Date(l.canceled_at + 'T12:00') : null, reason: l.cancel_reason || '', origin: org(l), sent: true
-  }));
-  entries.filter((e) => e.kind === 'receita' && SALE_CATS.includes(e.category)).forEach((e) => {
+  const withEntry = new Set();
+  entries.filter(isSale).forEach((e) => {
     const l = e.lead_id ? S.leads.find((x) => x.id === e.lead_id) : null;
+    if (l) withEntry.add(l.id);
     const o = org(e); const lo = org(l);
     out.push({
-      id: e.id, kind: 'entry', entry: e, lead: l, name: e.description || l?.nome || 'Venda lançada', start: new Date(e.date + 'T12:00'),
-      monthly: e.plan === 'unico' ? Number(e.amount) : Number(e.monthly_amount || (e.months ? e.amount / e.months : e.amount)), months: e.plan === 'unico' ? 1 : Number(e.months || months), plan: e.plan || null, service: e.service || null, value: Number(e.amount) || null,
+      id: e.id, kind: 'entry', entry: e, lead: l, pipeline: !!(e.from_pipeline || l), name: e.description || l?.nome || 'Venda', start: new Date(e.date + 'T12:00'),
+      monthly: e.plan === 'unico' ? Number(e.amount) : Number(e.monthly_amount || (e.months ? e.amount / e.months : e.amount)), months: e.plan === 'unico' ? 1 : Number(e.months || months),
+      plan: e.plan || null, service: e.service || null, value: Number(e.amount) || null,
       canceled: e.canceled_at ? new Date(e.canceled_at + 'T12:00') : null, reason: e.cancel_reason || '',
       origin: o.utm_campaign || o.utm_id ? o : lo, sent: !!e.meta_sent_at
     });
   });
-  // mensal renova até cancelar; pagamento único não entra na receita recorrente
+  S.leads.filter((l) => l.won_at && Number(l.valor) > 0 && !withEntry.has(l.id)).forEach((l) => out.push({
+    id: l.id, kind: 'lead', lead: l, pipeline: true, name: l.nome, start: new Date(l.won_at), monthly: Number(l.valor), months: l.plan === 'unico' ? 1 : Number(l.contract_months || months),
+    plan: l.plan || null, service: l.service || null, value: Number(l.contract_value) || null,
+    canceled: l.canceled_at ? new Date(l.canceled_at + 'T12:00') : null, reason: l.cancel_reason || '', origin: org(l), sent: true
+  }));
   out.forEach((c) => {
     c.oneTime = c.plan === 'unico';
+    if (!c.value) c.value = c.oneTime ? c.monthly : c.monthly * c.months;
+    // marketplace e pagamento único: recebemos o valor inteiro na data da venda; marketing: mensalidade todo mês
+    c.upfront = c.oneTime || c.service === 'marketplace';
+    // mensal renova até cancelar
     c.end = c.oneTime ? new Date(c.start) : c.plan === 'mensal' ? new Date(c.start.getTime() + 1200 * 30.44 * DAY) : new Date(c.start.getTime() + c.months * 30.44 * DAY);
   });
   return out;
 }
-// a venda veio de anúncio? (tem campanha, ou o contato chegou por tráfego pago)
-// venda de anúncio: tudo que não foi marcado como indicação/orgânico (a captação da Tracto é por anúncio)
+// quanto entra de cada contrato em [a, b]: valor inteiro na venda (marketplace/único) ou mensalidade na data de cada mês
+export function received(c, a, b) {
+  if (c.upfront) return c.start >= a && c.start <= b ? c.value : 0;
+  let sum = 0;
+  for (let k = 0; k < 1200; k++) {
+    const d = new Date(c.start.getFullYear(), c.start.getMonth() + k, Math.min(c.start.getDate(), new Date(c.start.getFullYear(), c.start.getMonth() + k + 1, 0).getDate()), 12);
+    if (d > b || d >= c.end || (c.canceled && d >= c.canceled)) break;
+    if (d >= a) sum += c.monthly;
+  }
+  return sum;
+}
+// a venda veio de anúncio? (tudo que não foi marcado como indicação/orgânico; a captação da Tracto é por anúncio)
 export const isOrganic = (c) => (c.kind === 'entry' ? c.entry?.source === 'organico' : c.lead?.source === 'organico' || c.lead?.source === 'manual');
 export const hasOrigin = (c) => !!(c.origin?.utm_campaign || c.origin?.utm_id);
 export const fromAds = (c) => !isOrganic(c);
@@ -54,7 +73,7 @@ function metrics(ins, leads, a, b, contractsList, useMeta) {
   const cohortWon = cohort.filter((l) => l.won_at || clientLeadIds.has(l.id)).length;
   const nLeads = useMeta ? metaLeads : crmLeads; // mesma fonte nos dois períodos (comparação justa)
   const news = contractsList.filter((c) => inR(c.start));
-  const cValue = (c) => c.value || c.monthly * c.months;
+  const cValue = (c) => c.value;
   const newValue = news.reduce((s, c) => s + cValue(c), 0);
   // CAC e ROAS só com vendas que vieram de anúncio (venda por indicação/fora do tráfego não entra)
   const adsNews = news.filter(fromAds);
@@ -84,17 +103,13 @@ function metrics(ins, leads, a, b, contractsList, useMeta) {
   };
 }
 
-// resultado do período: receita pelo que cada contrato rende nos dias do período (mensalidade proporcional),
-// pagamentos únicos e outras receitas, menos anúncios e despesas lançadas (fixas e variáveis)
+// resultado do período: o que entrou (mensalidades de marketing no dia de cada mês, marketplace e pagamentos únicos
+// inteiros na venda, outras receitas) menos anúncios e despesas lançadas (fixas e variáveis)
 export function result(ins, entries, list, a, b) {
   const inR = (d) => d >= a && d <= b;
   const dIso = (x) => new Date(x + 'T12:00');
-  let recurring = 0;
-  list.filter((c) => !c.oneTime).forEach((c) => {
-    const s0 = Math.max(c.start, a); const s1 = Math.min(c.end, c.canceled || Infinity, b);
-    if (s1 > s0) recurring += c.monthly * ((s1 - s0) / (30.44 * DAY));
-  });
-  const once = list.filter((c) => c.oneTime && inR(c.start)).reduce((s, c) => s + c.monthly, 0);
+  const recurring = list.filter((c) => !c.upfront).reduce((s, c) => s + received(c, a, b), 0);
+  const once = list.filter((c) => c.upfront).reduce((s, c) => s + received(c, a, b), 0);
   const other = entries.filter((e) => e.kind === 'receita' && !SALE_CATS.includes(e.category) && inR(dIso(e.date))).reduce((s, e) => s + Number(e.amount), 0);
   const exp = entries.filter((e) => e.kind === 'despesa' && inR(dIso(e.date)));
   const fixed = exp.filter((e) => e.expense_type === 'fixa' || e.recurring_id).reduce((s, e) => s + Number(e.amount), 0);
@@ -202,7 +217,7 @@ export async function renderDashboard(el) {
       ${kpi('Ticket médio', money(cur.ticket), ltv ? `LTV estimado ${brl(ltv)}` : 'por cliente, ao mês', delta(cur.ticket, prev.ticket))}
       ${kpi('Churn', pctTxt(cur.churn), cur.churnN ? `${num(cur.churnN)} cancelamento${cur.churnN === 1 ? '' : 's'} no período` : 'nenhum cancelamento no período', delta(cur.churn, prev.churn, 'down', true))}
     </div>
-    <h2 class="dash-h">Resultado <span>no período · receita dos contratos menos anúncios e despesas</span></h2>
+    <h2 class="dash-h">Resultado <span>no período · o que entrou menos anúncios e despesas</span></h2>
     <div class="kx-grid kx-4">
       ${kpi('Lucro líquido', brl(res.profit), `margem ${pctTxt(res.margin)} · receita ${brl(res.revenue)}`, delta(res.profit, resPrev.profit), res.profit < 0 ? 'neg' : '')}
       ${kpi('Custos do período', brl(res.costs), res.costs ? `anúncios ${brl(res.ads)} · fixas ${brl(res.fixed)} · variáveis ${brl(res.variable)}` : 'nenhum custo no período', delta(res.costs, resPrev.costs, 'down'))}
