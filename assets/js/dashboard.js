@@ -1,7 +1,7 @@
 // Dashboard: visão executiva e enxuta da saúde do negócio.
 // O detalhe (campanhas, lançamentos, gráficos por dia) fica no Financeiro e na Central de leads.
 import { DB } from '@shared/db.js';
-import { PERIOD, dateRange, datePicker, dateBtn, S, $, $$, esc, ICON, brl, num, isDue, isInactive, fail, fmtDays } from './util.js?v=2609291903';
+import { PERIOD, dateRange, datePicker, dateBtn, S, $, $$, esc, ICON, brl, num, isDue, isInactive, fail, fmtDays } from './util.js?v=2609291906';
 
 const D = PERIOD;
 const DAY = 86400000;
@@ -14,7 +14,7 @@ export function contracts(entries, months) {
   const out = [];
   const org = (x) => ({ utm_campaign: x?.utm_campaign || null, utm_term: x?.utm_term || null, utm_content: x?.utm_content || null, utm_id: x?.utm_id || null });
   S.leads.filter((l) => l.won_at && Number(l.valor) > 0).forEach((l) => out.push({
-    id: l.id, kind: 'lead', lead: l, name: l.nome, start: new Date(l.won_at), monthly: Number(l.valor), months: l.plan === 'unico' ? 1 : Number(l.contract_months || months), plan: l.plan || null, service: l.service || null,
+    id: l.id, kind: 'lead', lead: l, name: l.nome, start: new Date(l.won_at), monthly: Number(l.valor), months: l.plan === 'unico' ? 1 : Number(l.contract_months || months), plan: l.plan || null, service: l.service || null, value: Number(l.contract_value) || null,
     canceled: l.canceled_at ? new Date(l.canceled_at + 'T12:00') : null, reason: l.cancel_reason || '', origin: org(l), sent: true
   }));
   entries.filter((e) => e.kind === 'receita' && SALE_CATS.includes(e.category)).forEach((e) => {
@@ -22,7 +22,7 @@ export function contracts(entries, months) {
     const o = org(e); const lo = org(l);
     out.push({
       id: e.id, kind: 'entry', entry: e, lead: l, name: e.description || l?.nome || 'Venda lançada', start: new Date(e.date + 'T12:00'),
-      monthly: e.plan === 'unico' ? Number(e.amount) : Number(e.monthly_amount || (e.months ? e.amount / e.months : e.amount)), months: e.plan === 'unico' ? 1 : Number(e.months || months), plan: e.plan || null, service: e.service || null,
+      monthly: e.plan === 'unico' ? Number(e.amount) : Number(e.monthly_amount || (e.months ? e.amount / e.months : e.amount)), months: e.plan === 'unico' ? 1 : Number(e.months || months), plan: e.plan || null, service: e.service || null, value: Number(e.amount) || null,
       canceled: e.canceled_at ? new Date(e.canceled_at + 'T12:00') : null, reason: e.cancel_reason || '',
       origin: o.utm_campaign || o.utm_id ? o : lo, sent: !!e.meta_sent_at
     });
@@ -54,10 +54,11 @@ function metrics(ins, leads, a, b, contractsList, useMeta) {
   const cohortWon = cohort.filter((l) => l.won_at || clientLeadIds.has(l.id)).length;
   const nLeads = useMeta ? metaLeads : crmLeads; // mesma fonte nos dois períodos (comparação justa)
   const news = contractsList.filter((c) => inR(c.start));
-  const newValue = news.reduce((s, c) => s + c.monthly * c.months, 0);
+  const cValue = (c) => c.value || c.monthly * c.months;
+  const newValue = news.reduce((s, c) => s + cValue(c), 0);
   // CAC e ROAS só com vendas que vieram de anúncio (venda por indicação/fora do tráfego não entra)
   const adsNews = news.filter(fromAds);
-  const adsValue = adsNews.reduce((s, c) => s + c.monthly * c.months, 0);
+  const adsValue = adsNews.reduce((s, c) => s + cValue(c), 0);
   const activeStart = contractsList.filter((c) => activeAt(c, a));
   const canceled = contractsList.filter((c) => c.canceled && inR(c.canceled));
   const activeEnd = contractsList.filter((c) => activeAt(c, b));

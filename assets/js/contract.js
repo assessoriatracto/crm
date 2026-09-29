@@ -1,6 +1,6 @@
 // Campos de contrato usados em todo lugar que lança venda: serviço (marketing/marketplace),
 // tipo (mensal, semestral, anual, pagamento único), duração e valores.
-import { esc, brl } from './util.js?v=2609291903';
+import { esc, brl } from './util.js?v=2609291906';
 
 export const SERVICES = [['marketing', 'Marketing'], ['marketplace', 'Marketplace']];
 // meses padrão de cada tipo (mensal renova todo mês até cancelar; usa a previsão só pra estimar o valor do contrato)
@@ -26,14 +26,14 @@ export function contractFields(v = {}, { defaultMonths = 12 } = {}) {
   const plan = v.plan || 'mensal';
   const months = plan === 'mensal' ? v.months || defaultMonths : planMonths(plan, defaultMonths);
   // o campo mostra o valor do formato (semestre, ano, pagamento); por trás guardamos o equivalente mensal
-  const val = plan === 'unico' ? v.total || v.monthly : plan === 'mensal' ? v.monthly : (v.monthly ? v.monthly * planFactor(plan) : v.total);
+  const val = plan === 'unico' ? v.total || v.monthly : plan === 'mensal' ? v.monthly : (v.total || (v.monthly ? v.monthly * planFactor(plan) : null));
   return `<div class="ctr" data-ctr data-default-months="${defaultMonths}">
     <div class="grid2">
       <div class="row"><span class="lbl">Serviço</span><div class="seg ctr-seg" role="radiogroup" aria-label="Serviço">${SERVICES.map(([k, n]) => `<button type="button" class="b ${(v.service || 'marketing') === k ? 'on' : ''}" role="radio" aria-checked="${(v.service || 'marketing') === k}" data-svc="${k}">${n}</button>`).join('')}</div></div>
       <div class="row"><label class="lbl" for="ctrPlan">Tipo de contrato</label><select class="inp" id="ctrPlan" data-plan>${PLANS.map(([k, n]) => `<option value="${k}" ${plan === k ? 'selected' : ''}>${n}</option>`).join('')}</select></div>
     </div>
     <div class="grid2" data-vals>
-      <div class="row"><label class="lbl" for="ctrVal" data-val-l>${VALUE_LABEL[plan]}</label><input class="inp" id="ctrVal" data-val inputmode="decimal" placeholder="0,00" value="${fmtN(val)}"></div>
+      <div class="row"><label class="lbl" for="ctrVal" data-val-l>${VALUE_LABEL[plan]}</label><input class="inp" id="ctrVal" data-val inputmode="decimal" placeholder="R$ 0,00" value="${fmtN(val)}"></div>
       <div class="row" data-mo-row><label class="lbl" for="ctrMo">Previsão (meses)</label><input class="inp" id="ctrMo" data-mo inputmode="numeric" value="${months}"></div>
     </div>
     <p class="help ctr-help" data-ctr-help></p>
@@ -56,7 +56,7 @@ export function bindContract(root) {
       anual: 'Contrato de 12 meses, pago por ano.',
       unico: 'Entra no faturamento do dia da venda. Não conta na receita recorrente nem no churn.'
     }[p];
-    const calc = !(v > 0) ? '' : p === 'unico' ? '' : p === 'mensal' ? ` Contrato estimado: ${brl(v * (m || 0))}.` : ` Equivale a ${brl(v / planFactor(p))} por mês.`;
+    const calc = !(v > 0) ? '' : p === 'unico' ? '' : p === 'mensal' ? ` Contrato estimado: ${brl(v * (m || 0))}.` : ` Equivale a ${(v / planFactor(p)).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL', minimumFractionDigits: 2, maximumFractionDigits: 2 })} por mês.`;
     $('[data-ctr-help]').textContent = base + calc;
   };
   const layout = (fromChange) => {

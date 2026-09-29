@@ -1,10 +1,10 @@
 // Financeiro (estilo UTMify): gasto da Meta Ads × leads e vendas do CRM × receitas e despesas lançadas
 import { DB } from '@shared/db.js';
-import { renderClients } from './clients.js?v=2609291903';
-import { renderExpenses } from './expenses.js?v=2609291903';
-import { renderCashflow } from './cashflow.js?v=2609291903';
-import { contractFields, bindContract, contractTags } from './contract.js?v=2609291903';
-import { PERIOD, BRAND, popover, dateRange, datePicker, dateBtn, S, $, $$, esc, ICON, brl, num, pct, fullDate, ago, toast, fail, modal, confirmBox } from './util.js?v=2609291903';
+import { renderClients } from './clients.js?v=2609291906';
+import { renderExpenses } from './expenses.js?v=2609291906';
+import { renderCashflow } from './cashflow.js?v=2609291906';
+import { contractFields, bindContract, contractTags } from './contract.js?v=2609291906';
+import { PERIOD, BRAND, popover, dateRange, datePicker, dateBtn, S, $, $$, esc, ICON, brl, num, pct, fullDate, ago, toast, fail, modal, confirmBox } from './util.js?v=2609291906';
 
 const F = { period: '30', from: '', to: '', level: 'campaign', revenue: 'mensal', sort: 'spend', tab: 'geral' };
 const GRAPH = 'v21.0';
@@ -100,7 +100,7 @@ export async function renderFinance(el, swap = false) {
 
   // ---------- números ----------
   const sales = S.leads.filter((l) => l.won_at && inRange(l.won_at, r));
-  const saleValue = (l) => Number(l.valor || 0) * (F.revenue === 'contrato' && l.plan !== 'unico' ? Number(l.contract_months || months) : 1);
+  const saleValue = (l) => (F.revenue === 'contrato' ? Number(l.contract_value) || Number(l.valor || 0) * (l.plan === 'unico' ? 1 : Number(l.contract_months || months)) : Number(l.valor || 0));
   const manualSales = entries.filter(isSaleEntry);
   // todas as vendas do período (pipeline + lançadas), com serviço e origem
   const allSales = [

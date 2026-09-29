@@ -1,8 +1,8 @@
 // Financeiro > Clientes: contratos ativos, cancelamentos (churn) e origem de cada venda (campanha › conjunto › anúncio).
 import { DB } from '@shared/db.js';
-import { S, esc, ICON, brl, num, toast, fail, modal, menu, dateRange } from './util.js?v=2609291903';
-import { contracts, activeAt } from './dashboard.js?v=2609291903';
-import { contractFields, bindContract, contractTags, SERVICES, planFactor } from './contract.js?v=2609291903';
+import { S, esc, ICON, brl, num, toast, fail, modal, menu, dateRange } from './util.js?v=2609291906';
+import { contracts, activeAt } from './dashboard.js?v=2609291906';
+import { contractFields, bindContract, contractTags, SERVICES, planFactor } from './contract.js?v=2609291906';
 
 const C = { status: 'ativos', q: '', svc: '' };
 const REASONS = ['Preço', 'Resultado abaixo do esperado', 'Atendimento', 'Fechou ou vendeu a loja', 'Cortou custos', 'Foi para outra agência', 'Outro'];
@@ -67,7 +67,7 @@ export async function renderClients(host, F, reload) {
           <td><b class="ellip-1" title="${esc(c.name)}">${esc(c.name)}</b><small class="muted">${c.kind === 'lead' ? 'Venda pelo pipeline' : 'Venda lançada'}${c.oneTime || c.plan === 'mensal' ? '' : ` · ${c.months} ${c.months === 1 ? 'mês' : 'meses'}`}</small></td>
           <td>${PILL[st]}${st === 'cancelado' ? `<small class="muted cl-why">${fmt(c.canceled)}${c.reason ? ' · ' + esc(c.reason) : ''}</small>` : ''}</td>
           <td><div class="ctr-tags">${contractTags(c.service, c.plan) || '<span class="muted">—</span>'}</div></td>
-          <td class="num">${brl(c.monthly * planFactor(c.plan))}${c.oneTime ? '' : `<small class="muted">${({ semestral: '/semestre', anual: '/ano' })[c.plan] || '/mês'}</small>`}</td>
+          <td class="num">${brl(['semestral', 'anual'].includes(c.plan) && c.value ? c.value : c.monthly * planFactor(c.plan))}${c.oneTime ? '' : `<small class="muted">${({ semestral: '/semestre', anual: '/ano' })[c.plan] || '/mês'}</small>`}</td>
           <td class="nowrap">${fmt(c.start)}${c.kind === 'entry' && c.entry.created_at && iso(new Date(c.entry.created_at)) !== iso(c.start) ? `<small class="muted">lançado em ${fmt(new Date(c.entry.created_at))}</small>` : ''}</td>
           <td class="nowrap">${c.oneTime ? '<span class="muted">—</span>' : c.plan === 'mensal' && st !== 'cancelado' ? '<span class="muted">até cancelar</span>' : fmt(st === 'cancelado' ? c.canceled : c.end)}</td>
           <td>${(c.kind === 'entry' ? c.entry.source === 'organico' : c.lead?.source === 'organico') ? '<span class="pill">Indicação / orgânico</span>' : originTxt(c.origin) ? `<span class="cl-origin" title="${esc(originTxt(c.origin))}">${esc(originTxt(c.origin))}</span>${c.lead ? '' : '<small class="muted">sem lead: não vai pra Meta</small>'}` : '<button class="b b-sm" data-origin>Definir origem</button>'}</td>
@@ -133,7 +133,7 @@ function clientModal(c, months, done) {
     <p class="help" style="margin-top:-4px">${c ? 'As mudanças valem pro MRR, churn e ticket médio.' : 'Use pra clientes que fecharam fora do pipeline ou antes do CRM.'}</p>
     <div class="row"><label class="lbl">Nome do cliente</label><input class="inp" data-n maxlength="120" value="${esc(c?.name || '')}" placeholder="Ex: Ferragista Silva"></div>
     <div class="row"><label class="lbl">Contrato fechado em</label><input class="inp" type="date" data-d value="${c ? iso(c.start) : ''}" max="${iso(new Date())}" required></div>
-    ${contractFields({ service: c?.service, plan: c?.plan || (c ? (c.months === 6 ? 'semestral' : c.months === 12 ? 'anual' : 'mensal') : 'mensal'), months: c && !c.oneTime ? c.months : null, monthly: c?.monthly, total: c ? (c.kind === 'entry' ? c.entry.amount : c.monthly * c.months) : null }, { defaultMonths: months })}
+    ${contractFields({ service: c?.service, plan: c?.plan || (c ? (c.months === 6 ? 'semestral' : c.months === 12 ? 'anual' : 'mensal') : 'mensal'), months: c && !c.oneTime ? c.months : null, monthly: c?.monthly, total: c ? (c.kind === 'entry' ? c.entry.amount : Number(c.lead.contract_value) || c.monthly * c.months) : null }, { defaultMonths: months })}
     ${!c ? `<div class="row"><label class="lbl">Contato do cliente (opcional)</label><input class="inp" list="clNewLeads" data-lead placeholder="Busque pelo nome ou WhatsApp">
       <datalist id="clNewLeads">${leadOpts.slice(0, 800).map((l) => `<option value="${esc(`${l.nome} · ${l.whatsapp || l.email || ''}`)}"></option>`).join('')}</datalist>
       <p class="help">Ligando ao lead, a venda vai pra Meta com os dados dele e a campanha de origem.</p></div>` : ''}
@@ -162,7 +162,7 @@ function clientModal(c, months, done) {
       btn.disabled = true;
       try {
         if (isLead) {
-          const lp = { nome: name, valor: v.monthly_amount, contract_months: v.months === months ? null : v.months, service: v.service, plan: v.plan, won_at: new Date(d + 'T12:00').toISOString(), ...(v.plan === 'unico' ? { canceled_at: null } : {}) };
+          const lp = { nome: name, valor: v.monthly_amount, contract_value: ['semestral', 'anual', 'unico'].includes(v.plan) ? v.amount : null, contract_months: v.months === months ? null : v.months, service: v.service, plan: v.plan, won_at: new Date(d + 'T12:00').toISOString(), ...(v.plan === 'unico' ? { canceled_at: null } : {}) };
           await DB.updateLeads([c.lead.id], lp);
           Object.assign(c.lead, lp);
         } else {

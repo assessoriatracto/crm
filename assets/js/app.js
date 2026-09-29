@@ -3,17 +3,17 @@ import {
   go, routeName, S, $, $$, esc, ICON, FAT, COLORS, initials, isHot, stageOf, profileOf, labelOf, isInactive, isDue, fatShort, brl, pct, num,
   fmtPhone, fullDate, longDate, addedAt, ago, sourceLabel, formName, waLink, toast, fail, popover, closePop, menu, multiSelect,
   modal, confirmBox, downloadCSV, dateRange, datePicker, dateBtn, daysToSale, fmtDays
-} from './util.js?v=2609291903';
-import { importModal } from './import.js?v=2609291903';
-import { renderDashboard } from './dashboard.js?v=2609291903';
-import { renderSettings } from './admin.js?v=2609291903';
-import { renderIntegrations, renderPixel, leadMetaEvents, statusPill } from './integrations.js?v=2609291903';
-import { renderRecovery, loadPartials } from './recovery.js?v=2609291903';
-import { showSignIn, showSignUp, showForgot, showReset, showMfa, showPending, watchIdle, AUTH_ROUTES } from './auth.js?v=2609291903';
-import { SERVICES, PLANS, planMonths, planFactor, VALUE_LABEL } from './contract.js?v=2609291903';
-import { openProfile, renderProfile } from './profile.js?v=2609291903';
-import { renderBuilder } from './builder.js?v=2609291903';
-import { renderFinance } from './finance.js?v=2609291903';
+} from './util.js?v=2609291906';
+import { importModal } from './import.js?v=2609291906';
+import { renderDashboard } from './dashboard.js?v=2609291906';
+import { renderSettings } from './admin.js?v=2609291906';
+import { renderIntegrations, renderPixel, leadMetaEvents, statusPill } from './integrations.js?v=2609291906';
+import { renderRecovery, loadPartials } from './recovery.js?v=2609291906';
+import { showSignIn, showSignUp, showForgot, showReset, showMfa, showPending, watchIdle, AUTH_ROUTES } from './auth.js?v=2609291906';
+import { SERVICES, PLANS, planMonths, planFactor, VALUE_LABEL } from './contract.js?v=2609291906';
+import { openProfile, renderProfile } from './profile.js?v=2609291906';
+import { renderBuilder } from './builder.js?v=2609291906';
+import { renderFinance } from './finance.js?v=2609291906';
 
 // ============================================================
 // preferências locais (por navegador)
@@ -419,6 +419,16 @@ function toggleMinCol(id) {
   try { localStorage.setItem(MIN_KEY, JSON.stringify([...set])); } catch (e) {}
 }
 
+// valor mostrado no formato do contrato (usa o valor exato digitado quando existe)
+const localDay = (d) => { const x = new Date(d); return new Date(x.getTime() - x.getTimezoneOffset() * 60000).toISOString().slice(0, 10); };
+const brl2 = (v) => Number(v).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL', minimumFractionDigits: 2, maximumFractionDigits: 2 });
+function contractShown(l) {
+  if (l.valor == null || l.valor === '') return '';
+  const fac = planFactor(l.plan);
+  const v = l.contract_value && (fac > 1 || l.plan === 'unico') ? Number(l.contract_value) : Math.round(Number(l.valor) * fac * 100) / 100;
+  return v.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+
 // ---------- tabela ----------
 const COLS = [
   ['nome', 'Nome'], ['whatsapp', 'Contato'], ['stage', 'Estágio'], ['assigned', 'Atribuído a'], ['labels', 'Rótulos'],
@@ -764,10 +774,11 @@ function renderDrawer() {
           <div><label class="lbl">Serviço</label><select class="inp" data-field="service"><option value="">Não definido</option>${SERVICES.map(([k, n]) => `<option value="${k}" ${l.service === k ? 'selected' : ''}>${n}</option>`).join('')}</select></div>
           <div><label class="lbl">Tipo de contrato</label><select class="inp" data-field="plan"><option value="">Não definido</option>${PLANS.map(([k, n]) => `<option value="${k}" ${l.plan === k ? 'selected' : ''}>${n}</option>`).join('')}</select></div>
         </div>
-        <div class="${!l.plan || l.plan === 'mensal' ? 'grid2' : ''}" style="margin-top:10px"><div><label class="lbl">${VALUE_LABEL[l.plan || 'mensal']}</label><input class="inp" data-field="valor" data-factor="${planFactor(l.plan)}" inputmode="decimal" value="${l.valor != null && l.valor !== '' ? (Math.round(Number(l.valor) * planFactor(l.plan) * 100) / 100).toLocaleString('pt-BR', { maximumFractionDigits: 2 }) : ''}" placeholder="0,00"></div>
+        <div class="${!l.plan || l.plan === 'mensal' ? 'grid2' : ''}" style="margin-top:10px"><div><label class="lbl">${VALUE_LABEL[l.plan || 'mensal']}</label><input class="inp" data-field="valor" data-factor="${planFactor(l.plan)}" inputmode="decimal" value="${contractShown(l)}" placeholder="R$ 0,00"></div>
           ${!l.plan || l.plan === 'mensal' ? `<div><label class="lbl">Previsão (meses)</label><input class="inp" data-field="contract_months" inputmode="numeric" value="${l.contract_months ?? ''}" placeholder="12"></div>` : ''}</div>
-        ${l.valor && ['semestral', 'anual'].includes(l.plan) ? `<p class="help" style="margin:6px 0 0">Equivale a ${brl(Number(l.valor))} por mês, por ${planMonths(l.plan)} meses.</p>` : ''}
-        ${l.won_at && l.plan !== 'unico' ? `<div style="margin-top:10px"><label class="lbl">Contrato cancelado em</label><input class="inp" type="date" data-field="canceled_at" value="${l.canceled_at || ''}"></div>` : ''}
+        ${l.valor && ['semestral', 'anual'].includes(l.plan) ? `<p class="help" style="margin:6px 0 0">Equivale a ${brl2(Number(l.contract_value || l.valor * planFactor(l.plan)) / planFactor(l.plan))} por mês, por ${planMonths(l.plan)} meses.</p>` : ''}
+        ${l.won_at ? `<div class="grid2" style="margin-top:10px"><div><label class="lbl">Venda realizada em</label><input class="inp" type="date" data-field="won_at" value="${localDay(l.won_at)}" max="${localDay(new Date().toISOString())}"></div>
+          ${l.plan !== 'unico' ? `<div><label class="lbl">Contrato cancelado em</label><input class="inp" type="date" data-field="canceled_at" value="${l.canceled_at || ''}"></div>` : ''}</div>` : ''}
         <p class="ttc-line">${l.won_at ? (daysToSale(l) < 1 ? 'Virou venda <b>no mesmo dia</b> em que chegou como lead' : `Virou venda <b>${fmtDays(daysToSale(l))}</b> depois de chegar como lead`) : ((Date.now() - new Date(l.created_at)) / 86400000 < 1 ? 'Chegou como lead <b>hoje</b>' : `Lead há <b>${fmtDays((Date.now() - new Date(l.created_at)) / 86400000)}</b>`)}</p>
       </div>
       <div class="sec">
@@ -851,12 +862,31 @@ drawer.addEventListener('change', async (e) => {
   if (!f) return;
   let v = e.target.value.trim();
   // o campo mostra o valor do formato (semestre, ano); guardamos o equivalente mensal
-  if (f === 'valor') { v = v ? Number(v.replace(/[^\d,.-]/g, '').replace(/\./g, '').replace(',', '.')) : null; if (v !== null && Number.isNaN(v)) return toast('Valor inválido', true); if (v !== null) v = Math.round((v / (Number(e.target.dataset.factor) || 1)) * 100) / 100; }
+  const cur = S.leads.find((x) => x.id === S.openId);
+  let extraV = {};
+  if (f === 'valor') {
+    v = v ? Number(v.replace(/[^\d,.-]/g, '').replace(/\./g, '').replace(',', '.')) : null;
+    if (v !== null && Number.isNaN(v)) return toast('Valor inválido', true);
+    const fac = Number(e.target.dataset.factor) || 1;
+    // guarda o valor exato digitado e o equivalente mensal (5.000 no semestre = 833,33/mês, sem perder centavos)
+    extraV = { contract_value: v !== null && (fac > 1 || cur?.plan === 'unico') ? v : null };
+    if (v !== null) v = Math.round((v / fac) * 100) / 100;
+  } else if (f === 'won_at') {
+    if (!v) return toast('Informe a data da venda', true);
+    v = new Date(v + 'T12:00').toISOString();
+  }
   else if (f === 'contract_months') { v = v ? Math.round(Number(v)) : null; if (v !== null && !(v >= 1 && v <= 120)) return toast('Meses entre 1 e 120', true); }
   else v = v || null;
   // tipo de contrato ajusta os meses sozinho (semestral 6, anual 12, pagamento único 1)
-  const extra = f === 'plan' ? { contract_months: v ? planMonths(v, null) : null, ...(v === 'unico' ? { canceled_at: null } : {}) } : {};
-  patch([S.openId], { [f]: v, ...extra }, f === 'valor' ? 'Valor salvo' : f === 'canceled_at' ? (v ? 'Cancelamento registrado' : 'Cancelamento removido') : f === 'service' || f === 'plan' || f === 'contract_months' ? 'Contrato atualizado' : null);
+  let extra = extraV;
+  if (f === 'plan') {
+    // troca de formato: mantém o equivalente mensal exato e recalcula o valor do novo formato
+    const monthly = cur?.contract_value ? Number(cur.contract_value) / planFactor(cur.plan) : Number(cur?.valor || 0);
+    const fac = planFactor(v);
+    extra = { contract_months: v ? planMonths(v, null) : null, ...(v === 'unico' ? { canceled_at: null } : {}),
+      contract_value: monthly && (fac > 1) ? Math.round(monthly * fac * 100) / 100 : v === 'unico' && monthly ? Math.round(monthly * 100) / 100 : null };
+  }
+  patch([S.openId], { [f]: v, ...extra }, f === 'valor' ? 'Valor salvo' : f === 'won_at' ? 'Data da venda atualizada' : f === 'canceled_at' ? (v ? 'Cancelamento registrado' : 'Cancelamento removido') : f === 'service' || f === 'plan' || f === 'contract_months' ? 'Contrato atualizado' : null);
 });
 drawer.addEventListener('click', async (e) => {
   if (e.target.closest('[data-d="real"]')) {
