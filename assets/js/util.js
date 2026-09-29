@@ -249,6 +249,98 @@ new MutationObserver((muts) => {
   }
 }).observe(document.documentElement, { childList: true, subtree: true });
 
+// ---------- calendário do sistema (substitui o <input type="date"> nativo, mantendo o input escondido e sincronizado) ----------
+const INP_VAL = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value');
+const MESES = ['janeiro', 'fevereiro', 'março', 'abril', 'maio', 'junho', 'julho', 'agosto', 'setembro', 'outubro', 'novembro', 'dezembro'];
+const dpIso = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+function enhanceDate(inp) {
+  // dentro de outro popover (ex.: período personalizado) fica o nativo, pra não fechar o popover de fora
+  if (inp.dataset.dp || inp.dataset.native !== undefined || !inp.classList.contains('inp') || inp.closest('.pop')) return;
+  inp.dataset.dp = '1';
+  const btn = document.createElement('button');
+  btn.type = 'button';
+  btn.className = 'inp dp-btn';
+  btn.setAttribute('aria-haspopup', 'dialog');
+  btn.innerHTML = `<span class="dp-v"></span>${ICON.calendar}`;
+  if (inp.getAttribute('style')) btn.setAttribute('style', inp.getAttribute('style'));
+  if (inp.id) { btn.id = inp.id + '-dp'; document.querySelectorAll(`label[for="${inp.id}"]`).forEach((l) => l.setAttribute('for', btn.id)); }
+  inp.after(btn);
+  inp.classList.add('dp-native');
+  inp.tabIndex = -1;
+  inp.setAttribute('aria-hidden', 'true');
+  const sync = () => {
+    const v = INP_VAL.get.call(inp);
+    btn.querySelector('.dp-v').textContent = v ? new Date(v + 'T12:00').toLocaleDateString('pt-BR') : (inp.getAttribute('placeholder') || 'Selecionar data');
+    btn.classList.toggle('dd-empty', !v);
+    btn.disabled = inp.disabled;
+  };
+  Object.defineProperty(inp, 'value', { configurable: true, get() { return INP_VAL.get.call(this); }, set(v) { INP_VAL.set.call(this, v); sync(); } });
+  new MutationObserver(sync).observe(inp, { attributes: true, attributeFilter: ['disabled', 'placeholder'] });
+  inp.addEventListener('change', sync);
+  const pick = (v) => {
+    closePop();
+    if (v !== INP_VAL.get.call(inp)) {
+      INP_VAL.set.call(inp, v); sync();
+      inp.dispatchEvent(new Event('input', { bubbles: true }));
+      inp.dispatchEvent(new Event('change', { bubbles: true }));
+    }
+    btn.focus();
+  };
+  const open = () => {
+    if (inp.disabled) return;
+    const val = INP_VAL.get.call(inp);
+    const min = inp.min || ''; const max = inp.max || '';
+    let view = val ? new Date(val + 'T12:00') : new Date();
+    view = new Date(view.getFullYear(), view.getMonth(), 1, 12);
+    popover(btn, '<div class="dp-pop" role="dialog" aria-label="Escolher data"></div>', (p) => {
+      p.classList.add('pop-dd'); p._anchor = btn; btn.setAttribute('aria-expanded', 'true');
+      new MutationObserver((_, ob) => { if (!p.isConnected) { btn.setAttribute('aria-expanded', 'false'); ob.disconnect(); } }).observe(document.body, { childList: true });
+      const box = p.querySelector('.dp-pop');
+      const today = dpIso(new Date());
+      const ok = (d) => (!min || d >= min) && (!max || d <= max);
+      const draw = () => {
+        const y = view.getFullYear(); const m = view.getMonth();
+        const start = new Date(y, m, 1 - new Date(y, m, 1).getDay(), 12);
+        const days = Array.from({ length: 42 }, (_, i) => new Date(start.getFullYear(), start.getMonth(), start.getDate() + i, 12));
+        const prevOk = !min || dpIso(new Date(y, m, 0)) >= min; const nextOk = !max || dpIso(new Date(y, m + 1, 1)) <= max;
+        box.innerHTML = `<div class="dp-head"><button type="button" class="dp-nav" data-nav="-1" aria-label="Mês anterior" ${prevOk ? '' : 'disabled'}>${ICON.caret}</button><b>${MESES[m]} de ${y}</b><button type="button" class="dp-nav next" data-nav="1" aria-label="Próximo mês" ${nextOk ? '' : 'disabled'}>${ICON.caret}</button></div>
+          <div class="dp-grid">${['D', 'S', 'T', 'Q', 'Q', 'S', 'S'].map((d) => `<span class="dp-wd">${d}</span>`).join('')}
+          ${days.map((d) => { const k = dpIso(d); return `<button type="button" class="dp-d${d.getMonth() !== m ? ' out' : ''}${k === val ? ' on' : ''}${k === today ? ' today' : ''}" data-d="${k}" ${ok(k) ? '' : 'disabled'} aria-label="${d.toLocaleDateString('pt-BR', { day: 'numeric', month: 'long', year: 'numeric' })}">${d.getDate()}</button>`; }).join('')}</div>
+          <div class="dp-foot">${inp.required ? '<span></span>' : '<button type="button" class="dp-link" data-clear>Limpar</button>'}<button type="button" class="dp-link" data-today ${ok(today) ? '' : 'disabled'}>Hoje</button></div>`;
+      };
+      draw();
+      setTimeout(() => (box.querySelector('.dp-d.on') || box.querySelector('.dp-d.today:not([disabled])') || box.querySelector('.dp-d:not(.out):not([disabled])'))?.focus(), 20);
+      box.addEventListener('click', (e) => {
+        const nav = e.target.closest('[data-nav]');
+        if (nav) { view = new Date(view.getFullYear(), view.getMonth() + Number(nav.dataset.nav), 1, 12); draw(); return; }
+        const d = e.target.closest('[data-d]'); if (d && !d.disabled) return pick(d.dataset.d);
+        if (e.target.closest('[data-clear]')) return pick('');
+        if (e.target.closest('[data-today]')) return pick(today);
+      });
+      // setas do teclado andam pelos dias
+      box.addEventListener('keydown', (e) => {
+        const cur = document.activeElement?.dataset?.d; if (!cur) return;
+        const step = { ArrowLeft: -1, ArrowRight: 1, ArrowUp: -7, ArrowDown: 7 }[e.key]; if (!step) return;
+        e.preventDefault();
+        const nd = new Date(cur + 'T12:00'); nd.setDate(nd.getDate() + step);
+        if (nd.getMonth() !== view.getMonth()) { view = new Date(nd.getFullYear(), nd.getMonth(), 1, 12); draw(); }
+        box.querySelector(`[data-d="${dpIso(nd)}"]`)?.focus();
+      });
+    });
+  };
+  btn.addEventListener('click', (e) => { e.preventDefault(); if (openPop && openPop._anchor === btn) { closePop(); return; } open(); });
+  btn.addEventListener('keydown', (e) => { if (['ArrowDown', 'ArrowUp'].includes(e.key)) { e.preventDefault(); open(); } });
+  btn.setAttribute('data-pop-anchor', '');
+  sync();
+}
+export function enhanceDates(root = document) { root.querySelectorAll('input[type="date"].inp:not([data-dp])').forEach(enhanceDate); }
+new MutationObserver((muts) => {
+  for (const m of muts) for (const n of m.addedNodes) {
+    if (n.nodeType !== 1) continue;
+    if (n.matches?.('input[type="date"].inp')) enhanceDate(n); else if (n.querySelector?.('input[type="date"].inp')) enhanceDates(n);
+  }
+}).observe(document.documentElement, { childList: true, subtree: true });
+
 // menu simples: items = [{label, action, danger, sep, header}]
 export function menu(anchor, items) {
   const html = items.map((it, i) => it.sep ? '<hr>' : it.header ? `<div class="ph">${esc(it.header)}</div>` :

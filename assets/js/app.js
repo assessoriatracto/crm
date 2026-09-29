@@ -3,17 +3,17 @@ import {
   go, routeName, S, $, $$, esc, ICON, FAT, COLORS, initials, isHot, stageOf, profileOf, labelOf, isInactive, isDue, fatShort, brl, pct, num,
   fmtPhone, fullDate, longDate, addedAt, ago, sourceLabel, formName, waLink, toast, fail, popover, closePop, menu, multiSelect,
   modal, confirmBox, downloadCSV, dateRange, datePicker, dateBtn, daysToSale, fmtDays
-} from './util.js?v=2609291906';
-import { importModal } from './import.js?v=2609291906';
-import { renderDashboard } from './dashboard.js?v=2609291906';
-import { renderSettings } from './admin.js?v=2609291906';
-import { renderIntegrations, renderPixel, leadMetaEvents, statusPill } from './integrations.js?v=2609291906';
-import { renderRecovery, loadPartials } from './recovery.js?v=2609291906';
-import { showSignIn, showSignUp, showForgot, showReset, showMfa, showPending, watchIdle, AUTH_ROUTES } from './auth.js?v=2609291906';
-import { SERVICES, PLANS, planMonths, planFactor, VALUE_LABEL } from './contract.js?v=2609291906';
-import { openProfile, renderProfile } from './profile.js?v=2609291906';
-import { renderBuilder } from './builder.js?v=2609291906';
-import { renderFinance } from './finance.js?v=2609291906';
+} from './util.js?v=2609291913';
+import { importModal } from './import.js?v=2609291913';
+import { renderDashboard } from './dashboard.js?v=2609291913';
+import { renderSettings } from './admin.js?v=2609291913';
+import { renderIntegrations, renderPixel, leadMetaEvents, statusPill } from './integrations.js?v=2609291913';
+import { renderRecovery, loadPartials } from './recovery.js?v=2609291913';
+import { showSignIn, showSignUp, showForgot, showReset, showMfa, showPending, watchIdle, AUTH_ROUTES } from './auth.js?v=2609291913';
+import { SERVICES, PLANS, planMonths, planFactor, VALUE_LABEL, contractFields, bindContract } from './contract.js?v=2609291913';
+import { openProfile, renderProfile } from './profile.js?v=2609291913';
+import { renderBuilder } from './builder.js?v=2609291913';
+import { renderFinance } from './finance.js?v=2609291913';
 
 // ============================================================
 // preferências locais (por navegador)
@@ -419,6 +419,24 @@ function toggleMinCol(id) {
   try { localStorage.setItem(MIN_KEY, JSON.stringify([...set])); } catch (e) {}
 }
 
+// registrar venda: data, serviço, tipo de contrato e valor (mesmos campos dos lançamentos do Financeiro)
+function saleModal(l) {
+  modal(`<h3>Registrar venda</h3>
+    <p class="help" style="margin-top:-4px"><b>${esc(l.nome)}</b> virou cliente. Preencha o contrato pra venda entrar no faturamento, no dashboard e ir pra Meta com o valor certo.</p>
+    <div class="row"><label class="lbl" for="svD">Venda realizada em</label><input class="inp" type="date" id="svD" data-d value="${localDay(l.won_at || new Date().toISOString())}" max="${localDay(new Date().toISOString())}" required></div>
+    ${contractFields({ service: l.service, plan: l.plan, months: l.contract_months }, { defaultMonths: 12 })}
+    <div class="modal-foot"><button class="b" data-close>Preencher depois</button><button class="b b-primary" data-ok>Salvar venda</button></div>`, (m, close) => {
+    const ctr = bindContract(m);
+    m.querySelector('[data-ok]').addEventListener('click', async (e) => {
+      const d = m.querySelector('[data-d]').value; if (!d) return toast('Informe a data da venda', true);
+      const v = ctr.read(); if (v.error) return toast(v.error, true);
+      e.currentTarget.disabled = true;
+      close();
+      await patch([l.id], { valor: v.monthly_amount, contract_value: ['semestral', 'anual', 'unico'].includes(v.plan) ? v.amount : null, contract_months: v.plan === 'mensal' ? v.months : v.months, service: v.service, plan: v.plan, won_at: new Date(d + 'T12:00').toISOString() }, 'Venda registrada');
+    });
+  });
+}
+
 // valor mostrado no formato do contrato (usa o valor exato digitado quando existe)
 const localDay = (d) => { const x = new Date(d); return new Date(x.getTime() - x.getTimezoneOffset() * 60000).toISOString().slice(0, 10); };
 const brl2 = (v) => Number(v).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL', minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -524,6 +542,11 @@ export async function patch(ids, p, msg) {
     await DB.updateLeads(ids, p);
     if (msg) toast(msg);
     if (S.openId && ids.includes(S.openId)) loadActivity();
+    // foi pra venda sem valor: pede os dados do contrato pra venda entrar no financeiro, dashboard e Meta
+    if (p.stage_id && ids.length === 1 && S.stages.find((x) => x.id === p.stage_id)?.kind === 'won') {
+      const l = S.leads.find((x) => x.id === ids[0]);
+      if (l && !(Number(l.valor) > 0)) saleModal(l);
+    }
   } catch (e) {
     before.forEach((b) => Object.assign(S.leads.find((l) => l.id === b.id) || {}, b));
     route(); fail(e);
