@@ -1261,3 +1261,27 @@ tr.row-click:hover td{background:var(--c-hover);}
 .colp-t{display:flex;flex-direction:column;min-width:0;text-align:left;}
 .colp-t small{font-size:11.5px;color:var(--gray-3);line-height:1.35;white-space:normal;}
 @media (max-width:760px){ .adt-tools{width:100%;order:-1;margin:0;} .adt-tools .adt-search{flex:1;width:auto;} }
+/* aviso de lead com dados falsos */
+.junk-note{display:flex;align-items:center;gap:12px;margin:0 20px 4px;padding:12px 14px;border-radius:12px;background:rgba(255,92,92,.1);border:1px solid rgba(255,92,92,.28);}
+.junk-note > svg{flex:none;color:var(--fg-red);width:18px;height:18px;}
+.junk-note div{flex:1;min-width:0;}
+.junk-note b{display:block;font-size:13.5px;}
+.junk-note small{display:block;font-size:12px;color:var(--gray-3);}
+/* dropdowns do sistema */
+select.inp.dd-native{display:none !important;}
+.dd-btn{display:flex;align-items:center;justify-content:space-between;gap:8px;width:100%;text-align:left;cursor:pointer;font:inherit;color:var(--c-text);}
+.dd-btn .dd-v{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.dd-btn.dd-empty .dd-v{color:var(--gray-3);}
+.dd-btn .caret{flex:none;color:var(--gray-3);transition:transform var(--dur-small) var(--ease-out);}
+.dd-btn[aria-expanded="true"]{border-color:var(--amber);}
+.dd-btn[aria-expanded="true"] .caret{transform:rotate(180deg);}
+.dd-btn:disabled{opacity:.55;cursor:not-allowed;}
+.dd-btn:focus-visible{outline:2px solid var(--amber);outline-offset:1px;}
+.pop.pop-dd{padding:4px;max-width:min(420px,calc(100vw - 24px));}
+.dd-pop .dd-q{margin:2px 2px 6px;height:34px;width:calc(100% - 4px);}
+.dd-list{max-height:300px;overflow:auto;display:flex;flex-direction:column;gap:1px;}
+.dd-o{justify-content:space-between;gap:10px;text-align:left;}
+.dd-o span:first-child{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.dd-o.active{color:var(--amber-ink);background:var(--amber-soft);}
+.dd-ck{display:flex;color:var(--amber-ink);flex:none;}
+.dd-o:focus-visible{outline:none;background:var(--c-hover);}

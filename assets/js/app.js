@@ -3,16 +3,16 @@ import {
   go, routeName, S, $, $$, esc, ICON, FAT, COLORS, initials, isHot, stageOf, profileOf, labelOf, isInactive, isDue, fatShort, brl, pct, num,
   fmtPhone, fullDate, longDate, addedAt, ago, sourceLabel, formName, waLink, toast, fail, popover, closePop, menu, multiSelect,
   modal, confirmBox, downloadCSV, dateRange, datePicker, dateBtn, daysToSale, fmtDays
-} from './util.js?v=2609282021';
-import { importModal } from './import.js?v=2609282021';
-import { renderDashboard } from './dashboard.js?v=2609282021';
-import { renderSettings } from './admin.js?v=2609282021';
-import { renderIntegrations, renderPixel, leadMetaEvents, statusPill } from './integrations.js?v=2609282021';
-import { renderRecovery, loadPartials } from './recovery.js?v=2609282021';
-import { showSignIn, showSignUp, showForgot, showReset, showMfa, showPending, watchIdle, AUTH_ROUTES } from './auth.js?v=2609282021';
-import { openProfile } from './profile.js?v=2609282021';
-import { renderBuilder } from './builder.js?v=2609282021';
-import { renderFinance } from './finance.js?v=2609282021';
+} from './util.js?v=2609282252';
+import { importModal } from './import.js?v=2609282252';
+import { renderDashboard } from './dashboard.js?v=2609282252';
+import { renderSettings } from './admin.js?v=2609282252';
+import { renderIntegrations, renderPixel, leadMetaEvents, statusPill } from './integrations.js?v=2609282252';
+import { renderRecovery, loadPartials } from './recovery.js?v=2609282252';
+import { showSignIn, showSignUp, showForgot, showReset, showMfa, showPending, watchIdle, AUTH_ROUTES } from './auth.js?v=2609282252';
+import { openProfile } from './profile.js?v=2609282252';
+import { renderBuilder } from './builder.js?v=2609282252';
+import { renderFinance } from './finance.js?v=2609282252';
 
 // ============================================================
 // preferências locais (por navegador)
@@ -261,7 +261,10 @@ function filtered() {
   const q = f.q.trim().toLowerCase();
   const qd = q.replace(/\D/g, '');
   const [from, to] = periodRange(f);
+  const junkStage = S.stages.find((x) => x.name === 'Descarte')?.id;
+  const showJunk = V.showJunk || f.stages.includes(junkStage);
   return S.leads.filter((l) => {
+    if (!showJunk && junkStage && l.stage_id === junkStage) return false;
     const c = new Date(l.created_at);
     if (from && c < from) return false;
     if (to && c > to) return false;
@@ -304,6 +307,8 @@ function renderLeads() {
   const view = $('#view');
   const first = S.stages.find((s) => s.kind === 'open');
   const won = list.filter((l) => stageOf(l)?.kind === 'won');
+  const junkId = S.stages.find((x) => x.name === 'Descarte')?.id;
+  const junkN = junkId ? S.leads.filter((l) => l.stage_id === junkId).length : 0;
   const anyFilter = V.f.q || V.f.period !== 'tudo' || ['campaigns', 'forms', 'stages', 'sources', 'assignees', 'labels'].some((k) => V.f[k].length);
   const scrollX = $('.board')?.scrollLeft || 0;
 
@@ -326,6 +331,7 @@ function renderLeads() {
         <span class="vsep tb-desk"></span>
         <label class="search">${ICON.search}<input class="inp" data-q type="search" placeholder="Buscar nome, @, WhatsApp, e-mail" value="${esc(V.f.q)}"></label>
         ${filterBtn('campaigns', 'Campanha')}${filterBtn('forms', 'Formulários')}${filterBtn('period', 'Selecionar datas')}${filterBtn('stages', 'Estágio')}${filterBtn('sources', 'Fonte')}${filterBtn('assignees', 'Atribuído a')}${filterBtn('labels', 'Rótulos')}
+        ${junkN ? `<button class="b ${V.showJunk ? 'on' : ''}" data-act="junk" title="Leads com dados falsos, separados automaticamente">${V.showJunk ? 'Ocultar descarte' : 'Ver descarte'}<span class="count-badge">${num(junkN)}</span></button>` : ''}
         ${anyFilter ? '<button class="b b-ghost" data-act="clear">Limpar filtros</button>' : ''}
         <button class="b" data-act="more" data-pop-anchor aria-label="Mais ações">${ICON.dotsH}</button>
       </div>
@@ -377,7 +383,7 @@ function cardHtml(l) {
   </article>`;
 }
 function boardHtml(list) {
-  return `<div class="board">${S.stages.map((s) => {
+  return `<div class="board">${S.stages.filter((s) => s.name !== 'Descarte' || V.showJunk || V.f.stages.includes(s.id)).map((s) => {
     const items = list.filter((l) => l.stage_id === s.id);
     const soma = items.reduce((a, l) => a + Number(l.valor || 0), 0);
     return `<div class="col" data-stage="${s.id}">
@@ -521,9 +527,10 @@ view.addEventListener('click', async (e) => {
   if (act === 'f') { openFilter(a, a.dataset.k); return; }
   if (act === 'clear') { V.f = { q: '', period: 'tudo', from: '', to: '', campaigns: [], forms: [], stages: [], sources: [], assignees: [], labels: [] }; renderLeads(); return; }
   if (act === 'new-lead') { newLeadModal(); return; }
+  if (act === 'junk') { V.showJunk = !V.showJunk; renderLeads(); return; }
   if (act === 'import') { importModal(async () => { await loadAll(false); route(); }); return; }
   if (act === 'add-stage') { stageModal(); return; }
-  if (act === 'more') { const mob = matchMedia('(max-width:760px)').matches; menu(a, [...(mob ? [{ label: 'Adicionar estágio personalizado', action: () => stageModal() }, { label: V.bulkMode ? 'Sair da edição em massa' : 'Edição em massa', action: () => { V.bulkMode = !V.bulkMode; V.sel.clear(); renderLeads(); } }] : []), ...(['admin', 'gestor'].includes(S.me?.role) ? [{ label: 'Importar leads (planilha)', action: () => importModal(async () => { await loadAll(false); route(); }) }] : []), { label: 'Exportar leads filtrados (CSV)', action: () => exportCSV(filtered()) }, { label: 'Gerenciar estágios e rótulos', action: () => { go('ajustes'); } }]); return; }
+  if (act === 'more') { const mob = matchMedia('(max-width:760px)').matches; menu(a, [...(mob ? [{ label: 'Adicionar estágio personalizado', action: () => stageModal() }, { label: V.bulkMode ? 'Sair da edição em massa' : 'Edição em massa', action: () => { V.bulkMode = !V.bulkMode; V.sel.clear(); renderLeads(); } }] : []), ...(['admin', 'gestor'].includes(S.me?.role) ? [{ label: 'Importar leads (planilha)', action: () => importModal(async () => { await loadAll(false); route(); }) }] : []), ...(['admin', 'gestor'].includes(S.me?.role) ? [{ label: 'Separar leads com dados falsos', action: async () => { try { const n = await DB.junkSweep(); await loadAll(false); route(); toast(n ? `${n} lead${n === 1 ? '' : 's'} movido${n === 1 ? '' : 's'} pro Descarte` : 'Nenhum lead com dados falsos encontrado'); } catch (e) { fail(e); } } }] : []), { label: 'Exportar leads filtrados (CSV)', action: () => exportCSV(filtered()) }, { label: 'Gerenciar estágios e rótulos', action: () => { go('ajustes'); } }]); return; }
   if (act === 'sort') { const k = a.dataset.k; V.sort = { key: k, dir: V.sort.key === k ? -V.sort.dir : (k === 'created_at' ? -1 : 1) }; renderLeads(); return; }
   if (act === 'sel-all') { const list = filtered(); const all = list.every((l) => V.sel.has(l.id)); list.forEach((l) => (all ? V.sel.delete(l.id) : V.sel.add(l.id))); renderLeads(); return; }
   if (act === 'sel' && row) { toggleSel(row.dataset.id); return; }
@@ -697,6 +704,7 @@ function renderDrawer() {
   const tracking = [['utm_source', 'utm_source'], ['utm_medium', 'utm_medium'], ['utm_campaign', 'Campanha'], ['utm_content', 'Anúncio'], ['utm_term', 'Termo'], ['referrer', 'Página de origem']].filter(([k]) => l[k]);
   drawer.innerHTML = `
     <div class="dr-head"><span class="av ${isHot(l) ? 'hot' : ''}">${esc(initials(l.nome))}</span><h2>${esc(l.nome)}</h2><button class="icon-btn" data-d="close" aria-label="Fechar">${ICON.x}</button></div>
+    ${l.junk_reason && stageOf(l)?.name === 'Descarte' ? `<div class="junk-note">${ICON.x}<div><b>Separado como dados falsos</b><small>${esc(l.junk_reason)}</small></div><button class="b b-sm" data-d="real">É um lead real</button></div>` : ''}
     <div class="dr-body">
       <div class="sec">
         <div class="meta-line">Lead adicionado ${addedAt(l.created_at)}</div>
@@ -815,6 +823,11 @@ drawer.addEventListener('change', async (e) => {
   patch([S.openId], { [f]: v }, f === 'valor' ? 'Valor salvo' : f === 'canceled_at' ? (v ? 'Cancelamento registrado' : 'Cancelamento removido') : null);
 });
 drawer.addEventListener('click', async (e) => {
+  if (e.target.closest('[data-d="real"]')) {
+    const first = [...S.stages].filter((x) => x.kind === 'open').sort((a, b) => a.position - b.position)[0];
+    if (first) patch([S.openId], { stage_id: first.id, junk_ok: true }, 'Lead devolvido pra Novos leads');
+    return;
+  }
   const b = e.target.closest('[data-d]'); if (!b) return;
   const id = S.openId;
   const l = S.leads.find((x) => x.id === id);

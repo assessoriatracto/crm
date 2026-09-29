@@ -168,6 +168,87 @@ document.addEventListener('mousedown', (e) => { if (openPop && !openPop.contains
 document.addEventListener('keydown', (e) => { if (e.key === 'Escape') closePop(); });
 window.addEventListener('resize', closePop);
 
+
+// ---------- dropdowns do sistema (substitui o <select> nativo, mantendo o select escondido e sincronizado) ----------
+const SEL_DESC = Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, 'value');
+const SEL_IDX = Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, 'selectedIndex');
+function ddLabel(sel) { const o = sel.options[sel.selectedIndex]; return o ? o.textContent : ''; }
+function enhanceSelect(sel) {
+  if (sel.dataset.dd || sel.multiple || sel.dataset.native !== undefined || !sel.classList.contains('inp')) return;
+  sel.dataset.dd = '1';
+  const btn = document.createElement('button');
+  btn.type = 'button';
+  btn.className = 'inp dd-btn';
+  btn.setAttribute('aria-haspopup', 'listbox');
+  btn.innerHTML = `<span class="dd-v"></span>${ICON.caret}`;
+  if (sel.getAttribute('style')) btn.setAttribute('style', sel.getAttribute('style'));
+  if (sel.id) { btn.id = sel.id + '-dd'; document.querySelectorAll(`label[for="${sel.id}"]`).forEach((l) => l.setAttribute('for', btn.id)); }
+  sel.after(btn);
+  sel.classList.add('dd-native');
+  sel.tabIndex = -1;
+  sel.setAttribute('aria-hidden', 'true');
+  const sync = () => {
+    btn.querySelector('.dd-v').textContent = ddLabel(sel) || '—';
+    btn.disabled = sel.disabled;
+    btn.classList.toggle('dd-empty', !sel.value);
+  };
+  sel._ddSync = sync;
+  // mudanças feitas por código (select.value = …) também atualizam o botão
+  Object.defineProperty(sel, 'value', { configurable: true, get() { return SEL_DESC.get.call(this); }, set(v) { SEL_DESC.set.call(this, v); sync(); } });
+  Object.defineProperty(sel, 'selectedIndex', { configurable: true, get() { return SEL_IDX.get.call(this); }, set(v) { SEL_IDX.set.call(this, v); sync(); } });
+  new MutationObserver(sync).observe(sel, { childList: true, subtree: true, attributes: true, attributeFilter: ['disabled'] });
+  sel.addEventListener('change', sync);
+  const open = () => {
+    if (sel.disabled) return;
+    const opts = [...sel.options];
+    const many = opts.length > 9;
+    popover(btn, `<div class="dd-pop" role="listbox" style="min-width:${Math.round(btn.getBoundingClientRect().width)}px">
+      ${many ? '<input class="inp dd-q" placeholder="Buscar" autocomplete="off">' : ''}
+      <div class="dd-list">${opts.map((o, i) => (o.parentElement.tagName === 'OPTGROUP' && o === o.parentElement.firstElementChild ? `<div class="ph">${esc(o.parentElement.label)}</div>` : '') +
+        `<button type="button" class="pi dd-o ${i === sel.selectedIndex ? 'active' : ''}" role="option" aria-selected="${i === sel.selectedIndex}" data-i="${i}" ${o.disabled ? 'disabled' : ''}><span>${esc(o.textContent)}</span>${i === sel.selectedIndex ? `<span class="dd-ck">${ICON.check}</span>` : ''}</button>`).join('')}</div></div>`, (p) => {
+      p.classList.add('pop-dd'); p._anchor = btn; btn.setAttribute('aria-expanded', 'true');
+      new MutationObserver((_, ob) => { if (!p.isConnected) { btn.setAttribute('aria-expanded', 'false'); ob.disconnect(); } }).observe(document.body, { childList: true });
+      const list = p.querySelector('.dd-list');
+      const act = list.querySelector('.active') || list.querySelector('.dd-o:not([disabled])');
+      setTimeout(() => { (p.querySelector('.dd-q') || act)?.focus(); act?.scrollIntoView({ block: 'nearest' }); }, 20);
+      p.querySelector('.dd-q')?.addEventListener('input', (e) => {
+        const q = e.target.value.trim().toLowerCase();
+        list.querySelectorAll('.dd-o').forEach((b) => { b.hidden = q && !b.textContent.toLowerCase().includes(q); });
+      });
+      p.addEventListener('click', (e) => {
+        const b = e.target.closest('.dd-o'); if (!b || b.disabled) return;
+        const i = +b.dataset.i;
+        closePop();
+        if (i !== sel.selectedIndex) {
+          SEL_IDX.set.call(sel, i); sync();
+          sel.dispatchEvent(new Event('input', { bubbles: true }));
+          sel.dispatchEvent(new Event('change', { bubbles: true }));
+        }
+        btn.focus();
+      });
+      p.addEventListener('keydown', (e) => {
+        const items = [...list.querySelectorAll('.dd-o:not([hidden]):not([disabled])')];
+        const cur = items.indexOf(document.activeElement);
+        if (e.key === 'ArrowDown') { e.preventDefault(); items[Math.min(items.length - 1, cur + 1)]?.focus(); }
+        if (e.key === 'ArrowUp') { e.preventDefault(); items[Math.max(0, cur - 1)]?.focus(); }
+        if (e.key === 'Enter' && document.activeElement?.classList.contains('dd-q')) { e.preventDefault(); items[0]?.click(); }
+      });
+    });
+  };
+  btn.addEventListener('click', (e) => { e.preventDefault(); if (openPop && openPop._anchor === btn) { closePop(); return; } open(); });
+  btn.addEventListener('keydown', (e) => { if (['ArrowDown', 'ArrowUp'].includes(e.key)) { e.preventDefault(); open(); } });
+  btn.setAttribute('data-pop-anchor', '');
+  sync();
+}
+export function enhanceSelects(root = document) { root.querySelectorAll('select.inp:not([data-dd])').forEach(enhanceSelect); }
+// todo select novo que aparecer na tela vira dropdown do sistema
+new MutationObserver((muts) => {
+  for (const m of muts) for (const n of m.addedNodes) {
+    if (n.nodeType !== 1) continue;
+    if (n.matches?.('select.inp')) enhanceSelect(n); else if (n.querySelector?.('select.inp')) enhanceSelects(n);
+  }
+}).observe(document.documentElement, { childList: true, subtree: true });
+
 // menu simples: items = [{label, action, danger, sep, header}]
 export function menu(anchor, items) {
   const html = items.map((it, i) => it.sep ? '<hr>' : it.header ? `<div class="ph">${esc(it.header)}</div>` :

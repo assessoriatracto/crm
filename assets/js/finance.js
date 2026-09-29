@@ -1,7 +1,7 @@
 // Financeiro (estilo UTMify): gasto da Meta Ads × leads e vendas do CRM × receitas e despesas lançadas
 import { DB } from '@shared/db.js';
-import { renderClients } from './clients.js?v=2609282021';
-import { BRAND, popover, dateRange, datePicker, dateBtn, S, $, $$, esc, ICON, brl, num, pct, fullDate, ago, toast, fail, modal, confirmBox } from './util.js?v=2609282021';
+import { renderClients } from './clients.js?v=2609282252';
+import { BRAND, popover, dateRange, datePicker, dateBtn, S, $, $$, esc, ICON, brl, num, pct, fullDate, ago, toast, fail, modal, confirmBox } from './util.js?v=2609282252';
 
 const F = { period: '30', from: '', to: '', level: 'campaign', revenue: 'mensal', sort: 'spend', tab: 'geral' };
 const GRAPH = 'v21.0';
@@ -695,7 +695,7 @@ function entryModal(done, entry = null) {
   modal(`<h3>${entry ? (SALE_CATS.includes(entry.category) ? 'Editar venda' : 'Editar lançamento') : 'Novo lançamento'}</h3>
     <div class="row"><div class="seg"><button type="button" class="b ${kind === 'receita' ? 'on' : ''}" data-k="receita">Receita</button><button type="button" class="b ${kind === 'despesa' ? 'on' : ''}" data-k="despesa">Despesa</button></div></div>
     <div class="grid2"><div class="row"><label class="lbl">Categoria</label><select class="inp" data-cat>${cats()}</select></div>
-      <div class="row"><label class="lbl">Data</label><input class="inp" type="date" data-date value="${entry?.date || iso(new Date())}"></div></div>
+      <div class="row"><label class="lbl" data-date-l>Contrato fechado em</label><input class="inp" type="date" data-date value="${entry?.date || iso(new Date())}"></div></div>
     <div data-sale>
       <div class="grid3">
         <div class="row"><label class="lbl">Meses de contrato</label><input class="inp" data-months inputmode="numeric" value="${entry?.months || 12}"></div>
@@ -723,6 +723,7 @@ function entryModal(done, entry = null) {
       const sale = isSale();
       $c('[data-sale]').hidden = !sale; $c('[data-simple]').hidden = sale;
       $c('[data-desc-l]').textContent = sale ? 'Cliente' : 'Descrição';
+      $c('[data-date-l]').textContent = sale ? 'Contrato fechado em' : 'Data';
       $c('[data-desc]').placeholder = sale ? 'Ex: Ferragista Silva' : kind === 'despesa' ? 'Ex: Assinatura de ferramenta' : 'Ex: Setup da loja';
     };
     const recalc = () => {

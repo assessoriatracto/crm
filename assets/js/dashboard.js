@@ -1,7 +1,7 @@
 // Dashboard: visão executiva e enxuta da saúde do negócio.
 // O detalhe (campanhas, lançamentos, gráficos por dia) fica no Financeiro e na Central de leads.
 import { DB } from '@shared/db.js';
-import { dateRange, datePicker, dateBtn, S, $, $$, esc, ICON, brl, num, isDue, isInactive, fail, fmtDays } from './util.js?v=2609282021';
+import { dateRange, datePicker, dateBtn, S, $, $$, esc, ICON, brl, num, isDue, isInactive, fail, fmtDays } from './util.js?v=2609282252';
 
 const D = { period: '30', from: '', to: '' };
 const DAY = 86400000;
@@ -14,7 +14,7 @@ export function contracts(entries, months) {
   const out = [];
   const org = (x) => ({ utm_campaign: x?.utm_campaign || null, utm_term: x?.utm_term || null, utm_content: x?.utm_content || null, utm_id: x?.utm_id || null });
   S.leads.filter((l) => l.won_at && Number(l.valor) > 0).forEach((l) => out.push({
-    id: l.id, kind: 'lead', lead: l, name: l.nome, start: new Date(l.won_at), monthly: Number(l.valor), months,
+    id: l.id, kind: 'lead', lead: l, name: l.nome, start: new Date(l.won_at), monthly: Number(l.valor), months: Number(l.contract_months || months),
     canceled: l.canceled_at ? new Date(l.canceled_at + 'T12:00') : null, reason: l.cancel_reason || '', origin: org(l), sent: true
   }));
   entries.filter((e) => e.kind === 'receita' && SALE_CATS.includes(e.category)).forEach((e) => {
@@ -37,7 +37,8 @@ function metrics(ins, leads, a, b, contractsList, useMeta) {
   const insR = ins.filter((x) => { const d = new Date(x.date + 'T12:00'); return inR(d); });
   const spend = insR.reduce((s, x) => s + Number(x.spend), 0);
   const metaLeads = insR.reduce((s, x) => s + Number(x.meta_leads || 0), 0);
-  const crmLeads = leads.filter((l) => inR(new Date(l.created_at))).length;
+  const junkId = S.stages.find((x) => x.name === 'Descarte')?.id;
+  const crmLeads = leads.filter((l) => l.stage_id !== junkId && inR(new Date(l.created_at))).length;
   const nLeads = useMeta ? metaLeads : crmLeads; // mesma fonte nos dois períodos (comparação justa)
   const news = contractsList.filter((c) => inR(c.start));
   const newValue = news.reduce((s, c) => s + c.monthly * c.months, 0);
@@ -116,13 +117,19 @@ export async function renderDashboard(el) {
   const qualIdx = Math.max(0, open.findIndex((s) => /qualific/i.test(s.name)));
   const meetIdx = open.findIndex((s) => /reuni|agend/i.test(s.name));
   const posOf = (l) => { const s = S.stages.find((x) => x.id === l.stage_id); return s ? (s.kind === 'won' ? 999 : s.kind === 'lost' ? -1 : open.indexOf(s)) : 0; };
-  const funnel = [
-    ['Leads', leadsR.length],
-    ['Em atendimento', leadsR.filter((l) => posOf(l) >= 1 || l.won_at).length],
-    ['Qualificados', leadsR.filter((l) => posOf(l) >= Math.max(qualIdx, 1) || l.won_at).length],
-    ...(meetIdx > 0 ? [['Reunião agendada', leadsR.filter((l) => posOf(l) >= meetIdx || l.won_at).length]] : []),
-    ['Vendas', leadsR.filter((l) => l.won_at).length]
+  const junkId = S.stages.find((x) => x.name === 'Descarte')?.id;
+  const leadsOk = leadsR.filter((l) => l.stage_id !== junkId);
+  const raw = [
+    ['Leads', canMoney ? cur.nLeads : leadsOk.length],
+    ['Em atendimento', leadsOk.filter((l) => posOf(l) >= 1 || l.won_at).length],
+    ['Qualificados', leadsOk.filter((l) => posOf(l) >= Math.max(qualIdx, 1) || l.won_at).length],
+    ...(meetIdx > 0 ? [['Reunião agendada', leadsOk.filter((l) => posOf(l) >= meetIdx || l.won_at).length]] : []),
+    ['Vendas', canMoney ? cur.newClients : leadsOk.filter((l) => l.won_at).length]
   ];
+  // cada etapa inclui quem já passou dela (quem comprou também foi atendido, qualificado…)
+  const funnel = raw.map(([n, v]) => [n, v]);
+  for (let k = funnel.length - 2; k >= 1; k--) funnel[k][1] = Math.max(funnel[k][1], funnel[k + 1][1]);
+  funnel[0][1] = Math.max(funnel[0][1], funnel[1]?.[1] || 0);
 
   // precisa de atenção (agora)
   const openLeads = S.leads.filter((l) => { const k = S.stages.find((s) => s.id === l.stage_id)?.kind; return k !== 'won' && k !== 'lost'; });

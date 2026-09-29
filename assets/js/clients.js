@@ -1,7 +1,7 @@
 // Financeiro > Clientes: contratos ativos, cancelamentos (churn) e origem de cada venda (campanha › conjunto › anúncio).
 import { DB } from '@shared/db.js';
-import { S, esc, ICON, brl, num, toast, fail, modal, menu, dateRange } from './util.js?v=2609282021';
-import { contracts, activeAt } from './dashboard.js?v=2609282021';
+import { S, esc, ICON, brl, num, toast, fail, modal, menu, dateRange } from './util.js?v=2609282252';
+import { contracts, activeAt } from './dashboard.js?v=2609282252';
 
 const C = { status: 'ativos', q: '' };
 const REASONS = ['Preço', 'Resultado abaixo do esperado', 'Atendimento', 'Fechou ou vendeu a loja', 'Cortou custos', 'Foi para outra agência', 'Outro'];
@@ -55,8 +55,9 @@ export async function renderClients(host, F, reload) {
       <div class="cl-head">
         <div class="seg cl-seg">${[['ativos', 'Ativos'], ['cancelados', 'Cancelados'], ['encerrados', 'Encerrados'], ['sem_origem', 'Sem origem'], ['todos', 'Todos']].map(([k, n]) => `<button class="b b-sm ${C.status === k ? 'on' : ''}" data-cs="${k}">${n}<span class="cl-n">${num(count(k))}</span></button>`).join('')}</div>
         <label class="adt-search">${ICON.search}<input type="search" data-cq placeholder="Buscar cliente ou campanha" value="${esc(C.q)}"></label>
+        <button class="b b-primary" data-new-client>+ Novo cliente</button>
       </div>
-      ${rows.length ? `<div class="table-wrap"><table class="int-table cl-table"><thead><tr><th>Cliente</th><th>Status</th><th class="num">Mensalidade</th><th>Início</th><th>Término</th><th>Origem da venda</th><th></th></tr></thead><tbody>
+      ${rows.length ? `<div class="table-wrap"><table class="int-table cl-table"><thead><tr><th>Cliente</th><th>Status</th><th class="num">Mensalidade</th><th>Fechado em</th><th>Término</th><th>Origem da venda</th><th></th></tr></thead><tbody>
         ${rows.map((c) => { const st = statusOf(c); return `<tr data-c="${c.id}">
           <td><b class="ellip-1" title="${esc(c.name)}">${esc(c.name)}</b><small class="muted">${c.kind === 'lead' ? 'Venda pelo pipeline' : 'Venda lançada'} · ${c.months} ${c.months === 1 ? 'mês' : 'meses'}</small></td>
           <td>${PILL[st]}${st === 'cancelado' ? `<small class="muted cl-why">${fmt(c.canceled)}${c.reason ? ' · ' + esc(c.reason) : ''}</small>` : ''}</td>
@@ -71,12 +72,14 @@ export async function renderClients(host, F, reload) {
   host.querySelectorAll('[data-cs]').forEach((btn) => btn.addEventListener('click', () => { C.status = btn.dataset.cs; renderClients(host, F, reload); }));
   let t; host.querySelector('[data-cq]').addEventListener('input', (e) => { clearTimeout(t); t = setTimeout(() => { C.q = e.target.value; renderClients(host, F, reload).then(() => { const i = host.querySelector('[data-cq]'); i.focus(); i.setSelectionRange(i.value.length, i.value.length); }); }, 200); });
   const done = () => renderClients(host, F, reload);
+  host.querySelector('[data-new-client]').addEventListener('click', () => clientModal(null, months, done));
   host.querySelectorAll('tr[data-c]').forEach((tr) => {
     const c = list.find((x) => x.id === tr.dataset.c); if (!c) return;
     tr.querySelector('[data-origin]')?.addEventListener('click', () => originModal(c, ins, done));
     tr.querySelector('[data-more]').addEventListener('click', (e) => {
       const st = statusOf(c);
       menu(e.currentTarget, [
+        { label: 'Editar cliente', action: () => clientModal(c, months, done) },
         st === 'cancelado' ? { label: 'Desfazer cancelamento', action: () => saveCancel(c, null, null, done) } : { label: 'Registrar cancelamento', action: () => cancelModal(c, done) },
         { label: originTxt(c.origin) ? 'Alterar origem da venda' : 'Definir origem da venda', action: () => originModal(c, ins, done) },
         ...(c.lead ? [{ label: 'Abrir lead', action: () => { history.pushState(null, '', '/leads'); window.dispatchEvent(new Event('tracto:nav')); setTimeout(() => window.dispatchEvent(new CustomEvent('tracto:open-lead', { detail: c.lead.id })), 150); } }] : [])
@@ -110,6 +113,67 @@ function cancelModal(c, done) {
       if (new Date(d + 'T12:00') < c.start) return toast('A data é antes do início do contrato', true);
       const o = m.querySelector('[data-o]').value.trim();
       close(); saveCancel(c, d, m.querySelector('[data-r]').value + (o ? ' · ' + o : ''), done);
+    });
+  });
+}
+
+// novo cliente / editar cliente (nome, mensalidade, meses e data em que o contrato foi fechado)
+function clientModal(c, months, done) {
+  const isLead = c?.kind === 'lead';
+  const e = c?.entry;
+  const leadOpts = S.leads.filter((l) => !l.won_at).sort((x, y) => x.nome.localeCompare(y.nome));
+  const fmtN = (n) => (Number(n) > 0 ? Number(n).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '');
+  const parse = (v) => Number(String(v || '').replace(/[^\d,.-]/g, '').replace(/\./g, '').replace(',', '.'));
+  modal(`<h3>${c ? 'Editar cliente' : 'Novo cliente'}</h3>
+    <p class="help" style="margin-top:-4px">${c ? 'As mudanças valem pro MRR, churn e ticket médio.' : 'Use pra clientes que fecharam fora do pipeline ou antes do CRM.'}</p>
+    <div class="row"><label class="lbl">Nome do cliente</label><input class="inp" data-n maxlength="120" value="${esc(c?.name || '')}" placeholder="Ex: Ferragista Silva"></div>
+    <div class="grid3">
+      <div class="row"><label class="lbl">Mensalidade (R$)</label><input class="inp" data-m inputmode="decimal" value="${fmtN(c?.monthly)}" placeholder="0,00"></div>
+      <div class="row"><label class="lbl">Meses de contrato</label><input class="inp" data-mo inputmode="numeric" value="${c?.months || months}"></div>
+      <div class="row"><label class="lbl">Contrato fechado em</label><input class="inp" type="date" data-d value="${c ? iso(c.start) : iso(new Date())}" max="${iso(new Date())}"></div>
+    </div>
+    <p class="help" data-tot></p>
+    ${!c ? `<div class="row"><label class="lbl">Lead do cliente (opcional)</label><input class="inp" list="clNewLeads" data-lead placeholder="Busque pelo nome ou WhatsApp">
+      <datalist id="clNewLeads">${leadOpts.slice(0, 800).map((l) => `<option value="${esc(`${l.nome} · ${l.whatsapp || l.email || ''}`)}"></option>`).join('')}</datalist>
+      <p class="help">Ligando ao lead, a venda vai pra Meta com os dados dele e a campanha de origem.</p></div>` : ''}
+    <div class="modal-foot"><button class="b" data-close>Cancelar</button><button class="b b-primary" data-ok>${c ? 'Salvar' : 'Adicionar cliente'}</button></div>`, (m, close) => {
+    const $m = (x) => m.querySelector(x);
+    const tot = () => { const v = parse($m('[data-m]').value); const n = Math.round(parse($m('[data-mo]').value)); $m('[data-tot]').textContent = v > 0 && n > 0 ? `Contrato total: ${brl(v * n)}` : ''; };
+    ['[data-m]', '[data-mo]'].forEach((x) => $m(x).addEventListener('input', tot)); tot();
+    $m('[data-m]').addEventListener('blur', (ev) => { const v = parse(ev.target.value); if (v > 0) ev.target.value = fmtN(v); });
+    if (!c) {
+      $m('[data-lead]').addEventListener('change', (ev) => {
+        const l = S.leads.find((x) => `${x.nome} · ${x.whatsapp || x.email || ''}` === ev.target.value);
+        if (l && !$m('[data-n]').value.trim()) $m('[data-n]').value = l.nome;
+      });
+    }
+    $m('[data-ok]').addEventListener('click', async (ev) => {
+      const btn = ev.currentTarget;
+      const name = $m('[data-n]').value.trim(); const monthly = parse($m('[data-m]').value); const mo = Math.round(parse($m('[data-mo]').value)); const d = $m('[data-d]').value;
+      if (name.length < 2) return toast('Informe o nome do cliente', true);
+      if (!(monthly > 0)) return toast('Informe a mensalidade', true);
+      if (!(mo >= 1 && mo <= 120)) return toast('Meses de contrato entre 1 e 120', true);
+      if (!d) return toast('Informe quando o contrato foi fechado', true);
+      let leadId = null;
+      if (!c) {
+        const txt = $m('[data-lead]').value.trim();
+        const l = txt ? S.leads.find((x) => `${x.nome} · ${x.whatsapp || x.email || ''}` === txt) : null;
+        if (txt && !l) return toast('Escolha um lead da lista ou deixe em branco', true);
+        leadId = l?.id || null;
+      }
+      btn.disabled = true;
+      try {
+        if (isLead) {
+          await DB.updateLeads([c.lead.id], { nome: name, valor: monthly, contract_months: mo === months ? null : mo, won_at: new Date(d + 'T12:00').toISOString() });
+          Object.assign(c.lead, { nome: name, valor: monthly, contract_months: mo === months ? null : mo, won_at: new Date(d + 'T12:00').toISOString() });
+        } else {
+          await DB.saveFinance({ ...(e ? { id: e.id } : { kind: 'receita', category: 'Venda (contrato)', lead_id: leadId, created_by: S.me?.id?.startsWith('demo') ? null : S.me?.id }),
+            description: name, date: d, months: mo, monthly_amount: monthly, amount: monthly * mo });
+        }
+        close(); toast(c ? 'Cliente atualizado' : 'Cliente adicionado');
+        window.dispatchEvent(new Event('tracto:reload-leads'));
+        done();
+      } catch (err) { btn.disabled = false; fail(err); }
     });
   });
 }

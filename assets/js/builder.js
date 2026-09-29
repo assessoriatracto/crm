@@ -1,7 +1,7 @@
 // Construtor de formulários (estilo Typeform): lista, editor de etapas, lógica, tema e prévia ao vivo
 import { DB } from '@shared/db.js';
 import { FORMS, formPath } from '@shared/forms.js';
-import { go, S, $, $$, esc, ICON, num, pct, toast, fail, modal, confirmBox, menu, popover, closePop } from './util.js?v=2609282021';
+import { go, S, $, $$, esc, ICON, num, pct, toast, fail, modal, confirmBox, menu, popover, closePop } from './util.js?v=2609282252';
 import { BTN_ICONS } from '@shared/form-engine.js';
 
 const SITE = window.TRACTO_CONFIG?.siteUrl || 'https://assessoriatracto.com.br';
@@ -585,10 +585,11 @@ function settingsModal(form) {
     <h4 class="px-h" style="margin-top:16px">Urgência</h4>
     <div class="grid2"><div class="row"><label class="lbl">Timer (minutos, 0 = sem timer)</label><input class="inp" type="number" min="0" max="240" data-timer value="${s.timer?.minutes || 0}"></div>
       <div class="row"><label class="lbl">Texto do timer</label><input class="inp" data-timer-label value="${esc(s.timer?.label || 'Condição especial expira em')}"></div></div>
-    <h4 class="px-h" style="margin-top:16px">Rastreamento extra</h4>
+    <h4 class="px-h" style="margin-top:16px">Rastreamento</h4>
+    <label class="bld-tog"><span>Pixels ativos neste formulário<small class="muted" style="display:block;font-size:12px;margin-top:2px">Meta, GA4, Google Ads e GTM cadastrados na aba Pixel, no navegador e pelo servidor. Ligado por padrão.</small></span><button type="button" class="switch ${s.pixels !== false ? 'on' : ''}" data-st="pixels"></button></label>
     <div class="row"><label class="lbl">Google Tag Manager deste formulário (opcional)</label><input class="inp" data-gtm value="${esc(s.gtm || '')}" placeholder="GTM-XXXXXXX"><p class="help">Os pixels da aba Pixel já valem pra todos os formulários. Use isto só se este formulário precisar de um contêiner GTM próprio.</p></div>
     <div class="modal-foot"><button class="b" data-close>Cancelar</button><button class="b b-primary" data-ok>Aplicar</button></div>`, (c, close) => {
-    const temp = { theme: { ...th }, hideBrand: s.hideBrand, privacy: s.privacy !== false };
+    const temp = { theme: { ...th }, hideBrand: s.hideBrand, privacy: s.privacy !== false, pixels: s.pixels !== false };
     c.querySelectorAll('[data-c]').forEach((i) => i.addEventListener('input', () => { temp.theme[i.dataset.c] = i.value.toUpperCase(); i.nextElementSibling.textContent = i.value.toUpperCase(); }));
     c.querySelectorAll('[data-st]').forEach((b) => b.addEventListener('click', () => { const on = !b.classList.contains('on'); b.classList.toggle('on', on); temp[b.dataset.st] = on; }));
     c.querySelector('[data-up="logo"]').addEventListener('change', async (e) => { try { temp.theme.logo = await DB.uploadMedia(e.target.files[0]); toast('Logo enviado'); } catch (err) { fail(err); } });
@@ -602,7 +603,7 @@ function settingsModal(form) {
       const minutes = Math.max(0, Math.min(240, Math.round(Number(c.querySelector('[data-timer]').value) || 0)));
       form.slug = slug;
       form.settings = {
-        ...s, theme: Object.fromEntries(Object.entries(temp.theme).filter(([, v]) => v)), hideBrand: !!temp.hideBrand, privacy: temp.privacy,
+        ...s, theme: Object.fromEntries(Object.entries(temp.theme).filter(([, v]) => v)), hideBrand: !!temp.hideBrand, privacy: temp.privacy, pixels: temp.pixels,
         title: c.querySelector('[data-title]').value.trim() || undefined, gtm: gtm || undefined,
         timer: minutes ? { minutes, label: c.querySelector('[data-timer-label]').value.trim() } : undefined
       };
