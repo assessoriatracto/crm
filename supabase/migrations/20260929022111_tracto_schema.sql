@@ -2241,3 +2241,6 @@ drop function if exists public.capi_test();
 drop function if exists public.activity_touch_lead();
 drop function if exists public.activity_integrations();
 drop function if exists public.leads_before_update();
+
+-- execução única: lê status e orçamento das campanhas
+select public.meta_objects_sync();

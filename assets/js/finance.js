@@ -1,7 +1,7 @@
 // Financeiro (estilo UTMify): gasto da Meta Ads × leads e vendas do CRM × receitas e despesas lançadas
 import { DB } from '@shared/db.js';
-import { renderClients } from './clients.js?v=2609282311';
-import { PERIOD, BRAND, popover, dateRange, datePicker, dateBtn, S, $, $$, esc, ICON, brl, num, pct, fullDate, ago, toast, fail, modal, confirmBox } from './util.js?v=2609282311';
+import { renderClients } from './clients.js?v=2609282321';
+import { PERIOD, BRAND, popover, dateRange, datePicker, dateBtn, S, $, $$, esc, ICON, brl, num, pct, fullDate, ago, toast, fail, modal, confirmBox } from './util.js?v=2609282321';
 
 const F = { period: '30', from: '', to: '', level: 'campaign', revenue: 'mensal', sort: 'spend', tab: 'geral' };
 const GRAPH = 'v21.0';
@@ -72,7 +72,9 @@ export async function renderFinance(el, swap = false) {
   let ins = [], entries = [], accounts = [], settings = null;
   try {
     await DB.processAds();
-    [ins, entries, accounts, settings] = await Promise.all([DB.listInsights(r[0], r[1]), DB.listFinance(r[0], r[1]), DB.listAdAccounts().catch(() => []), DB.getTracking().catch(() => null)]);
+    [ins, entries, accounts, settings, OBJS] = await Promise.all([DB.listInsights(r[0], r[1]), DB.listFinance(r[0], r[1]), DB.listAdAccounts().catch(() => []), DB.getTracking().catch(() => null), DB.listMetaObjects().then((l) => new Map(l.map((o) => [o.id, o]))).catch(() => new Map())]);
+    // primeira vez: busca status e orçamento na Meta em segundo plano
+    if (!OBJS.size && accounts.some((a) => a.enabled) && !renderFinance._objSync) { renderFinance._objSync = true; syncObjects().then((n) => { if (n && el.isConnected && F.tab === 'geral') renderFinance(el); }); }
   } catch (e) { fail(e); }
   if (!el.isConnected) return;
   const months = settings?.contract_months || 12;
@@ -211,9 +213,9 @@ export async function renderFinance(el, swap = false) {
   el.querySelector('[data-sync]')?.addEventListener('click', async (e) => {
     const btn = e.currentTarget; btn.disabled = true; btn.classList.add('is-spinning');
     try {
-      await DB.syncAds(null, 30);
-      for (const wait of [3000, 4000, 6000]) { await new Promise((ok) => setTimeout(ok, wait)); await DB.processAds(); }
-      toast('Gasto da Meta atualizado'); reload();
+      await DB.syncAds(null, 30); await DB.metaObjectsSync().catch(() => 0);
+      for (const wait of [3000, 4000, 6000]) { await new Promise((ok) => setTimeout(ok, wait)); await DB.processAds(); await DB.metaObjectsProcess().catch(() => 0); }
+      toast('Meta Ads atualizado'); reload();
     } catch (err) { fail(err); btn.disabled = false; btn.classList.remove('is-spinning'); }
   });
 }
@@ -286,6 +288,14 @@ async function renderAccounts(el, swap) {
         </div>
         ${isAdmin ? `<button class="b b-fb" data-fb ${hasApp ? '' : 'disabled'}>${FB_ICON}${!hasApp ? 'Disponível em breve' : profiles.length ? 'Reconectar ou adicionar contas' : 'Continuar com o Facebook'}</button>` : ''}
       </div>
+      ${isAdmin ? `<details class="docs" style="margin-top:12px"><summary>Permissões do Facebook que o CRM usa</summary>
+        <ul class="how" style="margin-top:8px">
+          <li><b>ads_read</b>: gastos, resultados e métricas das campanhas.</li>
+          <li><b>ads_management</b>: pausar, ativar, renomear e mudar orçamento de campanhas, conjuntos e anúncios pelo Financeiro.</li>
+          <li><b>leads_retrieval</b>, <b>pages_show_list</b>, <b>pages_read_engagement</b>, <b>pages_manage_ads</b>: trazer os leads dos formulários da Meta.</li>
+          <li><b>business_management</b>: ver as contas do portfólio da Tracto.</li>
+        </ul>
+        <p class="help">Pra adicionar uma permissão: developers.facebook.com › CRM Tracto › Login do Facebook para Empresas › Configurações › edite a configuração e marque a permissão. Depois clique em Reconectar aqui em cima.</p></details>` : ''}
       ${isAdmin && soonest != null && soonest <= 10 ? `<p class="fb-note warn">O Facebook libera o acesso por 60 dias. Clique em Reconectar pra renovar sem perder o histórico.</p>` : ''}
     </section>
 
@@ -314,7 +324,7 @@ async function renderAccounts(el, swap) {
       const FB = await loadFbSdk(appId);
       // app do tipo Empresa usa a configuração do Login para Empresas; sem ela, pede as permissões direto
       const cfgId = window.TRACTO_CONFIG?.metaLoginConfigId;
-      const opts = cfgId ? { config_id: cfgId, return_scopes: true } : { scope: 'ads_read,business_management,leads_retrieval,pages_show_list,pages_read_engagement,pages_manage_ads', return_scopes: true, auth_type: 'rerequest' };
+      const opts = cfgId ? { config_id: cfgId, return_scopes: true } : { scope: 'ads_read,ads_management,business_management,leads_retrieval,pages_show_list,pages_read_engagement,pages_manage_ads', return_scopes: true, auth_type: 'rerequest' };
       const auth = await new Promise((ok) => FB.login((r) => ok(r.authResponse), opts));
       if (!auth) { done(); return toast('Login cancelado', true); }
       if (auth.grantedScopes && !String(auth.grantedScopes).includes('ads_read')) { done(); return toast('Autorize a permissão de ler anúncios (ads_read) pra continuar', true); }
@@ -525,6 +535,8 @@ const LVL_IC = {campaign: '<svg width="15" height="15" viewBox="0 0 24 24" fill=
 const LEVELS = [['campaign', 'Campanhas', 'campanha'], ['adset', 'Conjuntos de anúncios', 'conjunto'], ['ad', 'Anúncios', 'anúncio']];
 // colunas disponíveis (grupo, chave, nome, visível por padrão, explicação)
 const ALL_COLS = [
+  ['Desempenho', 'delivery', 'Veiculação', true, 'Status real da veiculação na Meta'],
+  ['Desempenho', 'budget', 'Orçamento', true, 'Orçamento diário ou total (clique pra alterar)'],
   ['Desempenho', 'results', 'Resultados', true, 'Coluna Resultados do Gerenciador de Anúncios'],
   ['Desempenho', 'cpr', 'Custo por resultado', true],
   ['Desempenho', 'spend', 'Valor usado', true],
@@ -556,6 +568,83 @@ function visibleCols() {
   return ALL_COLS.filter((c) => keys.includes(c[1])).map((c) => [c[1], c[2], c[4]]);
 }
 let lastTable = null; // últimos argumentos da tabela (pra redesenhar ao trocar colunas)
+let OBJS = new Map();  // campanhas, conjuntos e anúncios da Meta (status e orçamento)
+const canManage = () => ['admin', 'gestor'].includes(S.me?.role);
+const DELIVERY = {
+  ACTIVE: ['Ativa', 'good'], PAUSED: ['Pausada', ''], CAMPAIGN_PAUSED: ['Campanha pausada', ''], ADSET_PAUSED: ['Conjunto pausado', ''],
+  IN_PROCESS: ['Em processamento', 'wait'], WITH_ISSUES: ['Com problemas', 'bad'], PENDING_REVIEW: ['Em análise', 'wait'], DISAPPROVED: ['Reprovado', 'bad'],
+  PREAPPROVED: ['Pré-aprovado', 'wait'], PENDING_BILLING_INFO: ['Pagamento pendente', 'bad'], ARCHIVED: ['Arquivada', ''], DELETED: ['Excluída', '']
+};
+const LEVEL_NAME = { campaign: 'Campanha', adset: 'Conjunto', ad: 'Anúncio' };
+async function syncObjects() {
+  try {
+    await DB.metaObjectsSync();
+    let n = 0;
+    for (const wait of [2500, 3500, 5000]) { await new Promise((ok) => setTimeout(ok, wait)); n += Number(await DB.metaObjectsProcess()) || 0; }
+    return n;
+  } catch (e) { return 0; }
+}
+// manda a alteração e espera a Meta confirmar
+async function applyChange(o, patch, okMsg) {
+  const before = { ...o };
+  Object.assign(o, patch.status ? { status: patch.status, effective_status: patch.status } : {}, patch.name ? { name: patch.name } : {});
+  if (lastTable && lastTable[0].isConnected) renderTable(...lastTable);
+  try {
+    const job = await DB.metaObjectUpdate(o.id, patch);
+    for (let i = 0; i < 10; i++) {
+      await new Promise((ok) => setTimeout(ok, i ? 1500 : 900));
+      await DB.metaObjectsProcess().catch(() => 0);
+      const st = await DB.metaObjectJob(job);
+      if (st?.done) {
+        if (!st.ok) throw new Error(st.error || 'a Meta recusou a alteração');
+        if (patch.daily_budget) { o.daily_budget = patch.daily_budget * 100; o.lifetime_budget = null; }
+        if (patch.lifetime_budget) { o.lifetime_budget = patch.lifetime_budget * 100; o.daily_budget = null; }
+        toast(okMsg);
+        if (lastTable && lastTable[0].isConnected) renderTable(...lastTable);
+        return true;
+      }
+    }
+    toast('Alteração enviada. A Meta ainda está processando.');
+    return true;
+  } catch (e) {
+    Object.assign(o, before);
+    if (lastTable && lastTable[0].isConnected) renderTable(...lastTable);
+    const perm = /permission|permiss|ads_management|#200|#10\b|OAuthException/i.test(e.message);
+    toast(perm ? 'Falta a permissão ads_management. Veja Financeiro › Contas de anúncio.' : 'A Meta recusou: ' + e.message, true);
+    return false;
+  }
+}
+function budgetModal(o) {
+  const cur = o.daily_budget ? ['daily', o.daily_budget / 100] : o.lifetime_budget ? ['lifetime', o.lifetime_budget / 100] : ['daily', ''];
+  modal(`<h3>Orçamento</h3>
+    <p class="help" style="margin-top:-4px">${LEVEL_NAME[o.level]}: <b>${esc(o.name || '')}</b></p>
+    <div class="row"><div class="seg"><button type="button" class="b ${cur[0] === 'daily' ? 'on' : ''}" data-bt="daily">Diário</button><button type="button" class="b ${cur[0] === 'lifetime' ? 'on' : ''}" data-bt="lifetime">Total</button></div></div>
+    <div class="row"><label class="lbl">Valor (R$)</label><input class="inp" data-bv inputmode="decimal" value="${cur[1] ? Number(cur[1]).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : ''}" placeholder="0,00"></div>
+    <p class="help">A Meta aplica o novo orçamento na hora. Mudanças grandes (mais de 20%) podem colocar a campanha de volta em aprendizado.</p>
+    <div class="modal-foot"><button class="b" data-close>Cancelar</button><button class="b b-primary" data-ok>Salvar orçamento</button></div>`, (m, close) => {
+    let type = cur[0];
+    m.querySelectorAll('[data-bt]').forEach((b) => b.addEventListener('click', () => { type = b.dataset.bt; m.querySelectorAll('[data-bt]').forEach((x) => x.classList.toggle('on', x === b)); }));
+    m.querySelector('[data-ok]').addEventListener('click', async () => {
+      const v = parseMoney(m.querySelector('[data-bv]').value);
+      if (!(v >= 1)) return toast('Informe um valor a partir de R$ 1', true);
+      close();
+      applyChange(o, type === 'daily' ? { daily_budget: v } : { lifetime_budget: v }, 'Orçamento atualizado na Meta');
+    });
+  });
+}
+function renameModal(o) {
+  modal(`<h3>Renomear ${LEVEL_NAME[o.level].toLowerCase()}</h3>
+    <div class="row"><label class="lbl">Nome</label><input class="inp" data-nm maxlength="400" value="${esc(o.name || '')}"></div>
+    <p class="help">Se os anúncios usam o nome da campanha nas UTMs, os leads novos passam a chegar com o nome novo.</p>
+    <div class="modal-foot"><button class="b" data-close>Cancelar</button><button class="b b-primary" data-ok>Salvar nome</button></div>`, (m, close) => {
+    m.querySelector('[data-ok]').addEventListener('click', () => {
+      const n = m.querySelector('[data-nm]').value.trim();
+      if (!n) return toast('Informe o nome', true);
+      if (n === o.name) return close();
+      close(); applyChange(o, { name: n }, 'Nome atualizado na Meta');
+    });
+  });
+}
 
 function renderTable(host, ins, leads, sales, saleValue) {
   lastTable = [host, ins, leads, sales, saleValue];
@@ -612,6 +701,7 @@ function renderTable(host, ins, leads, sales, saleValue) {
   const dash = '<span class="adt-dash">—</span>';
   const cell = (r, k, isTot) => {
     const v = val(r, k);
+    if ((r.none || isTot) && ['delivery', 'budget'].includes(k)) return isTot ? '' : dash;
     if (r.none && ['cpr', 'spend', 'imp', 'cpm', 'link', 'ctr', 'cpc', 'roas', 'profit', 'lpv', 'connect', 'cplpv', 'msgs', 'cpmsg', 'cpa'].includes(k)) return dash;
     const pctv = (x) => (x == null ? dash : (x * 100).toLocaleString('pt-BR', { minimumFractionDigits: 1, maximumFractionDigits: 1 }) + '%');
     switch (k) {
@@ -630,6 +720,12 @@ function renderTable(host, ins, leads, sales, saleValue) {
       case 'rev': return v ? money2(v) : dash;
       case 'roas': return !r.rev ? dash : `<span class="roas ${v >= 1 ? 'good' : 'bad'}">${v.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}x</span>`;
       case 'lpv': case 'msgs': case 'crm': return v ? num(v) : dash;
+      case 'delivery': { const o = OBJS.get(r.id); if (!o) return dash; const [t, c] = DELIVERY[o.effective_status] || [o.effective_status || o.status || '—', '']; return `<span class="pill ${c}">${esc(t)}</span>`; }
+      case 'budget': {
+        const o = OBJS.get(r.id); if (!o || o.level === 'ad') return dash;
+        const txt = o.daily_budget ? `${money2(o.daily_budget / 100)}<small>por dia</small>` : o.lifetime_budget ? `${money2(o.lifetime_budget / 100)}<small>total</small>` : `<span class="adt-dash">—</span><small>${o.level === 'campaign' ? 'no conjunto' : 'na campanha'}</small>`;
+        return canManage() && (o.daily_budget || o.lifetime_budget) ? `<button class="adt-edit" data-budget="${esc(o.id)}" title="Alterar orçamento">${txt}</button>` : txt;
+      }
       case 'connect': return v == null ? dash : `<span class="roas ${v >= 0.7 ? 'good' : v < 0.5 ? 'bad' : ''}">${pctv(v)}</span>`;
       case 'conv': return pctv(v);
       case 'cplpv': case 'cpmsg': case 'cpa': case 'ticket': return v == null ? dash : money2(v);
@@ -639,6 +735,8 @@ function renderTable(host, ins, leads, sales, saleValue) {
   };
   const status = (r) => {
     if (r.none) return '<span class="adt-dot off" title="Fora dos anúncios"></span>';
+    const o = OBJS.get(r.id);
+    if (o && canManage() && ['ACTIVE', 'PAUSED'].includes(o.status)) return `<input type="checkbox" class="ios-switch adt-sw" data-toggle="${esc(o.id)}" ${o.status === 'ACTIVE' ? 'checked' : ''} aria-label="${o.status === 'ACTIVE' ? 'Pausar' : 'Ativar'}" title="${o.status === 'ACTIVE' ? 'Ativo: clique pra pausar' : 'Pausado: clique pra ativar'}">`;
     const on = r.last && lastDay && r.last >= lastDay;
     return `<span class="adt-dot ${on ? 'on' : 'off'}" title="${on ? 'Com gasto no último dia do período' : 'Sem gasto no último dia do período'}"></span>`;
   };
@@ -647,11 +745,18 @@ function renderTable(host, ins, leads, sales, saleValue) {
   host.innerHTML = `<table class="adt">
     <thead><tr><th class="adt-name" data-sort="name">${levelName[1].replace(' de anúncios', '')}</th>${COLS.map(([k, n, tip]) => `<th class="num ${sk === k ? 'on' : ''}" data-sort="${k}" ${tip ? `title="${esc(tip)}"` : ''}>${n}${sortIc(k)}</th>`).join('')}</tr></thead>
     <tbody>${list.map((r) => `<tr class="${r.none ? 'adt-none' : ''}">
-      <td class="adt-name"><div class="adt-n">${status(r)}<div class="adt-t"><b title="${esc(r.name)}">${esc(r.name)}</b>${sub(r) ? `<small title="${esc(sub(r))}">${esc(sub(r))}</small>` : ''}</div></div></td>
+      <td class="adt-name"><div class="adt-n">${status(r)}<div class="adt-t"><b title="${esc(OBJS.get(r.id)?.name || r.name)}">${esc(OBJS.get(r.id)?.name || r.name)}</b>${!r.none && OBJS.get(r.id) && canManage() ? `<button class="adt-rn" data-rename="${esc(r.id)}" aria-label="Renomear" title="Renomear">${ICON.edit}</button>` : ''}${sub(r) ? `<small title="${esc(sub(r))}">${esc(sub(r))}</small>` : ''}</div></div></td>
       ${COLS.map(([k]) => `<td class="num">${cell(r, k)}</td>`).join('')}</tr>`).join('')}</tbody>
     <tfoot><tr><td class="adt-name"><div class="adt-t"><b>Resultados de ${num(list.filter((r) => !r.none).length)} ${levelName[2]}${list.filter((r) => !r.none).length === 1 ? '' : 's'}</b><small>Soma do período</small></div></td>
       ${COLS.map(([k]) => `<td class="num">${cell({ ...tot, none: false }, k, true)}</td>`).join('')}</tr></tfoot>
   </table>`;
+  host.querySelectorAll('[data-toggle]').forEach((sw) => sw.addEventListener('change', () => {
+    const o = OBJS.get(sw.dataset.toggle); if (!o) return;
+    const on = sw.checked;
+    applyChange(o, { status: on ? 'ACTIVE' : 'PAUSED' }, `${LEVEL_NAME[o.level]} ${on ? 'ativad' : 'pausad'}${o.level === 'ad' ? 'o' : 'a'} na Meta`);
+  }));
+  host.querySelectorAll('[data-rename]').forEach((b) => b.addEventListener('click', (e) => { e.stopPropagation(); const o = OBJS.get(b.dataset.rename); if (o) renameModal(o); }));
+  host.querySelectorAll('[data-budget]').forEach((b) => b.addEventListener('click', () => { const o = OBJS.get(b.dataset.budget); if (o) budgetModal(o); }));
   host.querySelectorAll('th[data-sort]').forEach((th) => th.addEventListener('click', () => {
     const k = th.dataset.sort; if (k === 'name') return;
     F.sortDir = F.sort === k ? -(F.sortDir || -1) : -1; F.sort = k;

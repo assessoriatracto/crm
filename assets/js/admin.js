@@ -1,8 +1,8 @@
 // Página "Ajustes": estágios, rótulos, equipe, times e auditoria
 import { DB, LIVE } from '@shared/db.js';
-import { S, $, $$, esc, ICON, COLORS, num, pct, ago, toast, fail, confirmBox } from './util.js?v=2609282311';
-import { openProfile } from './profile.js?v=2609282311';
-import { stageModal, moveStage, deleteStageFlow } from './app.js?v=2609282311';
+import { S, $, $$, esc, ICON, COLORS, num, pct, ago, toast, fail, confirmBox } from './util.js?v=2609282321';
+import { openProfile } from './profile.js?v=2609282321';
+import { stageModal, moveStage, deleteStageFlow } from './app.js?v=2609282321';
 
 // ============================================================
 // AJUSTES
