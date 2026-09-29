@@ -1,7 +1,7 @@
 // Financeiro > Fluxo de caixa: resultado mês a mês (DRE simples) e previsão dos próximos 3 meses
 import { DB } from '@shared/db.js';
-import { esc, brl, fail } from './util.js?v=2609291922';
-import { contracts, received, result } from './dashboard.js?v=2609291922';
+import { esc, brl, fail } from './util.js?v=2609291926';
+import { contracts, received, result } from './dashboard.js?v=2609291926';
 
 const CF = { months: 6 };
 const iso = (d) => new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 10);

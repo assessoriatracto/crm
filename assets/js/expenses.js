@@ -1,6 +1,6 @@
 // Financeiro > Despesas: fixas (cadastradas uma vez, lançadas todo mês) e variáveis (lançamentos avulsos)
 import { DB } from '@shared/db.js';
-import { S, esc, ICON, brl, num, toast, fail, modal, menu, confirmBox } from './util.js?v=2609291922';
+import { S, esc, ICON, brl, num, toast, fail, modal, menu, confirmBox } from './util.js?v=2609291926';
 
 const E = { type: 'todas' };
 const CATS_FIXED = ['Ferramentas', 'Equipe', 'Contador', 'Aluguel', 'Impostos', 'Outros'];
