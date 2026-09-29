@@ -1,7 +1,7 @@
 // Financeiro > Clientes: contratos ativos, cancelamentos (churn) e origem de cada venda (campanha › conjunto › anúncio).
 import { DB } from '@shared/db.js';
-import { S, esc, ICON, brl, num, toast, fail, modal, menu, dateRange } from './util.js?v=2609282258';
-import { contracts, activeAt } from './dashboard.js?v=2609282258';
+import { S, esc, ICON, brl, num, toast, fail, modal, menu, dateRange } from './util.js?v=2609282300';
+import { contracts, activeAt } from './dashboard.js?v=2609282300';
 
 const C = { status: 'ativos', q: '' };
 const REASONS = ['Preço', 'Resultado abaixo do esperado', 'Atendimento', 'Fechou ou vendeu a loja', 'Cortou custos', 'Foi para outra agência', 'Outro'];
@@ -133,7 +133,7 @@ function clientModal(c, months, done) {
       <div class="row"><label class="lbl">Contrato fechado em</label><input class="inp" type="date" data-d value="${c ? iso(c.start) : iso(new Date())}" max="${iso(new Date())}"></div>
     </div>
     <p class="help" data-tot></p>
-    ${!c ? `<div class="row"><label class="lbl">Lead do cliente (opcional)</label><input class="inp" list="clNewLeads" data-lead placeholder="Busque pelo nome ou WhatsApp">
+    ${!c ? `<div class="row"><label class="lbl">Contato do cliente (opcional)</label><input class="inp" list="clNewLeads" data-lead placeholder="Busque pelo nome ou WhatsApp">
       <datalist id="clNewLeads">${leadOpts.slice(0, 800).map((l) => `<option value="${esc(`${l.nome} · ${l.whatsapp || l.email || ''}`)}"></option>`).join('')}</datalist>
       <p class="help">Ligando ao lead, a venda vai pra Meta com os dados dele e a campanha de origem.</p></div>` : ''}
     <div class="modal-foot"><button class="b" data-close>Cancelar</button><button class="b b-primary" data-ok>${c ? 'Salvar' : 'Adicionar cliente'}</button></div>`, (m, close) => {
@@ -195,7 +195,7 @@ function originModal(c, ins, done) {
   const leadOpts = S.leads.filter((l) => !l.won_at || l.id === c.lead?.id).sort((x, y) => x.nome.localeCompare(y.nome));
   modal(`<h3>Origem da venda</h3>
     <p class="help" style="margin-top:-4px"><b>${esc(c.name)}</b>. Vendas de leads que chegaram pelos formulários já vêm com a origem sozinhas (pelos parâmetros de URL). Aqui você define para as vendas antigas ou lançadas à mão.</p>
-    ${needLead ? `<div class="row"><label class="lbl">Lead do cliente</label><input class="inp" list="clLeads" data-lead placeholder="Busque pelo nome ou WhatsApp" value="${esc(c.lead ? `${c.lead.nome} · ${c.lead.whatsapp || c.lead.email || ''}` : '')}">
+    ${needLead ? `<div class="row"><label class="lbl">Contato do cliente</label><input class="inp" list="clLeads" data-lead placeholder="Busque pelo nome ou WhatsApp" value="${esc(c.lead ? `${c.lead.nome} · ${c.lead.whatsapp || c.lead.email || ''}` : '')}">
       <datalist id="clLeads">${leadOpts.slice(0, 800).map((l) => `<option value="${esc(`${l.nome} · ${l.whatsapp || l.email || ''}`)}"></option>`).join('')}</datalist>
       <p class="help">Com o lead ligado, a venda vai pra Meta com os dados dele (e-mail e telefone criptografados), o valor do contrato e a campanha. É isso que ensina a Meta a buscar quem compra.</p></div>` : ''}
     <div class="row"><label class="lbl">Campanha</label><select class="inp" data-cp><option value="">Selecione</option>${clist.map((cp, i) => `<option value="${i}" ${(o.utm_id && o.utm_id === cp.id) || o.utm_campaign === cp.name ? 'selected' : ''}>${esc(cp.name)}</option>`).join('')}<option value="manual">Outra (digitar)</option></select></div>
