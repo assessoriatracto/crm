@@ -1,7 +1,7 @@
 // "Meu perfil": página própria (/perfil) com dados pessoais, notificações e segurança
 import { DB, LIVE } from '@shared/db.js';
-import { S, esc, toast, fail, modal, ICON } from './util.js?v=2609290946';
-import { passwordCheck } from './auth.js?v=2609290946';
+import { S, esc, toast, fail, modal, ICON } from './util.js?v=2609291008';
+import { passwordCheck } from './auth.js?v=2609291008';
 
 const ROLE = { admin: 'Admin', gestor: 'Gestor', sdr: 'SDR' };
 const ROLE_HELP = { admin: 'Acesso total ao CRM, incluindo usuários e integrações.', gestor: 'Gerencia leads, financeiro, formulários e ajustes da equipe.', sdr: 'Atende e move os leads atribuídos no pipeline.' };
