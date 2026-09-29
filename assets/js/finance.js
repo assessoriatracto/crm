@@ -1,7 +1,10 @@
 // Financeiro (estilo UTMify): gasto da Meta Ads × leads e vendas do CRM × receitas e despesas lançadas
 import { DB } from '@shared/db.js';
-import { renderClients } from './clients.js?v=2609291008';
-import { PERIOD, BRAND, popover, dateRange, datePicker, dateBtn, S, $, $$, esc, ICON, brl, num, pct, fullDate, ago, toast, fail, modal, confirmBox } from './util.js?v=2609291008';
+import { renderClients } from './clients.js?v=2609291406';
+import { renderExpenses } from './expenses.js?v=2609291406';
+import { renderCashflow } from './cashflow.js?v=2609291406';
+import { contractFields, bindContract, contractTags } from './contract.js?v=2609291406';
+import { PERIOD, BRAND, popover, dateRange, datePicker, dateBtn, S, $, $$, esc, ICON, brl, num, pct, fullDate, ago, toast, fail, modal, confirmBox } from './util.js?v=2609291406';
 
 const F = { period: '30', from: '', to: '', level: 'campaign', revenue: 'mensal', sort: 'spend', tab: 'geral' };
 const GRAPH = 'v21.0';
@@ -51,6 +54,8 @@ const TAB_IC = (d) => `<svg width="17" height="17" viewBox="0 0 24 24" fill="non
 const TABS = [
   ['geral', 'Visão geral', TAB_IC('<rect x="3" y="3" width="7" height="9" rx="1.5"/><rect x="14" y="3" width="7" height="5" rx="1.5"/><rect x="14" y="12" width="7" height="9" rx="1.5"/><rect x="3" y="16" width="7" height="5" rx="1.5"/>')],
   ['clientes', 'Clientes', TAB_IC('<circle cx="9" cy="8" r="3.5"/><path d="M2.5 20c.9-3.4 3.4-5.5 6.5-5.5s5.6 2.1 6.5 5.5"/><path d="M16 4.6a3.5 3.5 0 0 1 0 6.8M18 14.8c1.8.7 3 2.5 3.5 5.2"/>')],
+  ['despesas', 'Despesas', TAB_IC('<path d="M5 3h14v18l-3-2-2 2-2-2-2 2-2-2-3 2z"/><path d="M9 8h6M9 12h6M9 16h3"/>')],
+  ['fluxo', 'Fluxo de caixa', TAB_IC('<path d="M3 17l5-5 4 4 8-8"/><path d="M15 8h5v5"/>')],
   ['contas', 'Contas de anúncio', TAB_IC('<path d="M19 7V5.5A1.5 1.5 0 0 0 17.5 4H5a2 2 0 0 0 0 4h14a1 1 0 0 1 1 1v10a1 1 0 0 1-1 1H5a2 2 0 0 1-2-2V6"/><path d="M16.5 14h.01"/>')],
 ];
 const tabBar = () => `<nav class="ptabs" role="tablist">${TABS.map(([k, n, ic]) => `<button role="tab" class="ptab ${F.tab === k ? 'on' : ''}" aria-selected="${F.tab === k}" data-tab="${k}">${ic}<span>${n}</span></button>`).join('')}</nav>`;
@@ -66,6 +71,14 @@ export async function renderFinance(el, swap = false) {
   F.period = PERIOD.period; F.from = PERIOD.from; F.to = PERIOD.to;
   try { const t = sessionStorage.getItem('tracto_fin_tab'); if (t) { F.tab = t; sessionStorage.removeItem('tracto_fin_tab'); } } catch (e) {}
   if (F.tab === 'contas') return renderAccounts(el, swap);
+  if (F.tab === 'despesas' || F.tab === 'fluxo') {
+    const exp = F.tab === 'despesas';
+    el.innerHTML = `<div class="topline"><h1>Financeiro</h1><div class="grow"></div>${exp ? dateBtn(F) : ''}</div>${tabBar()}<div class="tab-body ${swap ? 'swap-in' : ''}" data-sub></div>`;
+    bindTabs(el);
+    el.querySelector('[data-date]')?.addEventListener('click', (e) => datePicker(e.currentTarget, F, (st) => { Object.assign(F, st); Object.assign(PERIOD, st); renderFinance(el); }));
+    const host = el.querySelector('[data-sub]');
+    return exp ? renderExpenses(host, F, { range, entryModal }) : renderCashflow(host);
+  }
   if (F.tab === 'clientes') {
     el.innerHTML = `<div class="topline"><h1>Financeiro</h1><div class="grow"></div>${dateBtn(F)}</div>${tabBar()}<div class="tab-body ${swap ? 'swap-in' : ''}" data-clients></div>`;
     bindTabs(el);
@@ -76,7 +89,7 @@ export async function renderFinance(el, swap = false) {
   const r = range();
   let ins = [], entries = [], accounts = [], settings = null;
   try {
-    await DB.processAds();
+    await Promise.all([DB.processAds(), DB.runRecurring?.()]);
     [ins, entries, accounts, settings, OBJS] = await Promise.all([DB.listInsights(r[0], r[1]), DB.listFinance(r[0], r[1]), DB.listAdAccounts().catch(() => []), DB.getTracking().catch(() => null), DB.listMetaObjects().then((l) => new Map(l.map((o) => [o.id, o]))).catch(() => new Map())]);
     // primeira vez: busca status e orçamento na Meta em segundo plano
     if (!OBJS.size && accounts.some((a) => a.enabled) && !renderFinance._objSync) { renderFinance._objSync = true; syncObjects().then((n) => { if (n && el.isConnected && F.tab === 'geral') renderFinance(el); }); }
@@ -150,7 +163,6 @@ export async function renderFinance(el, swap = false) {
       <div class="seg"><button class="b b-sm ${F.revenue === 'mensal' ? 'on' : ''}" data-rev="mensal">Receita: 1ª mensalidade</button><button class="b b-sm ${F.revenue === 'contrato' ? 'on' : ''}" data-rev="contrato">Receita: contrato</button></div>
       <div class="grow"></div>
       ${accounts.length ? `<button class="b b-refresh" data-sync>${ICON.refresh}Sincronizar Meta Ads</button>` : ''}
-      <button class="b b-primary" data-entry>+ Lançamento</button>
     </div>
     <div class="fin-tiles">${tiles.map(([l, v, sub, cls]) => `<section class="panel ftile ${cls || ''}"><div class="t-label">${l}</div><div class="t-value">${v}</div><div class="t-sub">${esc(sub)}</div></section>`).join('')}</div>
 
@@ -173,9 +185,9 @@ export async function renderFinance(el, swap = false) {
 
     <div class="int-grid" style="margin-top:12px">
       <section class="panel int-card">
-        <div class="int-h"><div><h3>Lançamentos</h3><p class="help">Vendas feitas por fora do CRM, outras receitas e despesas: ferramentas, equipe, impostos…</p></div></div>
+        <div class="int-h"><div><h3>Lançamentos</h3><p class="help">Vendas feitas por fora do CRM, outras receitas e despesas do período.</p></div><button class="b b-primary b-sm" data-entry>+ Novo lançamento</button></div>
         ${entries.length ? `<div class="table-wrap"><table class="int-table"><thead><tr><th>Data</th><th>Tipo</th><th>Categoria</th><th>Descrição</th><th class="num">Valor</th><th></th></tr></thead><tbody>
-          ${entries.map((e) => `<tr data-id="${e.id}" class="row-click" title="Clique para editar"><td class="nowrap">${new Date(e.date + 'T12:00').toLocaleDateString('pt-BR')}</td><td><span class="pill ${e.kind === 'receita' ? 'good' : 'bad'}">${e.kind === 'receita' ? 'Receita' : 'Despesa'}</span></td><td>${esc(e.category)}</td><td>${esc(e.description || '')}${e.months ? `<br><small class="muted">${e.months} × ${brl(e.monthly_amount || 0)}</small>` : ''}</td><td class="num">${brl(e.amount)}</td><td style="text-align:right"><span class="row-acts"><button class="b b-sm b-ghost" data-eedit aria-label="Editar">${ICON.edit}</button><button class="b b-sm b-ghost" data-edel aria-label="Excluir">${ICON.x}</button></span></td></tr>`).join('')}
+          ${entries.map((e) => `<tr data-id="${e.id}" class="row-click" title="Clique para editar"><td class="nowrap">${new Date(e.date + 'T12:00').toLocaleDateString('pt-BR')}</td><td><span class="pill ${e.kind === 'receita' ? 'good' : 'bad'}">${e.kind === 'receita' ? 'Receita' : 'Despesa'}</span></td><td>${esc(e.category)}${e.kind === 'despesa' ? `<br><small class="muted">${e.recurring_id || e.expense_type === 'fixa' ? 'Fixa' : 'Variável'}</small>` : ''}</td><td>${esc(e.description || '')}${isSaleEntry(e) ? `<div class="ctr-tags">${contractTags(e.service, e.plan)}${e.plan !== 'unico' && e.months ? `<small class="muted">${e.months} × ${brl(e.monthly_amount || 0)}</small>` : ''}</div>` : ''}</td><td class="num">${brl(e.amount)}</td><td style="text-align:right"><span class="row-acts"><button class="b b-sm b-ghost" data-eedit aria-label="Editar">${ICON.edit}</button><button class="b b-sm b-ghost" data-edel aria-label="Excluir">${ICON.x}</button></span></td></tr>`).join('')}
         </tbody></table></div>` : '<p class="muted empty-line">Nenhum lançamento no período.</p>'}
       </section>
       <section class="panel int-card">
@@ -724,7 +736,7 @@ function renderTable(host, ins, leads, sales, saleValue) {
       case 'ctr': return v == null ? dash : (v * 100).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + '%';
       case 'sales': return v ? `<b>${num(v)}</b>` : dash;
       case 'rev': return v ? money2(v) : dash;
-      case 'roas': return !r.rev ? dash : `<span class="roas ${v >= 1 ? 'good' : 'bad'}">${v.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}x</span>`;
+      case 'roas': return !r.rev || v == null || !Number.isFinite(v) ? dash : `<span class="roas ${v >= 1 ? 'good' : 'bad'}">${v.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}x</span>`;
       case 'lpv': case 'msgs': case 'crm': return v ? num(v) : dash;
       case 'delivery': { const o = OBJS.get(r.id); if (!o) return dash; const [t, c] = DELIVERY[o.effective_status] || [o.effective_status || o.status || '—', '']; return `<span class="pill ${c}">${esc(t)}</span>`; }
       case 'budget': {
@@ -808,33 +820,31 @@ function dailyChart(host, r, ins, sales, entries, saleValue) {
   svg.addEventListener('mouseleave', () => { tip.hidden = true; host.querySelectorAll('.bar').forEach((b) => b.classList.remove('dim')); });
 }
 
-function entryModal(done, entry = null) {
-  let kind = entry?.kind || 'receita';
-  let totalTouched = !!(entry && entry.months && entry.monthly_amount && Math.abs(entry.months * entry.monthly_amount - entry.amount) > 0.009);
+export function entryModal(done, entry = null, opts = {}) {
+  let kind = entry?.kind || opts.kind || 'receita';
+  const fixedEntry = !!(entry?.recurring_id);
   const cats = () => CATS[kind].map((c) => `<option>${c}</option>`).join('');
   const fmt0 = (n) => (Number(n) > 0 ? Number(n).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '');
-  modal(`<h3>${entry ? (SALE_CATS.includes(entry.category) ? 'Editar venda' : 'Editar lançamento') : 'Novo lançamento'}</h3>
-    <div class="row"><div class="seg"><button type="button" class="b ${kind === 'receita' ? 'on' : ''}" data-k="receita">Receita</button><button type="button" class="b ${kind === 'despesa' ? 'on' : ''}" data-k="despesa">Despesa</button></div></div>
+  const saleE = entry && SALE_CATS.includes(entry.category);
+  modal(`<h3>${entry ? (saleE ? 'Editar venda' : 'Editar lançamento') : opts.kind === 'despesa' ? 'Nova despesa variável' : 'Novo lançamento'}</h3>
+    ${fixedEntry ? '<p class="help" style="margin-top:-4px">Despesa fixa. O que mudar aqui vale só para este mês; o valor dos próximos meses se edita em Financeiro › Despesas.</p>' : ''}
+    <div class="row" ${opts.kind || fixedEntry ? 'hidden' : ''}><div class="seg"><button type="button" class="b ${kind === 'receita' ? 'on' : ''}" data-k="receita">Receita</button><button type="button" class="b ${kind === 'despesa' ? 'on' : ''}" data-k="despesa">Despesa</button></div></div>
     <div class="grid2"><div class="row"><label class="lbl">Categoria</label><select class="inp" data-cat>${cats()}</select></div>
-      <div class="row"><label class="lbl" data-date-l>Contrato fechado em</label><input class="inp" type="date" data-date value="${entry?.date || ''}" max="${iso(new Date())}"></div></div>
+      <div class="row"><label class="lbl" data-date-l>Contrato fechado em</label><input class="inp" type="date" data-date value="${entry?.date || (opts.kind ? iso(new Date()) : '')}" ${fixedEntry ? '' : `max="${iso(new Date())}"`}></div></div>
     <div data-sale>
-      <div class="grid3">
-        <div class="row"><label class="lbl">Meses de contrato</label><input class="inp" data-months inputmode="numeric" value="${entry?.months || 12}"></div>
-        <div class="row"><label class="lbl">Valor mensal (R$)</label><input class="inp" data-monthly inputmode="decimal" placeholder="0,00" value="${fmt0(entry?.monthly_amount)}"></div>
-        <div class="row"><label class="lbl">Valor total (R$)</label><input class="inp" data-total inputmode="decimal" placeholder="0,00" value="${entry && SALE_CATS.includes(entry.category) ? fmt0(entry.amount) : ''}"></div>
-      </div>
-      <p class="help" style="margin-top:-4px">O total é calculado sozinho (mensal × meses). Se o valor arrecadado for outro, é só editar.</p>
-      <div class="row"><label class="lbl">Contrato cancelado em <span class="muted" style="text-transform:none;letter-spacing:0">(opcional, entra no churn)</span></label><input class="inp" type="date" data-canceled value="${entry?.canceled_at || ''}"></div>
+      ${contractFields({ service: entry?.service, plan: entry?.plan || (saleE ? (entry.months === 1 && !entry.plan ? 'mensal' : entry.months === 6 ? 'semestral' : entry.months === 12 ? 'anual' : 'mensal') : 'mensal'), months: entry?.months, monthly: entry?.monthly_amount, total: saleE ? entry.amount : null })}
+      <div class="row" data-cancel-row><label class="lbl">Contrato cancelado em <span class="muted" style="text-transform:none;letter-spacing:0">(opcional, entra no churn)</span></label><input class="inp" type="date" data-canceled value="${entry?.canceled_at || ''}"></div>
     </div>
-    <div class="row" data-simple hidden><label class="lbl">Valor (R$)</label><input class="inp" data-amount inputmode="decimal" placeholder="0,00" value="${entry && !SALE_CATS.includes(entry.category) ? fmt0(entry.amount) : ''}"></div>
+    <div class="row" data-simple hidden><label class="lbl">Valor (R$)</label><input class="inp" data-amount inputmode="decimal" placeholder="0,00" value="${entry && !saleE ? fmt0(entry.amount) : ''}"></div>
     <div class="row"><label class="lbl" data-desc-l>Cliente</label><input class="inp" data-desc maxlength="200" placeholder="Ex: Ferragista Silva" value="${esc(entry?.description || '')}"></div>
     <div class="modal-foot">${entry ? '<button class="b b-danger" data-del style="margin-right:auto">Excluir</button>' : ''}<button class="b" data-close>Cancelar</button><button class="b b-primary" data-ok>Salvar</button></div>`, (c, close) => {
     const $c = (sel) => c.querySelector(sel);
+    const ctr = bindContract(c);
     if (entry) {
       const opt = [...$c('[data-cat]').options].find((o) => o.value === entry.category || (SALE_CATS.includes(entry.category) && SALE_CATS.includes(o.value)));
       if (opt) $c('[data-cat]').value = opt.value; else $c('[data-cat]').insertAdjacentHTML('afterbegin', `<option selected>${esc(entry.category)}</option>`);
       $c('[data-del]').addEventListener('click', async () => {
-        if (!(await confirmBox('Excluir este lançamento?', 'Excluir'))) return;
+        if (!(await confirmBox(fixedEntry ? 'Excluir o lançamento deste mês? A despesa fixa continua nos próximos meses.' : 'Excluir este lançamento?', 'Excluir'))) return;
         try { await DB.deleteFinance(entry.id); close(); toast('Lançamento excluído'); done(); } catch (err) { fail(err); }
       });
     }
@@ -843,24 +853,18 @@ function entryModal(done, entry = null) {
     const layout = () => {
       const sale = isSale();
       $c('[data-sale]').hidden = !sale; $c('[data-simple]').hidden = sale;
+      $c('[data-cancel-row]').hidden = $c('[data-plan]').value === 'unico';
       $c('[data-desc-l]').textContent = sale ? 'Cliente' : 'Descrição';
-      $c('[data-date-l]').textContent = sale ? 'Contrato fechado em' : 'Data';
-      $c('[data-desc]').placeholder = sale ? 'Ex: Ferragista Silva' : kind === 'despesa' ? 'Ex: Assinatura de ferramenta' : 'Ex: Setup da loja';
-    };
-    const recalc = () => {
-      if (totalTouched) return;
-      const m = Math.round(parseMoney($c('[data-months]').value)); const v = parseMoney($c('[data-monthly]').value);
-      $c('[data-total]').value = m > 0 && v > 0 ? fmt(m * v) : '';
+      $c('[data-date-l]').textContent = sale ? 'Contrato fechado em' : kind === 'despesa' ? 'Data do pagamento' : 'Data';
+      $c('[data-desc]').placeholder = sale ? 'Ex: Ferragista Silva' : kind === 'despesa' ? 'Ex: Comissão do vendedor' : 'Ex: Setup da loja';
     };
     c.querySelectorAll('[data-k]').forEach((b) => b.addEventListener('click', () => {
       kind = b.dataset.k; c.querySelectorAll('[data-k]').forEach((x) => x.classList.toggle('on', x === b));
       $c('[data-cat]').innerHTML = cats(); layout();
     }));
     $c('[data-cat]').addEventListener('change', layout);
-    $c('[data-months]').addEventListener('input', recalc);
-    $c('[data-monthly]').addEventListener('input', recalc);
-    $c('[data-total]').addEventListener('input', (e) => { totalTouched = e.target.value.trim() !== ''; if (!totalTouched) recalc(); });
-    ['[data-monthly]', '[data-total]', '[data-amount]'].forEach((sel) => $c(sel).addEventListener('blur', (e) => { const v = parseMoney(e.target.value); if (v > 0) e.target.value = fmt(v); }));
+    $c('[data-plan]').addEventListener('change', layout);
+    $c('[data-amount]').addEventListener('blur', (e) => { const v = parseMoney(e.target.value); if (v > 0) e.target.value = fmt(v); });
     layout();
     $c('[data-ok]').addEventListener('click', async (e) => {
       const btn = e.currentTarget;
@@ -868,15 +872,12 @@ function entryModal(done, entry = null) {
       let row;
       if (!base.date) return toast(isSale() ? 'Informe quando o contrato foi fechado' : 'Informe a data', true);
       if (isSale()) {
-        const months = Math.round(parseMoney($c('[data-months]').value)); const monthly = parseMoney($c('[data-monthly]').value); const total = parseMoney($c('[data-total]').value);
-        if (!(months >= 1 && months <= 120)) return toast('Meses de contrato entre 1 e 120', true);
-        if (!(monthly > 0)) return toast('Informe o valor mensal', true);
-        if (!(total > 0)) return toast('Informe o valor total', true);
-        row = { ...base, amount: total, months, monthly_amount: monthly, canceled_at: $c('[data-canceled]').value || null };
+        const v = ctr.read(); if (v.error) return toast(v.error, true);
+        row = { ...base, ...v, canceled_at: v.plan === 'unico' ? null : $c('[data-canceled]').value || null };
       } else {
         const amount = parseMoney($c('[data-amount]').value);
         if (!(amount > 0)) return toast('Informe um valor', true);
-        row = { ...base, amount, months: null, monthly_amount: null };
+        row = { ...base, amount, months: null, monthly_amount: null, service: null, plan: null, ...(kind === 'despesa' ? { expense_type: fixedEntry ? 'fixa' : 'variavel' } : { expense_type: null }) };
       }
       btn.disabled = true;
       try { await DB.saveFinance(row); close(); toast(entry ? 'Lançamento atualizado' : isSale() ? 'Venda lançada' : 'Lançamento salvo'); done(); } catch (err) { btn.disabled = false; fail(err); }

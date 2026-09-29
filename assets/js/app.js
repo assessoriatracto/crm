@@ -3,16 +3,17 @@ import {
   go, routeName, S, $, $$, esc, ICON, FAT, COLORS, initials, isHot, stageOf, profileOf, labelOf, isInactive, isDue, fatShort, brl, pct, num,
   fmtPhone, fullDate, longDate, addedAt, ago, sourceLabel, formName, waLink, toast, fail, popover, closePop, menu, multiSelect,
   modal, confirmBox, downloadCSV, dateRange, datePicker, dateBtn, daysToSale, fmtDays
-} from './util.js?v=2609291008';
-import { importModal } from './import.js?v=2609291008';
-import { renderDashboard } from './dashboard.js?v=2609291008';
-import { renderSettings } from './admin.js?v=2609291008';
-import { renderIntegrations, renderPixel, leadMetaEvents, statusPill } from './integrations.js?v=2609291008';
-import { renderRecovery, loadPartials } from './recovery.js?v=2609291008';
-import { showSignIn, showSignUp, showForgot, showReset, showMfa, showPending, watchIdle, AUTH_ROUTES } from './auth.js?v=2609291008';
-import { openProfile, renderProfile } from './profile.js?v=2609291008';
-import { renderBuilder } from './builder.js?v=2609291008';
-import { renderFinance } from './finance.js?v=2609291008';
+} from './util.js?v=2609291406';
+import { importModal } from './import.js?v=2609291406';
+import { renderDashboard } from './dashboard.js?v=2609291406';
+import { renderSettings } from './admin.js?v=2609291406';
+import { renderIntegrations, renderPixel, leadMetaEvents, statusPill } from './integrations.js?v=2609291406';
+import { renderRecovery, loadPartials } from './recovery.js?v=2609291406';
+import { showSignIn, showSignUp, showForgot, showReset, showMfa, showPending, watchIdle, AUTH_ROUTES } from './auth.js?v=2609291406';
+import { SERVICES, PLANS, planMonths } from './contract.js?v=2609291406';
+import { openProfile, renderProfile } from './profile.js?v=2609291406';
+import { renderBuilder } from './builder.js?v=2609291406';
+import { renderFinance } from './finance.js?v=2609291406';
 
 // ============================================================
 // preferências locais (por navegador)
@@ -759,8 +760,13 @@ function renderDrawer() {
           <div><label class="lbl">Atribuído a</label><select class="inp" data-field="assigned_to"><option value="">Não atribuído</option>${S.profiles.filter((p) => p.ativo || p.id === l.assigned_to).map((p) => `<option value="${p.id}" ${p.id === l.assigned_to ? 'selected' : ''}>${esc(p.nome)}</option>`).join('')}</select></div>
           <div><label class="lbl">Estágio</label><select class="inp" data-field="stage_id">${S.stages.map((s) => `<option value="${s.id}" ${s.id === l.stage_id ? 'selected' : ''}>${esc(s.name)}</option>`).join('')}</select></div>
         </div>
-        <div class="${l.won_at ? 'grid2' : ''}" style="margin-top:10px"><div><label class="lbl">Valor do contrato (R$/mês)</label><input class="inp" data-field="valor" inputmode="decimal" value="${l.valor ?? ''}" placeholder="0"></div>
-          ${l.won_at ? `<div><label class="lbl">Contrato cancelado em</label><input class="inp" type="date" data-field="canceled_at" value="${l.canceled_at || ''}"></div>` : ''}</div>
+        <div class="grid2" style="margin-top:10px">
+          <div><label class="lbl">Serviço</label><select class="inp" data-field="service"><option value="">Não definido</option>${SERVICES.map(([k, n]) => `<option value="${k}" ${l.service === k ? 'selected' : ''}>${n}</option>`).join('')}</select></div>
+          <div><label class="lbl">Tipo de contrato</label><select class="inp" data-field="plan"><option value="">Não definido</option>${PLANS.map(([k, n]) => `<option value="${k}" ${l.plan === k ? 'selected' : ''}>${n}</option>`).join('')}</select></div>
+        </div>
+        <div class="grid2" style="margin-top:10px"><div><label class="lbl">${l.plan === 'unico' ? 'Valor do pagamento (R$)' : 'Mensalidade (R$)'}</label><input class="inp" data-field="valor" inputmode="decimal" value="${l.valor ?? ''}" placeholder="0"></div>
+          ${l.plan === 'unico' ? '' : `<div><label class="lbl">${l.plan === 'mensal' ? 'Previsão (meses)' : 'Meses de contrato'}</label><input class="inp" data-field="contract_months" inputmode="numeric" value="${l.contract_months ?? planMonths(l.plan, 12) ?? ''}" placeholder="12"></div>`}</div>
+        ${l.won_at && l.plan !== 'unico' ? `<div style="margin-top:10px"><label class="lbl">Contrato cancelado em</label><input class="inp" type="date" data-field="canceled_at" value="${l.canceled_at || ''}"></div>` : ''}
         <p class="ttc-line">${l.won_at ? (daysToSale(l) < 1 ? 'Virou venda <b>no mesmo dia</b> em que chegou como lead' : `Virou venda <b>${fmtDays(daysToSale(l))}</b> depois de chegar como lead`) : ((Date.now() - new Date(l.created_at)) / 86400000 < 1 ? 'Chegou como lead <b>hoje</b>' : `Lead há <b>${fmtDays((Date.now() - new Date(l.created_at)) / 86400000)}</b>`)}</p>
       </div>
       <div class="sec">
@@ -844,8 +850,11 @@ drawer.addEventListener('change', async (e) => {
   if (!f) return;
   let v = e.target.value.trim();
   if (f === 'valor') { v = v ? Number(v.replace(/\./g, '').replace(',', '.')) : null; if (v !== null && Number.isNaN(v)) return toast('Valor inválido', true); }
+  else if (f === 'contract_months') { v = v ? Math.round(Number(v)) : null; if (v !== null && !(v >= 1 && v <= 120)) return toast('Meses entre 1 e 120', true); }
   else v = v || null;
-  patch([S.openId], { [f]: v }, f === 'valor' ? 'Valor salvo' : f === 'canceled_at' ? (v ? 'Cancelamento registrado' : 'Cancelamento removido') : null);
+  // tipo de contrato ajusta os meses sozinho (semestral 6, anual 12, pagamento único 1)
+  const extra = f === 'plan' ? { contract_months: v ? planMonths(v, null) : null, ...(v === 'unico' ? { canceled_at: null } : {}) } : {};
+  patch([S.openId], { [f]: v, ...extra }, f === 'valor' ? 'Valor salvo' : f === 'canceled_at' ? (v ? 'Cancelamento registrado' : 'Cancelamento removido') : f === 'service' || f === 'plan' || f === 'contract_months' ? 'Contrato atualizado' : null);
 });
 drawer.addEventListener('click', async (e) => {
   if (e.target.closest('[data-d="real"]')) {
