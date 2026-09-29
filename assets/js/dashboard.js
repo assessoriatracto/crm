@@ -1,7 +1,7 @@
 // Dashboard: visão executiva e enxuta da saúde do negócio.
 // O detalhe (campanhas, lançamentos, gráficos por dia) fica no Financeiro e na Central de leads.
 import { DB } from '@shared/db.js';
-import { PERIOD, dateRange, datePicker, dateBtn, S, $, $$, esc, ICON, brl, num, isDue, isInactive, fail, fmtDays } from './util.js?v=2609282307';
+import { PERIOD, dateRange, datePicker, dateBtn, S, $, $$, esc, ICON, brl, num, isDue, isInactive, fail, fmtDays } from './util.js?v=2609282311';
 
 const D = PERIOD;
 const DAY = 86400000;
@@ -30,6 +30,8 @@ export function contracts(entries, months) {
   out.forEach((c) => { c.end = new Date(c.start.getTime() + c.months * 30.44 * DAY); });
   return out;
 }
+// a venda veio de anúncio? (tem campanha, ou o contato chegou por tráfego pago)
+export const fromAds = (c) => !!(c.origin?.utm_campaign || c.origin?.utm_id || c.lead?.source === 'pago' || c.lead?.fbclid || c.lead?.fbc);
 export const activeAt = (c, t) => c.start <= t && c.end > t && (!c.canceled || c.canceled > t);
 
 function metrics(ins, leads, a, b, contractsList, useMeta) {
@@ -38,10 +40,17 @@ function metrics(ins, leads, a, b, contractsList, useMeta) {
   const spend = insR.reduce((s, x) => s + Number(x.spend), 0);
   const metaLeads = insR.reduce((s, x) => s + Number(x.meta_leads || 0), 0);
   const junkId = S.stages.find((x) => x.name === 'Descarte')?.id;
-  const crmLeads = leads.filter((l) => l.stage_id !== junkId && inR(new Date(l.created_at))).length;
+  const cohort = leads.filter((l) => l.stage_id !== junkId && inR(new Date(l.created_at)));
+  const crmLeads = cohort.length;
+  // conversão por coorte: dos leads que chegaram no período, quantos já viraram cliente (pelo pipeline ou venda ligada ao contato)
+  const clientLeadIds = new Set(contractsList.filter((c) => c.lead).map((c) => c.lead.id));
+  const cohortWon = cohort.filter((l) => l.won_at || clientLeadIds.has(l.id)).length;
   const nLeads = useMeta ? metaLeads : crmLeads; // mesma fonte nos dois períodos (comparação justa)
   const news = contractsList.filter((c) => inR(c.start));
   const newValue = news.reduce((s, c) => s + c.monthly * c.months, 0);
+  // CAC e ROAS só com vendas que vieram de anúncio (venda por indicação/fora do tráfego não entra)
+  const adsNews = news.filter(fromAds);
+  const adsValue = adsNews.reduce((s, c) => s + c.monthly * c.months, 0);
   const activeStart = contractsList.filter((c) => activeAt(c, a));
   const canceled = contractsList.filter((c) => c.canceled && inR(c.canceled));
   const activeEnd = contractsList.filter((c) => activeAt(c, b));
@@ -54,9 +63,10 @@ function metrics(ins, leads, a, b, contractsList, useMeta) {
     spend, nLeads, crmLeads, hasAds: insR.length > 0,
     cpl: nLeads ? spend / nLeads : null,
     newClients: news.length, newMrr: news.reduce((s, c) => s + c.monthly, 0), newValue,
-    cac: news.length && spend ? spend / news.length : null,
-    roas: spend ? newValue / spend : null,
-    conv: nLeads ? news.length / nLeads : null,
+    adsClients: adsNews.length, adsValue, cohortWon,
+    cac: adsNews.length && spend ? spend / adsNews.length : null,
+    roas: spend ? adsValue / spend : null,
+    conv: crmLeads ? cohortWon / crmLeads : null,
     active: activeEnd.length, mrr, ticket: activeEnd.length ? mrr / activeEnd.length : null,
     churnN: canceled.length, churn: activeStart.length ? canceled.length / activeStart.length : null,
     churnMrr: canceled.reduce((s, c) => s + c.monthly, 0),
@@ -122,11 +132,11 @@ export async function renderDashboard(el) {
   const junkId = S.stages.find((x) => x.name === 'Descarte')?.id;
   const leadsOk = leadsR.filter((l) => l.stage_id !== junkId);
   const raw = [
-    ['Leads', canMoney ? cur.nLeads : leadsOk.length],
+    ['Leads', leadsOk.length],
     ['Em atendimento', leadsOk.filter((l) => posOf(l) >= 1 || l.won_at).length],
     ['Qualificados', leadsOk.filter((l) => posOf(l) >= Math.max(qualIdx, 1) || l.won_at).length],
     ...(meetIdx > 0 ? [['Reunião agendada', leadsOk.filter((l) => posOf(l) >= meetIdx || l.won_at).length]] : []),
-    ['Vendas', canMoney ? cur.newClients : leadsOk.filter((l) => l.won_at).length]
+    ['Viraram clientes', cur.cohortWon]
   ];
   // cada etapa inclui quem já passou dela (quem comprou também foi atendido, qualificado…)
   const funnel = raw.map(([n, v]) => [n, v]);
@@ -159,11 +169,11 @@ export async function renderDashboard(el) {
       ${kpi('Investimento', brl(cur.spend), cur.hasAds ? 'Meta Ads' : 'sem campanhas no período', delta(cur.spend, prev.spend, null))}
       ${kpi('Leads', num(cur.nLeads), cur.hasAds ? `resultados da Meta · ${num(cur.crmLeads)} no CRM` : 'no CRM', delta(cur.nLeads, prev.nLeads))}
       ${kpi('Custo por lead', money(cur.cpl), 'investimento ÷ leads', delta(cur.cpl, prev.cpl, 'down'))}
-      ${kpi('Novos clientes', num(cur.newClients), `${brl(cur.newValue)} em contratos`, delta(cur.newClients, prev.newClients))}
-      ${kpi('Taxa de conversão', pctTxt(cur.conv), 'leads que viraram venda', delta(cur.conv, prev.conv, 'up', true))}
+      ${kpi('Novos clientes', num(cur.newClients), cur.newClients ? `${brl(cur.newValue)} em contratos · ${num(cur.adsClients)} de anúncio` : 'nenhum contrato fechado no período', delta(cur.newClients, prev.newClients))}
+      ${kpi('Taxa de conversão', pctTxt(cur.conv), cur.crmLeads ? `${num(cur.cohortWon)} de ${num(cur.crmLeads)} leads do período viraram clientes` : 'nenhum lead no período', delta(cur.conv, prev.conv, 'up', true))}
       ${kpi('Tempo até a venda', cur.ttcAvg == null ? '—' : fmtDays(cur.ttcAvg), cur.ttcAvg == null ? 'média de lead a venda' : `média · mediana ${fmtDays(cur.ttcMed)} · ${num(cur.ttcN)} venda${cur.ttcN === 1 ? '' : 's'}`, delta(cur.ttcAvg, prev.ttcAvg, 'down'))}
-      ${kpi('CAC', money(cur.cac), ltv && cur.cac ? `LTV:CAC ${(ltv / cur.cac).toLocaleString('pt-BR', { maximumFractionDigits: 1 })}x` : 'investimento ÷ novos clientes', delta(cur.cac, prev.cac, 'down'))}
-      ${kpi('ROAS', cur.roas == null ? '—' : cur.roas.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + 'x', 'contratos fechados ÷ investimento', delta(cur.roas, prev.roas))}
+      ${kpi('CAC', money(cur.cac), cur.cac == null ? (cur.spend ? 'nenhuma venda de anúncio no período' : 'sem investimento no período') : ltv ? `LTV:CAC ${(ltv / cur.cac).toLocaleString('pt-BR', { maximumFractionDigits: 1 })}x` : 'investimento ÷ clientes de anúncio', delta(cur.cac, prev.cac, 'down'))}
+      ${kpi('ROAS', cur.roas == null ? '—' : cur.roas.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + 'x', cur.adsClients ? `${brl(cur.adsValue)} em contratos de anúncio ÷ investimento` : 'só vendas que vieram de anúncio', delta(cur.roas, prev.roas))}
     </div>` : ''}
     <div class="dash-row ${canMoney ? '' : 'two'}">
       <section class="panel dcard">

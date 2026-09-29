@@ -2,7 +2,7 @@
 // Boas práticas: senha forte + checagem de senhas vazadas (k-anonimato), mensagens genéricas,
 // bloqueio temporário após tentativas, 2FA (TOTP), sessão encerrada por inatividade e consentimento LGPD registrado.
 import { DB, LIVE } from '@shared/db.js';
-import { $, esc, toast, ICON } from './util.js?v=2609282307';
+import { $, esc, toast, ICON } from './util.js?v=2609282311';
 
 export const PRIVACY_VERSION = '2026-09';
 const SITE = window.TRACTO_CONFIG?.siteUrl || 'https://assessoriatracto.com.br';

@@ -1,7 +1,7 @@
 // Financeiro (estilo UTMify): gasto da Meta Ads × leads e vendas do CRM × receitas e despesas lançadas
 import { DB } from '@shared/db.js';
-import { renderClients } from './clients.js?v=2609282307';
-import { PERIOD, BRAND, popover, dateRange, datePicker, dateBtn, S, $, $$, esc, ICON, brl, num, pct, fullDate, ago, toast, fail, modal, confirmBox } from './util.js?v=2609282307';
+import { renderClients } from './clients.js?v=2609282311';
+import { PERIOD, BRAND, popover, dateRange, datePicker, dateBtn, S, $, $$, esc, ICON, brl, num, pct, fullDate, ago, toast, fail, modal, confirmBox } from './util.js?v=2609282311';
 
 const F = { period: '30', from: '', to: '', level: 'campaign', revenue: 'mensal', sort: 'spend', tab: 'geral' };
 const GRAPH = 'v21.0';
@@ -90,7 +90,15 @@ export async function renderFinance(el, swap = false) {
     const own = e.utm_campaign || e.utm_id;
     return { utm_campaign: own ? e.utm_campaign : l?.utm_campaign, utm_term: own ? e.utm_term : l?.utm_term, utm_content: own ? e.utm_content : l?.utm_content, utm_id: own ? e.utm_id : l?.utm_id, __entry: e };
   })];
+  const junkId = S.stages.find((x) => x.name === 'Descarte')?.id;
+  const leadsOk = leads.filter((l) => l.stage_id !== junkId);
+  const linked = new Set(entries.filter((e) => e.lead_id).map((e) => e.lead_id));
+  const cohortWon = leadsOk.filter((l) => l.won_at || linked.has(l.id)).length;
   const tblValue = (x) => (x.__entry ? entrySale(x.__entry) : saleValue(x));
+  // vendas que vieram de anúncio (campanha na venda/contato, ou contato de tráfego pago)
+  const isAds = (x) => !!(x.utm_campaign || x.utm_id || (x.__entry ? S.leads.find((l) => l.id === x.__entry.lead_id)?.source === 'pago' : x.source === 'pago' || x.fbclid || x.fbc));
+  const adsSales = tblSales.filter(isAds);
+  const revAds = adsSales.reduce((a2, x) => a2 + tblValue(x), 0);
   const nSales = sales.length + manualSales.length;
   const revSales = sales.reduce((a, l) => a + saleValue(l), 0) + manualSales.reduce((a, e) => a + entrySale(e), 0);
   const revManual = entries.filter((e) => e.kind === 'receita' && !isSaleEntry(e)).reduce((a, e) => a + Number(e.amount), 0);
@@ -113,13 +121,13 @@ export async function renderFinance(el, swap = false) {
     ['Faturamento', brl(faturamento), `${num(nSales)} venda${nSales === 1 ? '' : 's'}${revManual ? ' + ' + brl(revManual) + ' em outras receitas' : ''}`, 'accent'],
     ['Gastos com anúncios', brl(spend), accounts.length || ins.length ? `${num(imp)} impressões` : 'conecte na aba Contas de anúncio'],
     ['Lucro', brl(lucro), `margem ${faturamento ? pct(lucro, faturamento) : '—'}`, lucro < 0 ? 'neg' : 'pos'],
-    ['ROAS', x2(ratio(revSales, spend)), 'receita de vendas ÷ gasto'],
+    ['ROAS', x2(ratio(revAds, spend)), adsSales.length ? `${num(adsSales.length)} venda${adsSales.length === 1 ? '' : 's'} de anúncio ÷ gasto` : 'só vendas que vieram de anúncio'],
     ['ROI', ratio(lucro, despesas) == null ? '—' : pct(lucro, despesas), `despesas totais ${brl(despesas)}`],
     ['Ticket médio', money(ratio(revSales, nSales)), F.revenue === 'contrato' ? 'valor total do contrato' : 'por mensalidade'],
-    ['CAC', money(ratio(spend, nSales)), `com todas as despesas: ${money(ratio(despesas, nSales))}`],
+    ['CAC', money(ratio(spend, adsSales.length)), adsSales.length ? `com todas as despesas: ${money(ratio(despesas, nSales))}` : 'nenhuma venda de anúncio no período'],
     ['Leads', num(leadsN), hasMeta ? `pela Meta · ${num(leads.length)} no CRM` : `${num(paidLeads.length)} de anúncios`],
     ['CPL', money(ratio(spend, hasMeta ? metaLeads : (paidLeads.length || leads.length))), hasMeta ? 'gasto ÷ leads da Meta' : 'gasto ÷ leads de anúncio'],
-    ['Conversão', leadsN ? pct(nSales, leadsN) : '—', 'de leads em vendas'],
+    ['Conversão', leadsOk.length ? pct(cohortWon, leadsOk.length) : '—', leadsOk.length ? `${num(cohortWon)} de ${num(leadsOk.length)} leads do período viraram clientes` : 'nenhum lead no período'],
     ['CTR', imp ? pct(linkClicks || clicks, imp) : '—', `CPC ${money(ratio(spend, linkClicks || clicks))}${linkClicks ? ' · cliques no link' : ''}`],
     ['CPM', money(imp ? (spend / imp) * 1000 : null), `${num(linkClicks || clicks)} cliques${linkClicks ? ' no link' : ''}`]
   ];

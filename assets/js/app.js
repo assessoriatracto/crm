@@ -3,16 +3,16 @@ import {
   go, routeName, S, $, $$, esc, ICON, FAT, COLORS, initials, isHot, stageOf, profileOf, labelOf, isInactive, isDue, fatShort, brl, pct, num,
   fmtPhone, fullDate, longDate, addedAt, ago, sourceLabel, formName, waLink, toast, fail, popover, closePop, menu, multiSelect,
   modal, confirmBox, downloadCSV, dateRange, datePicker, dateBtn, daysToSale, fmtDays
-} from './util.js?v=2609282307';
-import { importModal } from './import.js?v=2609282307';
-import { renderDashboard } from './dashboard.js?v=2609282307';
-import { renderSettings } from './admin.js?v=2609282307';
-import { renderIntegrations, renderPixel, leadMetaEvents, statusPill } from './integrations.js?v=2609282307';
-import { renderRecovery, loadPartials } from './recovery.js?v=2609282307';
-import { showSignIn, showSignUp, showForgot, showReset, showMfa, showPending, watchIdle, AUTH_ROUTES } from './auth.js?v=2609282307';
-import { openProfile } from './profile.js?v=2609282307';
-import { renderBuilder } from './builder.js?v=2609282307';
-import { renderFinance } from './finance.js?v=2609282307';
+} from './util.js?v=2609282311';
+import { importModal } from './import.js?v=2609282311';
+import { renderDashboard } from './dashboard.js?v=2609282311';
+import { renderSettings } from './admin.js?v=2609282311';
+import { renderIntegrations, renderPixel, leadMetaEvents, statusPill } from './integrations.js?v=2609282311';
+import { renderRecovery, loadPartials } from './recovery.js?v=2609282311';
+import { showSignIn, showSignUp, showForgot, showReset, showMfa, showPending, watchIdle, AUTH_ROUTES } from './auth.js?v=2609282311';
+import { openProfile } from './profile.js?v=2609282311';
+import { renderBuilder } from './builder.js?v=2609282311';
+import { renderFinance } from './finance.js?v=2609282311';
 
 // ============================================================
 // preferências locais (por navegador)
