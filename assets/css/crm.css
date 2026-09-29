@@ -1481,3 +1481,7 @@ select.inp.dd-native{display:none !important;}
   .cl-svc{min-width:0;width:100%;}
 }
 .cf-table tbody th{text-transform:none;letter-spacing:0;font-family:inherit;font-size:13.5px;}
+.ptabs{overflow-x:auto;scrollbar-width:none;}
+.ptabs::-webkit-scrollbar{display:none;}
+.ptab{flex:none;white-space:nowrap;}
+@media (max-width:860px){.ptab{padding:10px 10px;gap:6px;}}
