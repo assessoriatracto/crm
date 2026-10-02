@@ -3,17 +3,17 @@ import {
   go, routeName, S, $, $$, esc, ICON, FAT, COLORS, initials, isHot, stageOf, profileOf, labelOf, isInactive, isDue, fatShort, brl, pct, num,
   fmtPhone, fullDate, longDate, addedAt, ago, sourceLabel, formName, waLink, toast, fail, popover, closePop, menu, multiSelect,
   modal, confirmBox, downloadCSV, dateRange, datePicker, dateBtn, daysToSale, fmtDays
-} from './util.js?v=2610021008';
-import { importModal } from './import.js?v=2610021008';
-import { renderDashboard } from './dashboard.js?v=2610021008';
-import { renderSettings } from './admin.js?v=2610021008';
-import { renderIntegrations, renderPixel, leadMetaEvents, statusPill } from './integrations.js?v=2610021008';
-import { renderRecovery, loadPartials } from './recovery.js?v=2610021008';
-import { showSignIn, showSignUp, showForgot, showReset, showMfa, showPending, watchIdle, AUTH_ROUTES } from './auth.js?v=2610021008';
-import { SERVICES, PLANS, planMonths, planFactor, VALUE_LABEL, contractFields, bindContract } from './contract.js?v=2610021008';
-import { openProfile, renderProfile } from './profile.js?v=2610021008';
-import { renderBuilder } from './builder.js?v=2610021008';
-import { renderFinance } from './finance.js?v=2610021008';
+} from './util.js?v=2610021016';
+import { importModal } from './import.js?v=2610021016';
+import { renderDashboard } from './dashboard.js?v=2610021016';
+import { renderSettings } from './admin.js?v=2610021016';
+import { renderIntegrations, renderPixel, leadMetaEvents, statusPill } from './integrations.js?v=2610021016';
+import { renderRecovery, loadPartials } from './recovery.js?v=2610021016';
+import { showSignIn, showSignUp, showForgot, showReset, showMfa, showPending, watchIdle, AUTH_ROUTES } from './auth.js?v=2610021016';
+import { SERVICES, PLANS, planMonths, planFactor, VALUE_LABEL, contractFields, bindContract } from './contract.js?v=2610021016';
+import { openProfile, renderProfile } from './profile.js?v=2610021016';
+import { renderBuilder } from './builder.js?v=2610021016';
+import { renderFinance } from './finance.js?v=2610021016';
 
 // ============================================================
 // preferências locais (por navegador)
@@ -350,7 +350,7 @@ function renderLeads() {
     <section id="leadsBody"></section>`;
 
   const body = $('#leadsBody');
-  if (V.view === 'board') { body.innerHTML = boardHtml(list); $('.board').scrollLeft = scrollX; }
+  if (V.view === 'board') { body.innerHTML = boardHtml(list); $('.board').scrollLeft = scrollX; fitBoard(); }
   else body.innerHTML = tableHtml(list);
   if (renderLeads._view && renderLeads._view !== V.view) body.classList.add('swap-in');
   renderLeads._view = V.view;
@@ -391,6 +391,20 @@ function cardHtml(l) {
     <div class="chips">${chipsHtml(l)}</div>
     <div class="card-foot">${p ? `<span class="av sm" title="${esc(p.nome)}">${esc(initials(p.nome))}</span>` : ''}${l.valor ? `<span>${cardValue(l)}</span>` : ''}<span class="grow"></span><span title="${fullDate(l.created_at)}">${ago(l.created_at)}</span></div>
   </article>`;
+}
+// colunas do pipeline descem até o fim da tela (os cards rolam dentro de cada coluna)
+function fitBoard() {
+  const board = $('.board'); if (!board) return;
+  if (matchMedia('(max-width:760px)').matches) {
+    // celular: a coluna ocupa a área útil entre o topo e o menu de baixo; rolando até o pipeline, ele preenche a tela
+    const h = $('.side').getBoundingClientRect().top - $('.m-top').getBoundingClientRect().bottom - 24;
+    board.style.setProperty('--board-h', Math.max(360, Math.floor(h)) + 'px');
+    return;
+  }
+  // computador: até o fim da tela (desconta só o respiro de baixo da página, pra não sobrar rolagem)
+  const top = board.getBoundingClientRect().top + window.scrollY;
+  const pad = parseFloat(getComputedStyle($('.main')).paddingBottom || 0) + 2;
+  board.style.setProperty('--board-h', Math.max(360, Math.floor(window.innerHeight - top - pad)) + 'px');
 }
 function boardHtml(list) {
   const mins = minCols();
@@ -1020,7 +1034,7 @@ $('#seedBtn').addEventListener('click', async () => {
 });
 
 let resizeT;
-window.addEventListener('resize', () => { clearTimeout(resizeT); resizeT = setTimeout(() => { if (routeName() === 'dashboard') route(); }, 250); });
+window.addEventListener('resize', () => { clearTimeout(resizeT); resizeT = setTimeout(() => { if (routeName() === 'dashboard') route(); fitBoard(); }, 250); });
 
 setInterval(() => { if (hashRoute() === 'leads' && !S.openId && !$('.pop') && !$('.modal') && document.activeElement?.tagName !== 'INPUT') route(); }, 60000);
 boot().catch((e) => { console.error(e); window.__crmFail?.(); });
