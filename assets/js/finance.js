@@ -1,12 +1,12 @@
 // Financeiro (estilo UTMify): gasto da Meta Ads × leads e vendas do CRM × receitas e despesas lançadas
 import { DB } from '@shared/db.js';
-import { renderClients } from './clients.js?v=2609291931';
-import { renderExpenses } from './expenses.js?v=2609291931';
-import { renderCashflow } from './cashflow.js?v=2609291931';
-import { contracts, result, fromAds, saleRevenue } from './dashboard.js?v=2609291931';
-import { contractTags } from './contract.js?v=2609291931';
-import { entryModal } from './entry.js?v=2609291931';
-import { PERIOD, REVENUE, setRevenueMode, revenueToggle, BRAND, popover, dateRange, datePicker, dateBtn, S, $, $$, esc, ICON, brl, num, pct, fullDate, ago, toast, fail, modal, confirmBox } from './util.js?v=2609291931';
+import { renderClients } from './clients.js?v=2610020948';
+import { renderExpenses } from './expenses.js?v=2610020948';
+import { renderCashflow } from './cashflow.js?v=2610020948';
+import { contracts, result, fromAds, saleRevenue } from './dashboard.js?v=2610020948';
+import { contractTags } from './contract.js?v=2610020948';
+import { entryModal } from './entry.js?v=2610020948';
+import { PERIOD, REVENUE, setRevenueMode, revenueToggle, BRAND, popover, dateRange, datePicker, dateBtn, S, $, $$, esc, ICON, brl, num, pct, fullDate, ago, toast, fail, modal, confirmBox } from './util.js?v=2610020948';
 
 const F = { period: '30', from: '', to: '', level: 'campaign', revenue: 'mensal', sort: 'spend', tab: 'geral' };
 const GRAPH = 'v21.0';

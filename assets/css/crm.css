@@ -1570,3 +1570,18 @@ input.inp.dp-native{display:none !important;}
 .kx.neg .kx-v,.cf-neg,.adt .neg{color:var(--fg-red);}
 .rev-seg{flex-wrap:nowrap;}
 @media (max-width:760px){.topline .rev-seg{order:3;width:100%;display:grid;grid-template-columns:1fr 1fr;}}
+/* teste do Pushcut */
+.pf-test{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin:0 0 14px;}
+.pf-test-msg{font-size:13px;color:var(--gray-3);}
+.pf-test-msg.ok{color:var(--fg-green);}
+.pf-test-msg.bad{color:var(--fg-red);}
+
+/* celular: a página não rola, só o conteúdo. Assim o menu de baixo (e o topo) ficam parados,
+   inclusive no Safari do iPhone, onde a barra de endereço encolhendo fazia o menu "subir" */
+@media (max-width:760px){
+  html:has(#app:not([hidden])),body:has(#app:not([hidden])){height:100%;overflow:hidden;overscroll-behavior:none;}
+  #app.shell:not([hidden]){position:fixed;inset:0;height:100vh;height:100dvh;display:flex;flex-direction:column;overflow:hidden;}
+  #app .m-top{position:relative;flex:none;}
+  #app .main{flex:1 1 auto;min-height:0;overflow-y:auto;overflow-x:hidden;-webkit-overflow-scrolling:touch;overscroll-behavior-y:contain;padding-bottom:calc(90px + env(safe-area-inset-bottom));}
+  #app .side{position:fixed;bottom:0;transform:translateZ(0);}
+}

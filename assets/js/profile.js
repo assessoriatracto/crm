@@ -1,7 +1,7 @@
 // "Meu perfil": página própria (/perfil) com dados pessoais, notificações e segurança
 import { DB, LIVE } from '@shared/db.js';
-import { S, esc, toast, fail, modal, ICON } from './util.js?v=2609291931';
-import { passwordCheck } from './auth.js?v=2609291931';
+import { S, esc, toast, fail, modal, ICON } from './util.js?v=2610020948';
+import { passwordCheck } from './auth.js?v=2610020948';
 
 const ROLE = { admin: 'Admin', gestor: 'Gestor', sdr: 'SDR' };
 const ROLE_HELP = { admin: 'Acesso total ao CRM, incluindo usuários e integrações.', gestor: 'Gerencia leads, financeiro, formulários e ajustes da equipe.', sdr: 'Atende e move os leads atribuídos no pipeline.' };
@@ -29,6 +29,7 @@ export async function renderProfile(el, onSaved) {
   if (!el.isConnected) return;
   const me = S.me || {};
   const mfaOn = factors.length > 0;
+  const scope = me.pushcut_scope || (['admin', 'gestor'].includes(me.role) ? 'all' : 'mine');
   const nav = [['perfil', 'Perfil', ICON.user], ['notificacoes', 'Notificações', ICON.bell], ['seguranca', 'Segurança', I.shield]];
 
   el.innerHTML = `
@@ -58,13 +59,17 @@ export async function renderProfile(el, onSaved) {
         </section>
 
         <section class="panel pf-sec" data-sec="notificacoes">
-          <header><h3>Notificação no celular</h3><p class="help">Receba um push no celular sempre que um lead for atribuído a você. Usa o app Pushcut (iPhone).</p></header>
+          <header><h3>Notificação no celular</h3><p class="help">Receba um push no celular quando chegar lead. Usa o app Pushcut (iPhone).</p></header>
           <div class="row"><label class="lbl" for="pf-push">URL do webhook do Pushcut</label><input class="inp" id="pf-push" data-f="pushcut_url" value="${esc(me.pushcut_url || '')}" placeholder="https://api.pushcut.io/…/notifications/…"></div>
+          <div class="row"><label class="lbl" for="pf-scope">Avisar sobre</label><select class="inp" id="pf-scope" data-f="pushcut_scope">
+            <option value="all" ${scope === 'all' ? 'selected' : ''}>Todos os leads novos</option>
+            <option value="mine" ${scope === 'mine' ? 'selected' : ''}>Só os leads atribuídos a mim</option></select></div>
           <ol class="pf-steps">
             <li>No app Pushcut, abra <b>Notifications</b> e toque em <b>+</b>.</li>
             <li>Crie uma notificação chamada <b>Novo lead</b>.</li>
             <li>Em <b>Webhook</b>, copie a URL e cole no campo acima.</li>
           </ol>
+          <div class="pf-test" data-test-box ${me.pushcut_url ? '' : 'hidden'}><button type="button" class="b b-sm" data-push-test>${ICON.bell}Enviar notificação de teste</button><span class="pf-test-msg" data-test-msg role="status"></span></div>
           <footer class="pf-foot"><span class="pf-status ${me.pushcut_url ? 'ok' : ''}">${me.pushcut_url ? `${ICON.check}Ativa` : 'Desligada'}</span><span class="grow"></span><button class="b" data-reset hidden>Descartar</button><button class="b b-primary" data-save disabled>Salvar alterações</button></footer>
         </section>
 
@@ -121,7 +126,7 @@ export async function renderProfile(el, onSaved) {
 
   // dados do perfil: salvar só aparece quando algo muda
   $('#pf-phone').addEventListener('input', (e) => { e.target.value = fmtPhone(e.target.value); });
-  const orig = { nome: me.nome || '', phone: fmtPhone(me.phone), pushcut_url: me.pushcut_url || '' };
+  const orig = { nome: me.nome || '', phone: fmtPhone(me.phone), pushcut_url: me.pushcut_url || '', pushcut_scope: scope };
   $$('[data-sec="perfil"], [data-sec="notificacoes"]').forEach((sec) => {
     const fields = [...sec.querySelectorAll('[data-f]')];
     const dirty = () => fields.some((i) => i.value.trim() !== orig[i.dataset.f]);
@@ -131,18 +136,34 @@ export async function renderProfile(el, onSaved) {
       sec.querySelector('[data-reset]').hidden = !d;
       const msg = sec.querySelector('[data-dirty-msg]'); if (msg) msg.hidden = !d;
     };
-    fields.forEach((i) => i.addEventListener('input', sync));
+    fields.forEach((i) => { i.addEventListener('input', sync); i.addEventListener('change', sync); });
     sec.querySelector('[data-reset]').addEventListener('click', () => { fields.forEach((i) => { i.value = orig[i.dataset.f]; }); sync(); });
     sec.querySelector('[data-save]').addEventListener('click', async (e) => {
       const v = Object.fromEntries(fields.map((i) => [i.dataset.f, i.value.trim() || null]));
       if ('nome' in v && (!v.nome || v.nome.length < 2)) return toast('Informe seu nome', true);
       if ('phone' in v && v.phone && v.phone.replace(/\D/g, '').length < 10) return toast('Telefone incompleto', true);
-      if (v.pushcut_url && !/^https:\/\/api\.pushcut\.io\/\S+$/.test(v.pushcut_url)) return toast('A URL do Pushcut começa com https://api.pushcut.io/', true);
+      if (v.pushcut_url) v.pushcut_url = v.pushcut_url.replace(/\s/g, '%20');
+      if (v.pushcut_url && !/^https:\/\/api\.pushcut\.io\/\S+\/notifications\/\S+$/.test(v.pushcut_url)) return toast('Cole a URL do webhook do Pushcut (https://api.pushcut.io/…/notifications/…)', true);
       if ('phone' in v && v.phone) v.phone = v.phone.replace(/\D/g, '');
       const btn = e.currentTarget; btn.disabled = true;
       try { S.me = { ...S.me, ...(await DB.updateMyProfile(v)) }; toast('Perfil salvo'); onSaved?.(); renderProfile(el, onSaved); }
       catch (err) { btn.disabled = false; fail(err); }
     });
+  });
+
+  // teste do Pushcut: manda e mostra se o Pushcut aceitou
+  $('[data-push-test]')?.addEventListener('click', async (e) => {
+    const btn = e.currentTarget; const msg = $('[data-test-msg]');
+    btn.disabled = true; msg.className = 'pf-test-msg'; msg.textContent = 'Enviando…';
+    try {
+      await DB.pushcutTest();
+      let st = { done: false };
+      for (let k = 0; k < 10 && !st.done; k++) { await new Promise((ok) => setTimeout(ok, 1500)); st = await DB.pushcutTestStatus(); }
+      if (!st.done) { msg.textContent = 'Enviado. Confira o celular (o Pushcut ainda não respondeu).'; }
+      else if (st.ok) { msg.className = 'pf-test-msg ok'; msg.textContent = 'O Pushcut recebeu. A notificação deve aparecer no celular.'; }
+      else { msg.className = 'pf-test-msg bad'; msg.textContent = st.status === 404 ? 'O Pushcut não achou essa notificação. Confira se a URL é do webhook certo e se a notificação existe no app.' : `O Pushcut recusou (${st.status || st.error || 'sem resposta'}). Confira a URL e se o app está logado.`; }
+    } catch (err) { msg.className = 'pf-test-msg bad'; msg.textContent = err.message || 'Não foi possível enviar agora.'; }
+    btn.disabled = false;
   });
 
   // segurança: cada ação abre no próprio item, sem janela por cima

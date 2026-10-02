@@ -3,17 +3,17 @@ import {
   go, routeName, S, $, $$, esc, ICON, FAT, COLORS, initials, isHot, stageOf, profileOf, labelOf, isInactive, isDue, fatShort, brl, pct, num,
   fmtPhone, fullDate, longDate, addedAt, ago, sourceLabel, formName, waLink, toast, fail, popover, closePop, menu, multiSelect,
   modal, confirmBox, downloadCSV, dateRange, datePicker, dateBtn, daysToSale, fmtDays
-} from './util.js?v=2609291931';
-import { importModal } from './import.js?v=2609291931';
-import { renderDashboard } from './dashboard.js?v=2609291931';
-import { renderSettings } from './admin.js?v=2609291931';
-import { renderIntegrations, renderPixel, leadMetaEvents, statusPill } from './integrations.js?v=2609291931';
-import { renderRecovery, loadPartials } from './recovery.js?v=2609291931';
-import { showSignIn, showSignUp, showForgot, showReset, showMfa, showPending, watchIdle, AUTH_ROUTES } from './auth.js?v=2609291931';
-import { SERVICES, PLANS, planMonths, planFactor, VALUE_LABEL, contractFields, bindContract } from './contract.js?v=2609291931';
-import { openProfile, renderProfile } from './profile.js?v=2609291931';
-import { renderBuilder } from './builder.js?v=2609291931';
-import { renderFinance } from './finance.js?v=2609291931';
+} from './util.js?v=2610020948';
+import { importModal } from './import.js?v=2610020948';
+import { renderDashboard } from './dashboard.js?v=2610020948';
+import { renderSettings } from './admin.js?v=2610020948';
+import { renderIntegrations, renderPixel, leadMetaEvents, statusPill } from './integrations.js?v=2610020948';
+import { renderRecovery, loadPartials } from './recovery.js?v=2610020948';
+import { showSignIn, showSignUp, showForgot, showReset, showMfa, showPending, watchIdle, AUTH_ROUTES } from './auth.js?v=2610020948';
+import { SERVICES, PLANS, planMonths, planFactor, VALUE_LABEL, contractFields, bindContract } from './contract.js?v=2610020948';
+import { openProfile, renderProfile } from './profile.js?v=2610020948';
+import { renderBuilder } from './builder.js?v=2610020948';
+import { renderFinance } from './finance.js?v=2610020948';
 
 // ============================================================
 // preferências locais (por navegador)
