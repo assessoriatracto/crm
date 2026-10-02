@@ -1,7 +1,7 @@
 // Construtor de formulários (estilo Typeform): lista, editor de etapas, lógica, tema e prévia ao vivo
 import { DB } from '@shared/db.js';
 import { FORMS, formPath } from '@shared/forms.js';
-import { go, S, $, $$, esc, ICON, num, pct, toast, fail, modal, confirmBox, menu, popover, closePop } from './util.js?v=2610020954';
+import { go, S, $, $$, esc, ICON, num, pct, toast, fail, modal, confirmBox, menu, popover, closePop } from './util.js?v=2610021008';
 import { BTN_ICONS } from '@shared/form-engine.js';
 
 const SITE = window.TRACTO_CONFIG?.siteUrl || 'https://assessoriatracto.com.br';
@@ -134,6 +134,7 @@ export async function renderBuilder(el) {
           <div class="chips">
             ${f.published ? '<span class="chip form">Publicado</span>' : '<span class="chip">Rascunho</span>'}
             ${LP[f.id] ? `<span class="chip paid">${LP[f.id]}</span>` : ''}
+            ${(() => { const sv = f.settings?.service || (/marketplace/i.test(`${f.id} ${f.name}`) ? 'marketplace' : /tr[aá]fego|marketing/i.test(`${f.id} ${f.name}`) ? 'marketing' : ''); return sv ? `<span class="chip svc svc-${sv}" title="Serviço dos leads deste formulário">${sv === 'marketplace' ? 'Marketplace' : 'Marketing'}</span>` : f.id === 'home' ? '<span class="chip" title="Pela resposta da pessoa">Serviço pela resposta</span>' : ''; })()}
             <span class="chip">${num(leads)} lead${leads === 1 ? '' : 's'} em 30 dias</span>
           </div>
         </div>
@@ -382,7 +383,7 @@ function renderProps() {
       <div class="row"><select class="inp" data-showmode><option value="always" ${!x.showIf ? 'selected' : ''}>Sempre</option><option value="if" ${x.showIf ? 'selected' : ''}>Só se…</option></select></div>
       ${x.showIf ? condEditor(x.showIf, qBefore, 'show') : ''}
       <h4 class="px-h" style="margin-top:18px">Depois desta etapa</h4>
-      <div data-rules>${(x.logic || []).map((r, i) => `<div class="rule" data-i="${i}"><div class="rule-h">Regra ${i + 1}<button class="b b-sm b-ghost" data-rm-rule="${i}" aria-label="Remover">×</button></div>
+      <div data-rules>${(x.logic || []).map((r, i) => `<div class="rule" data-i="${i}"><div class="rule-h">Regra ${i + 1}<button class="b b-sm b-ghost" data-rm-rule="${i}" aria-label="Remover">${ICON.x}</button></div>
         ${condEditor(r.if, [...qBefore, ...(isQ ? [x] : [])], 'rule' + i)}
         <div class="row"><label class="lbl">Ir para</label><select class="inp" data-jump="${i}">${others.map((o) => `<option value="${o.id}" ${r.jump === o.id ? 'selected' : ''}>${esc((TYPES[o.type] || [''])[0] + ': ' + strip(o.title || o.quote).slice(0, 40))}</option>`).join('')}</select></div></div>`).join('')}</div>
       <button class="b b-sm" data-add-rule>+ Adicionar regra</button>
@@ -399,10 +400,10 @@ function renderProps() {
 }
 
 function imageRow(k, label, v) {
-  return `<div class="row"><label class="lbl">${label}</label><div class="img-row">${v ? `<img src="${esc(v)}" alt="">` : ''}<input class="inp" data-k="${k}" value="${esc(v && !String(v).startsWith('data:') ? v : '')}" placeholder="${v?.startsWith?.('data:') ? 'Imagem enviada' : 'https://… ou envie'}"><label class="b b-sm">Enviar<input type="file" accept="image/*" data-up="${k}" hidden></label>${v ? `<button class="b b-sm b-ghost" data-clear="${k}" aria-label="Remover">×</button>` : ''}</div></div>`;
+  return `<div class="row"><label class="lbl">${label}</label><div class="img-row">${v ? `<img src="${esc(v)}" alt="">` : ''}<input class="inp" data-k="${k}" value="${esc(v && !String(v).startsWith('data:') ? v : '')}" placeholder="${v?.startsWith?.('data:') ? 'Imagem enviada' : 'https://… ou envie'}"><label class="b b-sm">Enviar<input type="file" accept="image/*" data-up="${k}" hidden></label>${v ? `<button class="b b-sm b-ghost" data-clear="${k}" aria-label="Remover">${ICON.x}</button>` : ''}</div></div>`;
 }
 function optionsEditor(x) {
-  return `<div class="row"><label class="lbl">Opções</label><div class="opts" data-opts>${(x.options || []).map((o, i) => `<div class="opt"><span class="opt-k">${String.fromCharCode(65 + i)}</span><input class="inp" data-opt="${i}" value="${esc(o)}"><button class="b b-sm b-ghost" data-opt-up="${i}" ${i ? '' : 'disabled'} aria-label="Subir">${ICON.up}</button><button class="b b-sm b-ghost" data-opt-rm="${i}" aria-label="Remover">×</button></div>`).join('')}</div>
+  return `<div class="row"><label class="lbl">Opções</label><div class="opts" data-opts>${(x.options || []).map((o, i) => `<div class="opt"><span class="opt-k">${String.fromCharCode(65 + i)}</span><input class="inp" data-opt="${i}" value="${esc(o)}"><button class="b b-sm b-ghost" data-opt-up="${i}" ${i ? '' : 'disabled'} aria-label="Subir">${ICON.up}</button><button class="b b-sm b-ghost" data-opt-rm="${i}" aria-label="Remover">${ICON.x}</button></div>`).join('')}</div>
     <button class="b b-sm" data-opt-add>+ Opção</button>${x.type === 'choice' ? `<label class="bld-tog" style="margin-top:10px"><span>Opção "Outro" com texto livre</span><button type="button" class="switch ${x.other ? 'on' : ''}" data-tog="other"></button></label>` : ''}</div>`;
 }
 function condEditor(cond, fields, key) {
@@ -421,7 +422,7 @@ function condEditor(cond, fields, key) {
         ${['filled', 'empty'].includes(c.op) ? '' : opts && ['is', 'is_not', 'in', 'includes'].includes(c.op)
           ? `<div class="cond-vals">${opts.map((o) => `<label><input type="checkbox" data-cv value="${esc(o)}" ${val.includes(o) ? 'checked' : ''}>${esc(o)}</label>`).join('')}</div>`
           : `<input class="inp" data-cvt value="${esc(val.join(', '))}" placeholder="valor">`}
-        ${list.length > 1 ? `<button class="b b-sm b-ghost" data-crm="${i}" aria-label="Remover condição">×</button>` : ''}
+        ${list.length > 1 ? `<button class="b b-sm b-ghost" data-crm="${i}" aria-label="Remover condição">${ICON.x}</button>` : ''}
       </div>`;
     }).join('')}
     <button class="b b-sm b-ghost" data-cadd>+ condição</button></div>`;
@@ -573,6 +574,11 @@ function settingsModal(form) {
   modal(`<h3>Configurações do formulário</h3>
     <div class="row"><label class="lbl">Endereço</label><div class="slug-in"><span>${esc(SITE.replace(/^https?:\/\//, ''))}/aplicar/</span><input class="inp" data-slug value="${esc(form.slug)}" maxlength="40" ${['trafego', 'marketplace', 'diagnostico', ''].includes(form.slug) && Object.values(FORMS).some((x) => x.id === form.id) ? 'readonly title="Endereço usado nas landing pages"' : ''}></div></div>
     <div class="row"><label class="lbl">Título da aba do navegador</label><input class="inp" data-title value="${esc(s.title || '')}" placeholder="${esc(form.name)}"></div>
+    <div class="row"><label class="lbl" for="bldSvc">Serviço dos leads deste formulário</label><select class="inp" id="bldSvc" data-svc>
+      <option value="" ${!s.service ? 'selected' : ''}>Automático (pela resposta ou pelo nome do formulário)</option>
+      <option value="marketing" ${s.service === 'marketing' ? 'selected' : ''}>Marketing</option>
+      <option value="marketplace" ${s.service === 'marketplace' ? 'selected' : ''}>Marketplace</option></select>
+      <p class="help">O lead já chega na Central de leads com essa etiqueta.</p></div>
     <h4 class="px-h" style="margin-top:16px">Visual</h4>
     <div class="grid3">
       <div class="row"><label class="lbl">Cor principal</label><div class="color-in"><input type="color" data-c="primary" value="${th.primary || '#FFAD00'}"><code>${th.primary || '#FFAD00'}</code></div></div>
@@ -604,7 +610,7 @@ function settingsModal(form) {
       form.slug = slug;
       form.settings = {
         ...s, theme: Object.fromEntries(Object.entries(temp.theme).filter(([, v]) => v)), hideBrand: !!temp.hideBrand, privacy: temp.privacy, pixels: temp.pixels,
-        title: c.querySelector('[data-title]').value.trim() || undefined, gtm: gtm || undefined,
+        title: c.querySelector('[data-title]').value.trim() || undefined, gtm: gtm || undefined, service: c.querySelector('[data-svc]').value || undefined,
         timer: minutes ? { minutes, label: c.querySelector('[data-timer-label]').value.trim() } : undefined
       };
       const open = $('[data-open]'); if (open) open.href = formUrl(form);

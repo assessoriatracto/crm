@@ -1,7 +1,7 @@
 // Abas "Integrações" (API + webhooks) e "Pixel" (Meta Pixel + Conversions API)
 import { DB, LIVE } from '@shared/db.js';
-import { S, $, $$, esc, FAT, ICON, BRAND, num, pct, brl, fullDate, ago, toast, fail, modal, confirmBox, menu } from './util.js?v=2610020954';
-import { hbars } from './dashboard.js?v=2610020954';
+import { S, $, $$, esc, FAT, ICON, BRAND, num, pct, brl, fullDate, ago, toast, fail, modal, confirmBox, menu } from './util.js?v=2610021008';
+import { hbars } from './dashboard.js?v=2610021008';
 import { PIXEL_EVENTS_RECOMMENDED } from '@shared/db.js';
 
 const EVENTS = [
@@ -103,7 +103,7 @@ app.post('/tracto', express.raw({ type: 'application/json' }), (req, res) => {
               <button class="b b-sm" data-test>Testar</button>
               <button class="b b-sm" data-secret>Segredo</button>
               <button class="b b-sm" data-edit>Editar</button>
-              <button class="b b-sm b-danger" data-del aria-label="Excluir">×</button>
+              <button class="b b-sm b-danger" data-del aria-label="Excluir">${ICON.x}</button>
             </div>
           </div>`).join('') : '<p class="muted">Nenhum webhook cadastrado.</p>'}
         <p class="help" style="margin-top:12px">Cada envio vai assinado, pra quem recebe confirmar que veio do CRM. O guia de formato e assinatura está no repositório, em docs/webhooks.md.</p>

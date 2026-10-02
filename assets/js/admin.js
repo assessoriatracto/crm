@@ -1,7 +1,7 @@
 // Página "Ajustes": estágios, rótulos, equipe, times e auditoria
 import { DB, LIVE } from '@shared/db.js';
-import { S, $, $$, esc, ICON, COLORS, num, pct, ago, toast, fail, confirmBox } from './util.js?v=2610020954';
-import { stageModal, moveStage, deleteStageFlow } from './app.js?v=2610020954';
+import { S, $, $$, esc, ICON, COLORS, num, pct, ago, toast, fail, confirmBox } from './util.js?v=2610021008';
+import { stageModal, moveStage, deleteStageFlow } from './app.js?v=2610021008';
 
 // ============================================================
 // AJUSTES
@@ -30,7 +30,7 @@ export async function renderSettings(el, reload) {
             <select class="inp" data-sf="kind" style="width:auto"><option value="open" ${s.kind === 'open' ? 'selected' : ''}>Andamento</option><option value="won" ${s.kind === 'won' ? 'selected' : ''}>Ganho</option><option value="lost" ${s.kind === 'lost' ? 'selected' : ''}>Perdido</option></select>
             <button class="b b-sm b-ghost" data-mv="-1" ${i ? '' : 'disabled'} aria-label="Subir">${ICON.up}</button>
             <button class="b b-sm b-ghost" data-mv="1" ${i < S.stages.length - 1 ? '' : 'disabled'} aria-label="Descer">${ICON.down}</button>
-            <button class="b b-sm b-danger" data-del aria-label="Excluir">×</button>
+            <button class="b b-sm b-danger" data-del aria-label="Excluir">${ICON.x}</button>
           </div>`).join('')}</div>
         <button class="b" style="margin-top:12px" data-add-stage>+ Adicionar estágio</button>
       </section>
@@ -43,7 +43,7 @@ export async function renderSettings(el, reload) {
             <input type="color" value="${x.color}" data-lf="color" aria-label="Cor">
             <input class="inp grow" value="${esc(x.name)}" maxlength="30" data-lf="name" aria-label="Nome">
             <span class="muted nowrap">${S.leads.filter((l) => (l.label_ids || []).includes(x.id)).length} leads</span>
-            <button class="b b-sm b-danger" data-ldel aria-label="Excluir">×</button>
+            <button class="b b-sm b-danger" data-ldel aria-label="Excluir">${ICON.x}</button>
           </div>`).join('') || '<p class="muted">Nenhum rótulo ainda.</p>'}</div>
         <div class="srow"><input class="inp grow" data-new-label placeholder="Novo rótulo" maxlength="30"><button class="b b-primary b-sm" data-add-label>Criar</button></div>
       </section>` : ''}
@@ -69,7 +69,7 @@ export async function renderSettings(el, reload) {
         <p class="help">Com o rodízio ligado, cada lead novo vai automaticamente pro SDR do time que recebeu lead há mais tempo, e ele é avisado no Pushcut.</p>
         <div data-teams>${teams.map((t) => `<div class="srow" data-id="${t.id}"><input class="inp grow" value="${esc(t.name)}" maxlength="40" data-tn>
           <label class="nowrap muted" style="display:flex;align-items:center;gap:8px">Rodízio <button class="switch ${t.auto_assign ? 'on' : ''}" data-auto></button></label>
-          <span class="muted nowrap">${S.profiles.filter((p) => p.team_id === t.id).length} pessoas</span><button class="b b-sm b-danger" data-tdel aria-label="Excluir">×</button></div>`).join('') || '<p class="muted">Nenhum time ainda.</p>'}</div>
+          <span class="muted nowrap">${S.profiles.filter((p) => p.team_id === t.id).length} pessoas</span><button class="b b-sm b-danger" data-tdel aria-label="Excluir">${ICON.x}</button></div>`).join('') || '<p class="muted">Nenhum time ainda.</p>'}</div>
         <div class="srow"><input class="inp grow" data-new-team placeholder="Novo time (ex: Comercial)" maxlength="40"><button class="b b-primary b-sm" data-add-team>Criar</button></div>
       </section>
 

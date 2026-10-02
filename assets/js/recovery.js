@@ -1,7 +1,7 @@
 // Aba "Recuperação": formulários começados e não concluídos (salvos automaticamente a cada resposta)
 import { DB, LIVE } from '@shared/db.js';
 import { formPath } from '@shared/forms.js';
-import { go, S, $, $$, esc, ICON, initials, fmtPhone, fullDate, ago, num, pct, toast, fail, modal, confirmBox } from './util.js?v=2610020954';
+import { go, S, $, $$, esc, ICON, initials, fmtPhone, fullDate, ago, num, pct, toast, fail, modal, confirmBox } from './util.js?v=2610021008';
 
 const SITE = window.TRACTO_CONFIG?.siteUrl || 'https://assessoriatracto.com.br';
 const STATUS = {
@@ -59,7 +59,7 @@ function paint(el) {
     </section>
     <section class="panel toolbar">
       <div class="tb-row">
-        <div class="seg">${TABS.map(([k, n]) => `<button class="b ${R.tab === k ? 'on' : ''}" data-tab="${k}">${n}${k !== 'todos' ? ` <span class="muted">${all.filter((p) => p.status === k).length}</span>` : ''}</button>`).join('')}</div>
+        <div class="seg seg-tabs">${TABS.map(([k, n]) => `<button class="b ${R.tab === k ? 'on' : ''}" data-tab="${k}">${n}${k !== 'todos' ? ` <span class="muted">${all.filter((p) => p.status === k).length}</span>` : ''}</button>`).join('')}</div>
         <div class="grow"></div>
         <label class="search">${ICON.search}<input class="inp" data-q type="search" placeholder="Buscar nome, WhatsApp, e-mail" value="${esc(R.q)}"></label>
       </div>
@@ -82,7 +82,7 @@ function paint(el) {
               ${p.whatsapp ? `<a class="b b-sm b-primary" href="${waUrl(p)}" target="_blank" rel="noopener" data-wa>${ICON.wa}Recuperar</a>` : ''}
               <button class="b b-sm" data-copy-link title="Copiar link de retomada">Link</button>
               <button class="b b-sm" data-convert title="Colocar no pipeline sem esperar">Virar lead</button>
-              <button class="b b-sm b-ghost" data-discard aria-label="Descartar">×</button>` : p.lead_id ? '<button class="b b-sm" data-open-lead>Ver lead</button>' : ''}
+              <button class="b b-sm b-ghost" data-discard aria-label="Descartar">${ICON.x}</button>` : p.lead_id ? '<button class="b b-sm" data-open-lead>Ver lead</button>' : ''}
           </td>
         </tr>`;
       }).join('')}

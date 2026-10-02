@@ -1589,3 +1589,143 @@ input.inp.dp-native{display:none !important;}
 .chip.svc-marketing{background:var(--amber-soft);color:var(--amber-ink);border-color:transparent;}
 .chip.svc-marketplace{background:rgba(106,168,255,.14);color:#6AA8FF;border-color:transparent;}
 :root[data-theme="light"] .chip.svc-marketplace{color:#2F6FD1;background:rgba(47,111,209,.10);}
+
+/* ---------- revisão mobile ---------- */
+/* Ajustes: painéis nunca mais largos que a tela */
+.settings{grid-template-columns:repeat(auto-fit,minmax(min(400px,100%),1fr));}
+.settings > .panel{min-width:0;}
+@media (max-width:560px){
+  .settings .panel{padding:16px;}
+  /* linha de estágio: cor + nome na primeira linha; tipo e ações embaixo */
+  [data-stages] .srow{flex-wrap:wrap;row-gap:8px;}
+  [data-stages] .srow .inp.grow{flex:1 1 calc(100% - 46px);min-width:0;}
+  [data-stages] .srow select.inp,[data-stages] .srow .dd-btn{flex:1 1 auto;width:auto;}
+  .srow .inp.grow{min-width:0;}
+  .settings .int-h{flex-wrap:wrap;}
+}
+/* Perfil: coluna única que não estica; menu de seções rola de lado */
+@media (max-width:860px){
+  .pf{grid-template-columns:minmax(0,1fr);}
+  .pf-side,.pf-main{min-width:0;}
+  .pf-nav{max-width:100%;}
+}
+@media (max-width:760px){
+  /* rótulos dos indicadores quebram linha em vez de cortar */
+  .kx-l{white-space:normal;overflow:visible;text-overflow:clip;line-height:1.3;}
+  /* subtítulo das seções do dashboard numa linha própria */
+  .dash-h span{display:block;margin:3px 0 0;text-transform:none;letter-spacing:0;}
+}
+/* Central de leads › tabela no celular: cada lead vira um cartão (sem rolar de lado) */
+.lt .td-lead b .chip{margin-left:6px;vertical-align:1px;font-size:11px;padding:1px 7px;}
+@media (max-width:760px){
+  .table-wrap:has(> .lt){overflow:visible;}
+  .lt,.lt tbody{display:block;width:100%;}
+  .lt thead{display:none;}
+  .lt tr{display:grid;grid-template-columns:30px minmax(0,1fr) auto;grid-template-areas:"sel lead stage" "sel contact contact" "sel owner date";gap:6px 10px;padding:12px 14px;border-bottom:1px solid var(--c-line-soft);align-items:center;}
+  .lt tr:last-child{border-bottom:0;}
+  .lt td{display:block;padding:0;border:0;min-width:0;white-space:normal;}
+  .lt td:nth-child(1){grid-area:sel;align-self:start;padding-top:6px;}
+  .lt td:nth-child(2){grid-area:lead;}
+  .lt td:nth-child(3){grid-area:contact;font-size:13px;color:var(--gray-2);overflow-wrap:anywhere;}
+  .lt td:nth-child(4){grid-area:stage;justify-self:end;}
+  .lt td:nth-child(5){grid-area:owner;font-size:12.5px;color:var(--gray-3);}
+  .lt td:nth-child(11){grid-area:date;justify-self:end;font-size:12.5px;color:var(--gray-3);}
+  .lt td:nth-child(6),.lt td:nth-child(7),.lt td:nth-child(8),.lt td:nth-child(9),.lt td:nth-child(10),.lt td:nth-child(12),.lt td:nth-child(n+13){display:none;}
+  .lt .td-lead b{display:flex;align-items:center;flex-wrap:wrap;gap:4px 6px;}
+  .lt .td-lead b .chip{margin-left:0;}
+}
+@media (max-width:760px){
+  .table-wrap > .lt{min-width:0 !important;width:100% !important;table-layout:auto;}
+  .lt tr{width:100%;}
+  .lt td{height:auto !important;}
+}
+/* Financeiro no celular: Clientes, Lançamentos e Despesas viram cartões (sem rolar de lado) */
+@media (max-width:760px){
+  .table-wrap:has(> .cl-table),.table-wrap:has(> .en-table),.table-wrap:has(> .ex-table){overflow:visible;}
+  .cl-table,.en-table,.ex-table{min-width:0 !important;width:100%;}
+  .cl-table thead,.en-table thead,.ex-table thead{display:none;}
+  .cl-table,.cl-table tbody,.en-table,.en-table tbody,.ex-table,.ex-table tbody{display:block;}
+  .cl-table tr,.en-table tr,.ex-table tr{display:flex;flex-wrap:wrap;align-items:center;gap:6px 10px;padding:12px 14px;border-bottom:1px solid var(--c-line-soft);}
+  .cl-table tr:last-child,.en-table tr:last-child,.ex-table tr:last-child{border-bottom:0;}
+  .cl-table td,.en-table td,.ex-table td{display:block;padding:0 !important;border:0 !important;height:auto !important;white-space:normal;min-width:0;text-align:left !important;}
+  .cl-table td small,.en-table td small,.ex-table td small{display:inline;}
+  /* Clientes: nome · status / contrato · valor / fechado · término · ações / origem */
+  .cl-table td:nth-child(1){order:1;flex:1 1 calc(100% - 120px);}
+  .cl-table td:nth-child(2){order:2;margin-left:auto;}
+  .cl-table td:nth-child(3){order:3;flex:1 1 calc(100% - 130px);}
+  .cl-table td:nth-child(4){order:4;margin-left:auto;font-weight:600;}
+  .cl-table td:nth-child(5){order:5;font-size:12.5px;color:var(--gray-3);}
+  .cl-table td:nth-child(5)::before{content:"Fechado ";}
+  .cl-table td:nth-child(6){order:6;font-size:12.5px;color:var(--gray-3);}
+  .cl-table td:nth-child(6)::before{content:"· Término ";}
+  .cl-table td:nth-child(8){order:7;margin-left:auto;}
+  .cl-table td:nth-child(7){order:8;flex:1 1 100%;}
+  .cl-table td:nth-child(7):has(.muted:only-child){display:none;}
+  /* Lançamentos: descrição · valor / data · tipo · categoria · ações */
+  .en-table td:nth-child(3){order:1;flex:1 1 calc(100% - 110px);}
+  .en-table td:nth-child(5){order:2;margin-left:auto;font-weight:600;}
+  .en-table td:nth-child(1){order:3;font-size:12.5px;color:var(--gray-3);}
+  .en-table td:nth-child(2){order:4;}
+  .en-table td:nth-child(4){order:5;font-size:12.5px;color:var(--gray-3);}
+  .en-table td:nth-child(6){order:6;margin-left:auto;}
+  /* Despesas: descrição · valor / data · tipo · categoria · ações */
+  .ex-table td:nth-child(2){order:1;flex:1 1 calc(100% - 110px);}
+  .ex-table td:nth-child(5){order:2;margin-left:auto;font-weight:600;}
+  .ex-table td:nth-child(1){order:3;font-size:12.5px;color:var(--gray-3);}
+  .ex-table td:nth-child(4){order:4;}
+  .ex-table td:nth-child(3){order:5;font-size:12.5px;color:var(--gray-3);}
+  .ex-table td:nth-child(6){order:6;margin-left:auto;}
+  .cl-table .row-acts,.en-table .row-acts,.ex-table .row-acts{opacity:1;}
+}
+@media (max-width:760px){
+  .cl-table td:nth-child(8){order:3;margin-left:0;}
+  .cl-table td:nth-child(3){order:4;}
+  .cl-table td:nth-child(4){order:5;}
+  .cl-table td:nth-child(5){order:6;}
+  .cl-table td:nth-child(6){order:7;}
+  .cl-table td:nth-child(2){margin-left:auto;}
+  /* números dos indicadores alinhados entre cards vizinhos, mesmo quando um rótulo quebra em 2 linhas */
+}
+
+/* indicadores: rótulo, número e texto de apoio alinhados entre os cards da mesma linha (qualquer tela) */
+@supports (grid-template-rows: subgrid){
+  .kx-grid > .kx{display:grid;grid-row:span 3;grid-template-rows:subgrid;row-gap:6px;align-content:start;}
+  .kx-grid > .kx > .kx-s{align-self:start;margin-top:0;}
+}
+@media (max-width:560px){
+  .ex-h-wrap > div:first-child{flex:1 1 100%;}
+  .ex-h-wrap .seg{flex:1 1 auto;}
+}
+/* editor de formulário no celular: colunas nunca mais largas que a tela */
+@media (max-width:1000px){
+  .bld-body{grid-template-columns:minmax(0,1fr) !important;}
+  .bld-body > *{min-width:0;}
+  .bld-steps .bs-t{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+}
+.chip button svg{width:11px;height:11px;}
+.srow .b-danger svg,.b-sm.b-ghost svg{width:14px;height:14px;}
+/* barras de ferramentas: só botão de ícone fica quadrado; botão com texto ocupa o que precisa */
+@media (max-width:760px){
+  .toolbar .seg .b:not(:has(svg)){width:auto;padding:0 12px;}
+  .toolbar .tb-row:has(> .seg-tabs){flex-wrap:wrap;}
+  .tb-row > .seg-tabs{flex:1 1 100%;}
+  .tb-row:has(> .seg-tabs) > .grow{display:none;}
+  .tb-row .search{flex:1 1 100%;max-width:none;}
+}
+/* Recuperação no celular: cada pessoa vira um cartão */
+@media (max-width:760px){
+  .table-wrap:has(> .rec-table){overflow:visible;}
+  .rec-table{min-width:0 !important;width:100%;}
+  .rec-table,.rec-table tbody{display:block;}
+  .rec-table thead{display:none;}
+  .rec-table tr{display:flex;flex-wrap:wrap;align-items:center;gap:8px 10px;padding:12px 14px;border-bottom:1px solid var(--c-line-soft);}
+  .rec-table tr:last-child{border-bottom:0;}
+  .rec-table td{display:block;padding:0 !important;border:0 !important;height:auto !important;white-space:normal;min-width:0;}
+  .rec-table td:nth-child(1){order:1;flex:1 1 auto;}
+  .rec-table td:nth-child(7){order:2;margin-left:auto;}
+  .rec-table td:nth-child(2){order:3;flex:1 1 100%;font-size:13px;}
+  .rec-table td:nth-child(3){order:4;flex:1 1 100%;}
+  .rec-table td:nth-child(4){order:5;font-size:12.5px;color:var(--gray-3);}
+  .rec-table td:nth-child(6){order:6;margin-left:auto;font-size:12.5px;color:var(--gray-3);}
+  .rec-table td:nth-child(5){display:none;}
+}

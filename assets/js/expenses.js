@@ -1,6 +1,6 @@
 // Financeiro > Despesas: fixas (cadastradas uma vez, lançadas todo mês) e variáveis (lançamentos avulsos)
 import { DB } from '@shared/db.js';
-import { S, esc, ICON, brl, num, toast, fail, modal, menu, confirmBox } from './util.js?v=2610020954';
+import { S, esc, ICON, brl, num, toast, fail, modal, menu, confirmBox } from './util.js?v=2610021008';
 
 const E = { type: 'todas' };
 const CATS_FIXED = ['Ferramentas', 'Equipe', 'Contador', 'Aluguel', 'Impostos', 'Outros'];
@@ -93,7 +93,7 @@ export async function renderExpenses(host, F, { range, entryModal }) {
       <div class="ex-h ex-h-wrap"><div><h3>Lançamentos de despesa</h3><p class="help">Tudo o que saiu no período (anúncios da Meta ficam na Visão geral)</p></div>
         <div class="seg">${[['todas', 'Todas'], ['fixas', 'Fixas'], ['variaveis', 'Variáveis']].map(([k, n]) => `<button class="b b-sm ${E.type === k ? 'on' : ''}" data-et="${k}">${n}</button>`).join('')}</div>
         <button class="b b-primary b-sm" data-new-var>+ Despesa variável</button></div>
-      ${rows.length ? `<div class="table-wrap"><table class="int-table"><thead><tr><th>Data</th><th>Descrição</th><th>Categoria</th><th>Tipo</th><th class="num">Valor</th><th></th></tr></thead><tbody>
+      ${rows.length ? `<div class="table-wrap"><table class="int-table ex-table"><thead><tr><th>Data</th><th>Descrição</th><th>Categoria</th><th>Tipo</th><th class="num">Valor</th><th></th></tr></thead><tbody>
         ${rows.map((e) => `<tr data-id="${e.id}" class="row-click" title="Clique para editar"><td class="nowrap">${new Date(e.date + 'T12:00').toLocaleDateString('pt-BR')}${e.date > iso(new Date()) ? '<small class="muted">a vencer</small>' : ''}</td><td>${esc(e.description || '')}</td><td>${esc(e.category)}</td><td><span class="pill ${isFixed(e) ? '' : 'wait'}">${isFixed(e) ? 'Fixa' : 'Variável'}</span></td><td class="num">${brl(e.amount)}</td><td style="text-align:right"><span class="row-acts"><button class="b b-sm b-ghost" data-eedit aria-label="Editar">${ICON.edit}</button><button class="b b-sm b-ghost" data-edel aria-label="Excluir">${ICON.x}</button></span></td></tr>`).join('')}
       </tbody></table></div>` : '<p class="muted empty-line">Nenhuma despesa no período.</p>'}
     </section>`;

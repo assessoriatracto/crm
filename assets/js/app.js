@@ -3,17 +3,17 @@ import {
   go, routeName, S, $, $$, esc, ICON, FAT, COLORS, initials, isHot, stageOf, profileOf, labelOf, isInactive, isDue, fatShort, brl, pct, num,
   fmtPhone, fullDate, longDate, addedAt, ago, sourceLabel, formName, waLink, toast, fail, popover, closePop, menu, multiSelect,
   modal, confirmBox, downloadCSV, dateRange, datePicker, dateBtn, daysToSale, fmtDays
-} from './util.js?v=2610020954';
-import { importModal } from './import.js?v=2610020954';
-import { renderDashboard } from './dashboard.js?v=2610020954';
-import { renderSettings } from './admin.js?v=2610020954';
-import { renderIntegrations, renderPixel, leadMetaEvents, statusPill } from './integrations.js?v=2610020954';
-import { renderRecovery, loadPartials } from './recovery.js?v=2610020954';
-import { showSignIn, showSignUp, showForgot, showReset, showMfa, showPending, watchIdle, AUTH_ROUTES } from './auth.js?v=2610020954';
-import { SERVICES, PLANS, planMonths, planFactor, VALUE_LABEL, contractFields, bindContract } from './contract.js?v=2610020954';
-import { openProfile, renderProfile } from './profile.js?v=2610020954';
-import { renderBuilder } from './builder.js?v=2610020954';
-import { renderFinance } from './finance.js?v=2610020954';
+} from './util.js?v=2610021008';
+import { importModal } from './import.js?v=2610021008';
+import { renderDashboard } from './dashboard.js?v=2610021008';
+import { renderSettings } from './admin.js?v=2610021008';
+import { renderIntegrations, renderPixel, leadMetaEvents, statusPill } from './integrations.js?v=2610021008';
+import { renderRecovery, loadPartials } from './recovery.js?v=2610021008';
+import { showSignIn, showSignUp, showForgot, showReset, showMfa, showPending, watchIdle, AUTH_ROUTES } from './auth.js?v=2610021008';
+import { SERVICES, PLANS, planMonths, planFactor, VALUE_LABEL, contractFields, bindContract } from './contract.js?v=2610021008';
+import { openProfile, renderProfile } from './profile.js?v=2610021008';
+import { renderBuilder } from './builder.js?v=2610021008';
+import { renderFinance } from './finance.js?v=2610021008';
 
 // ============================================================
 // preferências locais (por navegador)
@@ -474,7 +474,7 @@ function tableHtml(list) {
   const { key, dir } = V.sort;
   const rows = [...list].sort((a, b) => { const x = sortVal(a, key); const y = sortVal(b, key); return (x > y ? 1 : x < y ? -1 : 0) * dir; });
   const all = rows.every((l) => V.sel.has(l.id));
-  return `<div class="panel table-wrap"><table><thead><tr>
+  return `<div class="panel table-wrap"><table class="lt"><thead><tr>
       <th class="col-sel"><button type="button" class="cbx ${all ? 'on' : ''}" data-act="sel-all" role="checkbox" aria-checked="${all}" aria-label="Selecionar todos">${ICON.check}</button></th>
       ${COLS.map(([k, n]) => `<th class="sortable" data-act="sort" data-k="${k}">${n}${key === k ? (dir > 0 ? ICON.up : ICON.down) : ''}</th>`).join('')}
     </tr></thead><tbody>
@@ -482,7 +482,7 @@ function tableHtml(list) {
       const s = stageOf(l); const p = profileOf(l.assigned_to); const sel = V.sel.has(l.id);
       return `<tr data-id="${l.id}" class="${sel ? 'sel' : ''}">
         <td class="col-sel"><button type="button" class="cbx ${sel ? 'on' : ''}" data-act="sel" role="checkbox" aria-checked="${sel}" aria-label="Selecionar">${ICON.check}</button></td>
-        <td><div class="td-lead"><span class="av ${isHot(l) ? 'hot' : ''}">${esc(initials(l.nome))}</span><div><b>${esc(l.nome)}</b><small>${l.instagram ? '@' + esc(l.instagram) : ''}</small></div></div></td>
+        <td><div class="td-lead"><span class="av ${isHot(l) ? 'hot' : ''}">${esc(initials(l.nome))}</span><div><b>${esc(l.nome)}${l.service ? ` <span class="chip svc svc-${esc(l.service)}">${l.service === 'marketplace' ? 'Marketplace' : 'Marketing'}</span>` : ''}</b><small>${l.instagram ? '@' + esc(l.instagram) : ''}</small></div></div></td>
         <td class="nowrap">${esc(fmtPhone(l.whatsapp))}${l.email ? `<br><small class="muted">${esc(l.email)}</small>` : ''}</td>
         <td class="nowrap">${s ? `<span class="stage-pill"><span class="dot" style="background:${s.color}"></span>${esc(s.name)}</span>` : '—'}</td>
         <td class="nowrap">${p ? esc(p.nome) : '<span class="muted">Não atribuído</span>'}</td>
@@ -792,7 +792,7 @@ function renderDrawer() {
       <div class="sec">
         <h4>Rótulos</h4>
         <p class="help">Os rótulos ajudam você a descrever e organizar seus cadastros.</p>
-        <div class="lbl-list">${(l.label_ids || []).map(labelOf).filter(Boolean).map((x) => `<span class="chip tag" style="--c:${x.color}">${esc(x.name)}<button data-d="unlabel" data-id="${x.id}" aria-label="Remover">×</button></span>`).join('')}</div>
+        <div class="lbl-list">${(l.label_ids || []).map(labelOf).filter(Boolean).map((x) => `<span class="chip tag" style="--c:${x.color}">${esc(x.name)}<button data-d="unlabel" data-id="${x.id}" aria-label="Remover">${ICON.x}</button></span>`).join('')}</div>
         <label class="search" style="max-width:none">${ICON.search}<input class="inp" data-lblq placeholder="Pesquisar ou criar uma etiqueta" data-pop-anchor autocomplete="off"></label>
       </div>
       <div class="sec">
