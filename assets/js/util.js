@@ -80,7 +80,7 @@ export const ICON = {
 };
 
 // ---------- formatação ----------
-export const initials = (n) => String(n || '?').trim().split(/\s+/).filter(Boolean).slice(0, 2).map((w) => w[0]).join('').toUpperCase();
+export const initials = (n) => String(n || '').trim().split(/\s+/).map((w) => w.replace(/[^\p{L}\p{N}]/gu, '')).filter(Boolean).slice(0, 2).map((w) => w[0]).join('').toUpperCase() || '?';
 export const fatIdx = (l) => FAT.indexOf(l.faturamento);
 export const fatShort = (f) => FAT_SHORT[FAT.indexOf(f)] || '';
 export const isHot = (l) => fatIdx(l) >= 3;

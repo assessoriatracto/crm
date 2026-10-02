@@ -1,7 +1,7 @@
 // Construtor de formulários (estilo Typeform): lista, editor de etapas, lógica, tema e prévia ao vivo
 import { DB } from '@shared/db.js';
 import { FORMS, formPath } from '@shared/forms.js';
-import { go, S, $, $$, esc, ICON, num, pct, toast, fail, modal, confirmBox, menu, popover, closePop } from './util.js?v=2610020948';
+import { go, S, $, $$, esc, ICON, num, pct, toast, fail, modal, confirmBox, menu, popover, closePop } from './util.js?v=2610020954';
 import { BTN_ICONS } from '@shared/form-engine.js';
 
 const SITE = window.TRACTO_CONFIG?.siteUrl || 'https://assessoriatracto.com.br';

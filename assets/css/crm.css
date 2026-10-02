@@ -1585,3 +1585,7 @@ input.inp.dp-native{display:none !important;}
   #app .main{flex:1 1 auto;min-height:0;overflow-y:auto;overflow-x:hidden;-webkit-overflow-scrolling:touch;overscroll-behavior-y:contain;padding-bottom:calc(90px + env(safe-area-inset-bottom));}
   #app .side{position:fixed;bottom:0;transform:translateZ(0);}
 }
+/* serviço no card do lead */
+.chip.svc-marketing{background:var(--amber-soft);color:var(--amber-ink);border-color:transparent;}
+.chip.svc-marketplace{background:rgba(106,168,255,.14);color:#6AA8FF;border-color:transparent;}
+:root[data-theme="light"] .chip.svc-marketplace{color:#2F6FD1;background:rgba(47,111,209,.10);}

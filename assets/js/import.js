@@ -1,7 +1,7 @@
 // Importar leads de planilha (Respondi, formulários da Meta, Typeform, Google Forms…): CSV ou Excel.
 // Não duplica (WhatsApp/e-mail), mantém a data original e nunca manda conversão pra Meta.
 import { DB } from '@shared/db.js';
-import { S, esc, num, toast, fail, modal } from './util.js?v=2610020948';
+import { S, esc, num, toast, fail, modal } from './util.js?v=2610020954';
 
 const ORIGINS = [['respondi', 'Respondi'], ['meta_form', 'Formulário da Meta (planilha)'], ['typeform', 'Typeform'], ['google_forms', 'Google Forms'], ['planilha', 'Outra planilha']];
 const FIELDS = [

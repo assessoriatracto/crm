@@ -1,12 +1,12 @@
 // Financeiro (estilo UTMify): gasto da Meta Ads × leads e vendas do CRM × receitas e despesas lançadas
 import { DB } from '@shared/db.js';
-import { renderClients } from './clients.js?v=2610020948';
-import { renderExpenses } from './expenses.js?v=2610020948';
-import { renderCashflow } from './cashflow.js?v=2610020948';
-import { contracts, result, fromAds, saleRevenue } from './dashboard.js?v=2610020948';
-import { contractTags } from './contract.js?v=2610020948';
-import { entryModal } from './entry.js?v=2610020948';
-import { PERIOD, REVENUE, setRevenueMode, revenueToggle, BRAND, popover, dateRange, datePicker, dateBtn, S, $, $$, esc, ICON, brl, num, pct, fullDate, ago, toast, fail, modal, confirmBox } from './util.js?v=2610020948';
+import { renderClients } from './clients.js?v=2610020954';
+import { renderExpenses } from './expenses.js?v=2610020954';
+import { renderCashflow } from './cashflow.js?v=2610020954';
+import { contracts, result, fromAds, saleRevenue } from './dashboard.js?v=2610020954';
+import { contractTags } from './contract.js?v=2610020954';
+import { entryModal } from './entry.js?v=2610020954';
+import { PERIOD, REVENUE, setRevenueMode, revenueToggle, BRAND, popover, dateRange, datePicker, dateBtn, S, $, $$, esc, ICON, brl, num, pct, fullDate, ago, toast, fail, modal, confirmBox } from './util.js?v=2610020954';
 
 const F = { period: '30', from: '', to: '', level: 'campaign', revenue: 'mensal', sort: 'spend', tab: 'geral' };
 const GRAPH = 'v21.0';
@@ -629,6 +629,7 @@ const DELIVERY = {
   IN_PROCESS: ['Em processamento', 'wait'], WITH_ISSUES: ['Com problemas', 'bad'], PENDING_REVIEW: ['Em análise', 'wait'], DISAPPROVED: ['Reprovado', 'bad'],
   PREAPPROVED: ['Pré-aprovado', 'wait'], PENDING_BILLING_INFO: ['Pagamento pendente', 'bad'], ARCHIVED: ['Arquivada', ''], DELETED: ['Excluída', '']
 };
+const DELIVERY_RANK = { ACTIVE: 6, IN_PROCESS: 5, PENDING_REVIEW: 5, PREAPPROVED: 5, WITH_ISSUES: 4, DISAPPROVED: 4, PENDING_BILLING_INFO: 4, ADSET_PAUSED: 3, CAMPAIGN_PAUSED: 3, PAUSED: 2, ARCHIVED: 1, DELETED: 0 };
 const LEVEL_NAME = { campaign: 'Campanha', adset: 'Conjunto', ad: 'Anúncio' };
 async function syncObjects() {
   try {
@@ -735,7 +736,10 @@ function renderTable(host, ins, leads, sales, saleValue) {
     sales: r.sales, rev: r.rev, roas: r.spend ? r.rev / r.spend : null, profit: r.rev - r.spend,
     lpv: r.lpv, connect: (r.link || r.clicks) && r.lpv ? r.lpv / (r.link || r.clicks) : null, cplpv: r.lpv ? r.spend / r.lpv : null,
     msgs: r.msgs, cpmsg: r.msgs ? r.spend / r.msgs : null, crm: r.crm,
-    conv: (r.leads || r.crm) ? r.sales / (r.leads || r.crm) : null, cpa: r.sales && r.spend ? r.spend / r.sales : null, ticket: r.sales ? r.rev / r.sales : null
+    conv: (r.leads || r.crm) ? r.sales / (r.leads || r.crm) : null, cpa: r.sales && r.spend ? r.spend / r.sales : null, ticket: r.sales ? r.rev / r.sales : null,
+    // veiculação: ativas primeiro, depois em análise, com problema, pausadas e arquivadas
+    delivery: (() => { const o = OBJS.get(r.id); return o ? DELIVERY_RANK[o.effective_status] ?? (o.status === 'ACTIVE' ? 5 : 1) : null; })(),
+    budget: (() => { const o = OBJS.get(r.id); return o && o.level !== 'ad' ? Number(o.daily_budget || o.lifetime_budget || 0) / 100 || null : null; })()
   })[k];
   const q = (F.q || '').trim().toLowerCase();
   let list = [...rows.values()].filter((r) => !q || `${r.name} ${r.campaign || ''} ${r.adset || ''}`.toLowerCase().includes(q));

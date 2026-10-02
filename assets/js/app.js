@@ -3,17 +3,17 @@ import {
   go, routeName, S, $, $$, esc, ICON, FAT, COLORS, initials, isHot, stageOf, profileOf, labelOf, isInactive, isDue, fatShort, brl, pct, num,
   fmtPhone, fullDate, longDate, addedAt, ago, sourceLabel, formName, waLink, toast, fail, popover, closePop, menu, multiSelect,
   modal, confirmBox, downloadCSV, dateRange, datePicker, dateBtn, daysToSale, fmtDays
-} from './util.js?v=2610020948';
-import { importModal } from './import.js?v=2610020948';
-import { renderDashboard } from './dashboard.js?v=2610020948';
-import { renderSettings } from './admin.js?v=2610020948';
-import { renderIntegrations, renderPixel, leadMetaEvents, statusPill } from './integrations.js?v=2610020948';
-import { renderRecovery, loadPartials } from './recovery.js?v=2610020948';
-import { showSignIn, showSignUp, showForgot, showReset, showMfa, showPending, watchIdle, AUTH_ROUTES } from './auth.js?v=2610020948';
-import { SERVICES, PLANS, planMonths, planFactor, VALUE_LABEL, contractFields, bindContract } from './contract.js?v=2610020948';
-import { openProfile, renderProfile } from './profile.js?v=2610020948';
-import { renderBuilder } from './builder.js?v=2610020948';
-import { renderFinance } from './finance.js?v=2610020948';
+} from './util.js?v=2610020954';
+import { importModal } from './import.js?v=2610020954';
+import { renderDashboard } from './dashboard.js?v=2610020954';
+import { renderSettings } from './admin.js?v=2610020954';
+import { renderIntegrations, renderPixel, leadMetaEvents, statusPill } from './integrations.js?v=2610020954';
+import { renderRecovery, loadPartials } from './recovery.js?v=2610020954';
+import { showSignIn, showSignUp, showForgot, showReset, showMfa, showPending, watchIdle, AUTH_ROUTES } from './auth.js?v=2610020954';
+import { SERVICES, PLANS, planMonths, planFactor, VALUE_LABEL, contractFields, bindContract } from './contract.js?v=2610020954';
+import { openProfile, renderProfile } from './profile.js?v=2610020954';
+import { renderBuilder } from './builder.js?v=2610020954';
+import { renderFinance } from './finance.js?v=2610020954';
 
 // ============================================================
 // preferências locais (por navegador)
@@ -361,6 +361,8 @@ function renderLeads() {
 // ---------- pipeline ----------
 function chipsHtml(l) {
   const out = [];
+  // serviço do contrato (marketing ou marketplace) primeiro, pra bater o olho no pipeline
+  if (l.service) out.push(`<span class="chip svc svc-${esc(l.service)}">${l.service === 'marketplace' ? 'Marketplace' : 'Marketing'}</span>`);
   if (l.source === 'pago') out.push('<span class="chip paid">Pago</span>');
   else if (l.source === 'organico') out.push('<span class="chip">Orgânico</span>');
   if (isInactive(l)) out.push('<span class="chip inactive" title="Sem atividade há 7+ dias">Inativo</span>');
@@ -369,6 +371,12 @@ function chipsHtml(l) {
   if (l.reminder_at) out.push(`<span class="chip ${isDue(l) ? 'due' : 'rem'}">${ICON.bell}${isDue(l) ? 'Vencido' : new Date(l.reminder_at).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' })}</span>`);
   (l.label_ids || []).map(labelOf).filter(Boolean).forEach((x) => out.push(`<span class="chip tag" style="--c:${x.color}">${esc(x.name)}</span>`));
   return out.join('');
+}
+// valor no formato do contrato: R$ 900/mês, R$ 5.000/semestre, R$ 12.000/ano, R$ 3.000 à vista
+function cardValue(l) {
+  const fac = planFactor(l.plan);
+  const v = l.contract_value && (fac > 1 || l.plan === 'unico') ? Number(l.contract_value) : Number(l.valor) * fac;
+  return brl(v) + (({ semestral: '/semestre', anual: '/ano', unico: ' à vista' })[l.plan] || '/mês');
 }
 function cardHtml(l) {
   const p = profileOf(l.assigned_to);
@@ -381,7 +389,7 @@ function cardHtml(l) {
       ${V.bulkMode ? '' : `<button class="card-menu" data-act="card-menu" data-pop-anchor aria-label="Ações">${ICON.dots}</button>`}
     </div>
     <div class="chips">${chipsHtml(l)}</div>
-    <div class="card-foot">${p ? `<span class="av sm" title="${esc(p.nome)}">${esc(initials(p.nome))}</span>` : ''}${l.valor ? `<span>${brl(l.valor)}/mês</span>` : ''}<span class="grow"></span><span title="${fullDate(l.created_at)}">${ago(l.created_at)}</span></div>
+    <div class="card-foot">${p ? `<span class="av sm" title="${esc(p.nome)}">${esc(initials(p.nome))}</span>` : ''}${l.valor ? `<span>${cardValue(l)}</span>` : ''}<span class="grow"></span><span title="${fullDate(l.created_at)}">${ago(l.created_at)}</span></div>
   </article>`;
 }
 function boardHtml(list) {
