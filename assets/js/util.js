@@ -125,7 +125,9 @@ export const sourceLabel = (s) => ({ pago: 'Pago', organico: 'Orgânico', manual
 export const formName = (l) => S.forms[l.form_id]?.name || l.form_name || (l.form_id === 'manual' ? 'Cadastro manual' : l.form_id);
 export const waLink = (l, msg) => {
   const first = (l.nome || '').split(' ')[0];
-  const text = msg ?? `Oi ${first}, tudo bem? Aqui é da Tracto. Vi que você preencheu nosso formulário e queria entender melhor o momento da sua loja.`;
+  // quem manda se apresenta pelo próprio nome (primeiro nome de quem está logado)
+  const me = (S.me?.nome || '').trim().split(/\s+/)[0];
+  const text = msg ?? `Oi ${first}, tudo bem? Aqui é ${me ? me + ' ' : ''}da Tracto, vi que você acabou de preencher o nosso formulário.\n\nPosso te ligar para conversarmos melhor?`;
   return `https://wa.me/${String(l.whatsapp || '').replace(/\D/g, '')}?text=${encodeURIComponent(text)}`;
 };
 
