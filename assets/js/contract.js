@@ -1,6 +1,6 @@
 // Campos de contrato usados em todo lugar que lança venda: serviço (marketing/marketplace),
 // tipo (mensal, semestral, anual, pagamento único), duração e valores.
-import { esc, brl } from './util.js?v=2610021016';
+import { esc, brl } from './util.js?v=2610191451';
 
 export const SERVICES = [['marketing', 'Marketing'], ['marketplace', 'Marketplace']];
 // meses padrão de cada tipo (mensal renova todo mês até cancelar; usa a previsão só pra estimar o valor do contrato)
@@ -21,7 +21,7 @@ export function contractTags(service, plan) {
 export const planFactor = (k) => ({ semestral: 6, anual: 12 })[k] || 1;
 export const VALUE_LABEL = { mensal: 'Mensalidade (R$)', semestral: 'Valor do semestre (R$)', anual: 'Valor anual (R$)', unico: 'Valor do pagamento (R$)' };
 
-// v = { service, plan, months, monthly, total }
+// v = { service, plan, months, monthly, total, first }
 export function contractFields(v = {}, { defaultMonths = 12 } = {}) {
   const plan = v.plan || 'mensal';
   const months = plan === 'mensal' ? v.months || defaultMonths : planMonths(plan, defaultMonths);
@@ -36,6 +36,7 @@ export function contractFields(v = {}, { defaultMonths = 12 } = {}) {
       <div class="row"><label class="lbl" for="ctrVal" data-val-l>${VALUE_LABEL[plan]}</label><input class="inp" id="ctrVal" data-val inputmode="decimal" placeholder="R$ 0,00" value="${fmtN(val)}"></div>
       <div class="row" data-mo-row><label class="lbl" for="ctrMo">Previsão (meses)</label><input class="inp" id="ctrMo" data-mo inputmode="numeric" value="${months}"></div>
     </div>
+    <div class="row" data-first-row><label class="lbl" for="ctrFirst">1ª mensalidade (R$) <span class="muted" style="text-transform:none;letter-spacing:0">(opcional, se for diferente das demais)</span></label><input class="inp" id="ctrFirst" data-first inputmode="decimal" placeholder="Igual às demais" value="${fmtN(v.first)}"></div>
     <p class="help ctr-help" data-ctr-help></p>
   </div>`;
 }
@@ -56,13 +57,15 @@ export function bindContract(root) {
       anual: 'Contrato de 12 meses, pago por ano.',
       unico: 'Entra no faturamento do dia da venda. Não conta na receita recorrente nem no churn.'
     }[p];
-    const calc = !(v > 0) ? '' : p === 'unico' ? '' : p === 'mensal' ? ` Contrato estimado: ${brl(v * (m || 0))}.` : ` Equivale a ${(v / planFactor(p)).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL', minimumFractionDigits: 2, maximumFractionDigits: 2 })} por mês.`;
+    const f = parse($('[data-first]').value);
+    const calc = !(v > 0) ? '' : p === 'unico' ? '' : p === 'mensal' ? ` Contrato estimado: ${brl((f > 0 ? f + v * Math.max(0, (m || 0) - 1) : v * (m || 0)))}${f > 0 ? ` (1ª de ${brl(f)} + ${Math.max(0, (m || 0) - 1)} × ${brl(v)})` : ''}.` : ` Equivale a ${(v / planFactor(p)).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL', minimumFractionDigits: 2, maximumFractionDigits: 2 })} por mês.`;
     $('[data-ctr-help]').textContent = base + calc;
   };
   const layout = (fromChange) => {
     const p = plan();
     $('[data-val-l]').textContent = VALUE_LABEL[p];
     $('[data-mo-row]').hidden = p !== 'mensal';
+    $('[data-first-row]').hidden = p !== 'mensal';
     $('[data-vals]').classList.toggle('one', p !== 'mensal');
     // troca de formato: converte pelo equivalente mensal (ex.: R$ 1.000/mês vira R$ 6.000 no semestral)
     if (fromChange) {
@@ -79,16 +82,21 @@ export function bindContract(root) {
   $('[data-plan]').addEventListener('change', () => layout(true));
   $('[data-val]').addEventListener('input', help);
   $('[data-mo]').addEventListener('input', help);
+  $('[data-first]').addEventListener('input', help);
+  $('[data-first]').addEventListener('blur', (e) => { const v = parse(e.target.value); e.target.value = v > 0 ? fmtN(v) : ''; help(); });
   $('[data-val]').addEventListener('blur', (e) => { const v = parse(e.target.value); if (v > 0) e.target.value = fmtN(v); });
   layout(false);
   return {
     read() {
       const p = plan(); const v = parse($('[data-val]').value); const months = monthsOf(p);
       if (!(v > 0)) return { error: `Informe o ${VALUE_LABEL[p].replace(' (R$)', '').toLowerCase()}` };
-      if (p === 'unico') return { service, plan: p, months: 1, monthly_amount: v, amount: v };
+      if (p === 'unico') return { service, plan: p, months: 1, monthly_amount: v, amount: v, first_amount: null };
       if (!(months >= 1 && months <= 120)) return { error: 'Previsão entre 1 e 120 meses' };
       const monthly = v / planFactor(p);
-      return { service, plan: p, months, monthly_amount: Math.round(monthly * 100) / 100, amount: p === 'mensal' ? v * months : v };
+      // 1ª mensalidade diferente (só no mensal): contrato = 1ª + mensalidade × (meses − 1)
+      const first = p === 'mensal' && parse($('[data-first]').value) > 0 ? parse($('[data-first]').value) : null;
+      return { service, plan: p, months, monthly_amount: Math.round(monthly * 100) / 100, first_amount: first,
+        amount: p === 'mensal' ? (first != null ? first + v * (months - 1) : v * months) : v };
     }
   };
 }

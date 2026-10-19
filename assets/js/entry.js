@@ -1,8 +1,8 @@
 // Lançamento único do Financeiro: Venda, Outra receita ou Despesa.
 // A venda é a mesma da Central de leads: ligada a um contato, o banco atualiza o lead (valor, contrato, data e estágio) e vice-versa.
 import { DB } from '@shared/db.js';
-import { S, esc, toast, fail, modal, confirmBox } from './util.js?v=2610021016';
-import { contractFields, bindContract } from './contract.js?v=2610021016';
+import { S, esc, toast, fail, modal, confirmBox } from './util.js?v=2610191451';
+import { contractFields, bindContract } from './contract.js?v=2610191451';
 
 const SALE_CATS = ['Venda (contrato)', 'Contrato'];
 const CATS = { despesa: ['Ferramentas', 'Equipe', 'Comissões', 'Impostos', 'Tráfego (outras plataformas)', 'Outros'], receita: ['Setup', 'Consultoria', 'Outros'] };
@@ -35,7 +35,7 @@ export function entryModal(done, entry = null, opts = {}) {
       ${lead ? '' : `<div class="row"><label class="lbl" for="enLead">Contato do cliente <span class="muted" style="text-transform:none;letter-spacing:0">(opcional)</span></label><input class="inp" id="enLead" list="enLeads" data-lead placeholder="Busque pelo nome ou WhatsApp" autocomplete="off">
         <datalist id="enLeads">${leadOpts.slice(0, 800).map((l) => `<option value="${esc(leadLabel(l))}"></option>`).join('')}</datalist>
         <p class="help">Ligando ao contato, a venda aparece na Central de leads e vai pra Meta com a campanha de origem.</p></div>`}
-      ${contractFields({ service: entry?.service, plan: entry?.plan || (isSale(entry) ? ({ 6: 'semestral', 12: 'anual' })[entry.months] || 'mensal' : 'mensal'), months: entry?.months, monthly: entry?.monthly_amount, total: isSale(entry) ? entry.amount : null })}
+      ${contractFields({ service: entry?.service, plan: entry?.plan || (isSale(entry) ? ({ 6: 'semestral', 12: 'anual' })[entry.months] || 'mensal' : 'mensal'), months: entry?.months, monthly: entry?.monthly_amount, total: isSale(entry) ? entry.amount : null, first: entry?.first_amount })}
       <div class="row" data-cancel-row><label class="lbl" for="enCan">Contrato cancelado em <span class="muted" style="text-transform:none;letter-spacing:0">(opcional, entra no churn)</span></label><input class="inp" type="date" id="enCan" data-canceled value="${entry?.canceled_at || ''}"></div>
     </div>
 
@@ -86,7 +86,7 @@ export function entryModal(done, entry = null, opts = {}) {
         const amount = parse($('[data-amount]').value); const date = $('[data-date]').value;
         if (!date) return toast('Informe a data', true);
         if (!(amount > 0)) return toast('Informe um valor', true);
-        row = { kind: type, category: $('[data-cat]').value, description: $('[data-desc]').value.trim() || null, date, amount, months: null, monthly_amount: null, service: null, plan: null,
+        row = { kind: type, category: $('[data-cat]').value, description: $('[data-desc]').value.trim() || null, date, amount, months: null, monthly_amount: null, first_amount: null, service: null, plan: null,
           expense_type: type === 'despesa' ? (fixedEntry ? 'fixa' : 'variavel') : null };
       }
       if (entry) row.id = entry.id; else row.created_by = S.me?.id?.startsWith('demo') ? null : S.me?.id;
