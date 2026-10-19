@@ -1,7 +1,7 @@
 // Importar leads de planilha (Respondi, formulários da Meta, Typeform, Google Forms…): CSV ou Excel.
 // Não duplica (WhatsApp/e-mail), mantém a data original e nunca manda conversão pra Meta.
 import { DB } from '@shared/db.js';
-import { S, esc, num, toast, fail, modal } from './util.js?v=2610191753';
+import { S, esc, num, toast, fail, modal } from './util.js?v=2610191921';
 
 const ORIGINS = [['respondi', 'Respondi'], ['meta_form', 'Formulário da Meta (planilha)'], ['typeform', 'Typeform'], ['google_forms', 'Google Forms'], ['planilha', 'Outra planilha']];
 const FIELDS = [
@@ -85,7 +85,7 @@ export function importModal(done) {
     <div data-map></div>
     <details class="docs"><summary>Como exportar do Respondi e da Meta</summary>
       <p class="help"><b>Respondi:</b> abra o formulário &gt; Respostas &gt; Exportar (CSV ou Excel). Faça isso em cada formulário.</p>
-      <p class="help"><b>Meta:</b> os formulários de cadastro já são puxados sozinhos (Financeiro &gt; Contas de anúncio). Se quiser pela planilha: Meta Business Suite &gt; Todas as ferramentas &gt; Central de leads (ou na página &gt; Ferramentas de publicação &gt; Formulários de cadastro) &gt; Baixar.</p>
+      <p class="help"><b>Meta:</b> os formulários de cadastro já são puxados sozinhos (Campanhas). Se quiser pela planilha: Meta Business Suite &gt; Todas as ferramentas &gt; Central de leads (ou na página &gt; Ferramentas de publicação &gt; Formulários de cadastro) &gt; Baixar.</p>
     </details>
     <div class="modal-foot"><button class="b" data-close>Cancelar</button><button class="b b-primary" data-ok disabled>Importar</button></div>`, (c, close) => {
     const $c = (s) => c.querySelector(s);
