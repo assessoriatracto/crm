@@ -1,7 +1,7 @@
 // Aba "Recuperação": formulários começados e não concluídos (salvos automaticamente a cada resposta)
 import { DB, LIVE } from '@shared/db.js';
 import { formPath } from '@shared/forms.js';
-import { go, S, $, $$, esc, ICON, initials, fmtPhone, fullDate, ago, num, pct, toast, fail, modal, confirmBox } from './util.js?v=2610191540';
+import { go, S, $, $$, esc, ICON, initials, fmtPhone, fullDate, ago, num, pct, toast, fail, modal, confirmBox, renderTicket } from './util.js?v=2610191753';
 
 const SITE = window.TRACTO_CONFIG?.siteUrl || 'https://assessoriatracto.com.br';
 const STATUS = {
@@ -31,9 +31,10 @@ export async function loadPartials() {
 }
 
 export async function renderRecovery(el, { quiet = false } = {}) {
+  const stale = renderTicket(el);
   if (!quiet) el.innerHTML = '<div class="loading">Carregando…</div>';
   try { await loadPartials(); } catch (e) { fail(e); S.partials = []; }
-  if (!el.isConnected) return;
+  if (stale()) return;
   paint(el);
 }
 

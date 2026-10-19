@@ -1,7 +1,7 @@
 // Financeiro > Fluxo de caixa: resultado mês a mês (DRE simples) e previsão dos próximos 3 meses
 import { DB } from '@shared/db.js';
-import { esc, brl, fail } from './util.js?v=2610191540';
-import { contracts, received, result } from './dashboard.js?v=2610191540';
+import { esc, brl, fail, renderTicket } from './util.js?v=2610191753';
+import { contracts, received, result } from './dashboard.js?v=2610191753';
 
 const CF = { months: 6 };
 const iso = (d) => new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 10);
@@ -10,6 +10,7 @@ const pctTxt = (v) => (v == null || !Number.isFinite(v) ? '—' : (v * 100).toLo
 const short = (v) => (Math.abs(v) >= 1000 ? 'R$' + (v / 1000).toLocaleString('pt-BR', { maximumFractionDigits: 1 }) + 'k' : 'R$' + Math.round(v));
 
 export async function renderCashflow(host) {
+  const stale = renderTicket(host);
   host.innerHTML = '<div class="loading">Carregando…</div>';
   const now = new Date();
   const first = new Date(now.getFullYear(), now.getMonth() - CF.months + 1, 1);
@@ -22,7 +23,7 @@ export async function renderCashflow(host) {
       DB.getTracking().catch(() => null), DB.listRecurring().catch(() => [])
     ]);
   } catch (e) { fail(e); }
-  if (!host.isConnected) return;
+  if (stale()) return;
   const list = contracts(entries, settings?.contract_months || 12);
 
   // meses fechados e o atual (pelo que já foi lançado)

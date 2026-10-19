@@ -1,18 +1,19 @@
 // Página "Ajustes": estágios, rótulos, equipe, times e auditoria
 import { DB, LIVE } from '@shared/db.js';
-import { S, $, $$, esc, ICON, COLORS, num, pct, ago, toast, fail, confirmBox } from './util.js?v=2610191540';
-import { stageModal, moveStage, deleteStageFlow } from './app.js?v=2610191540';
+import { S, $, $$, esc, ICON, COLORS, num, pct, ago, toast, fail, confirmBox, renderTicket } from './util.js?v=2610191753';
+import { stageModal, moveStage, deleteStageFlow } from './app.js?v=2610191753';
 
 // ============================================================
 // AJUSTES
 // ============================================================
 export async function renderSettings(el, reload) {
+  const stale = renderTicket(el);
   const role = S.me?.role || 'sdr';
   const isAdmin = role === 'admin';
   const isManager = role === 'admin' || role === 'gestor';
   let teams = [], audit = [];
   try { [teams, audit] = await Promise.all([DB.listTeams(), isAdmin ? DB.listAudit(60) : Promise.resolve([])]); } catch (e) { fail(e); }
-  if (!el.isConnected) return;
+  if (stale()) return;
   const ROLE = { admin: 'Admin', gestor: 'Gestor', sdr: 'SDR' };
   const AUDIT = { insert: 'criou', update: 'alterou', delete: 'excluiu', export: 'exportou', view_token: 'viu token', login: 'entrou' };
   const ENT = { profiles: 'usuário', tracking_pixels: 'pixel', ad_accounts: 'conta de anúncio', api_keys: 'chave de API', webhooks: 'webhook', forms: 'formulário', leads: 'lead' };

@@ -1,12 +1,12 @@
 // Financeiro (estilo UTMify): gasto da Meta Ads × leads e vendas do CRM × receitas e despesas lançadas
 import { DB } from '@shared/db.js';
-import { renderClients } from './clients.js?v=2610191540';
-import { renderExpenses } from './expenses.js?v=2610191540';
-import { renderCashflow } from './cashflow.js?v=2610191540';
-import { contracts, result, fromAds, saleRevenue } from './dashboard.js?v=2610191540';
-import { contractTags } from './contract.js?v=2610191540';
-import { entryModal } from './entry.js?v=2610191540';
-import { PERIOD, REVENUE, setRevenueMode, revenueToggle, BRAND, popover, dateRange, datePicker, dateBtn, S, $, $$, esc, ICON, brl, num, pct, fullDate, ago, toast, fail, modal, confirmBox } from './util.js?v=2610191540';
+import { renderClients } from './clients.js?v=2610191753';
+import { renderExpenses } from './expenses.js?v=2610191753';
+import { renderCashflow } from './cashflow.js?v=2610191753';
+import { contracts, result, fromAds, saleRevenue } from './dashboard.js?v=2610191753';
+import { contractTags } from './contract.js?v=2610191753';
+import { entryModal } from './entry.js?v=2610191753';
+import { PERIOD, REVENUE, setRevenueMode, revenueToggle, BRAND, popover, dateRange, datePicker, dateBtn, S, $, $$, esc, ICON, brl, num, pct, fullDate, ago, toast, fail, modal, confirmBox, renderTicket } from './util.js?v=2610191753';
 
 const F = { period: '30', from: '', to: '', level: 'campaign', revenue: 'mensal', sort: 'spend', tab: 'geral' };
 const GRAPH = 'v21.0';
@@ -69,6 +69,7 @@ function bindTabs(el) {
 }
 
 export async function renderFinance(el, swap = false) {
+  const stale = renderTicket(el);
   // mesmo período do Dashboard
   F.period = PERIOD.period; F.from = PERIOD.from; F.to = PERIOD.to;
   try { const t = sessionStorage.getItem('tracto_fin_tab'); if (t) { F.tab = t; sessionStorage.removeItem('tracto_fin_tab'); } } catch (e) {}
@@ -94,7 +95,7 @@ export async function renderFinance(el, swap = false) {
     await Promise.all([DB.processAds(), DB.runRecurring?.()]);
     [ins, entries, settings, recur] = await Promise.all([DB.listInsights(r[0], r[1]), DB.listFinance('2000-01-01', iso(new Date(Date.now() + 400 * 86400000))), DB.getTracking().catch(() => null), DB.listRecurring?.().catch(() => []) || []]);
   } catch (e) { fail(e); }
-  if (!el.isConnected) return;
+  if (stale()) return;
   const months = settings?.contract_months || 12;
 
   // ---------- números ----------
@@ -212,6 +213,7 @@ export async function renderFinance(el, swap = false) {
 
 // ================= Campanhas (topo de Contas de anúncio): métricas por nível + gerenciar na Meta =================
 async function renderCampaigns(host) {
+  const stale = renderTicket(host);
   host.innerHTML = '<section class="panel adt-card"><div class="loading">Carregando campanhas…</div></section>';
   const r = range();
   let ins = [], entries = [], settings = null, accounts = [];
@@ -219,7 +221,7 @@ async function renderCampaigns(host) {
     await DB.processAds();
     [ins, entries, settings, accounts, OBJS] = await Promise.all([DB.listInsights(r[0], r[1]), DB.listFinance('2000-01-01', iso(new Date(Date.now() + 400 * 86400000))), DB.getTracking().catch(() => null), DB.listAdAccounts().catch(() => []), DB.listMetaObjects().then((l) => new Map(l.map((o) => [o.id, o]))).catch(() => new Map())]);
   } catch (e) { fail(e); }
-  if (!host.isConnected) return;
+  if (stale()) return;
   if (!accounts.length) { host.innerHTML = ''; return; }
   LEAD_TYPES = Array.isArray(settings?.meta_lead_actions) && settings.meta_lead_actions.length ? settings.meta_lead_actions : null;
   const months = settings?.contract_months || 12;
@@ -311,12 +313,13 @@ async function fbAccounts(FB) {
 const ACC_STATUS = { 1: 'Ativa', 2: 'Desativada', 3: 'Pagamento pendente', 7: 'Em análise', 8: 'Pagamento pendente', 9: 'Em período de carência', 100: 'Encerrando', 101: 'Encerrada' };
 
 async function renderAccounts(el, swap) {
+  const stale = renderTicket(el);
   el.innerHTML = '<div class="loading">Carregando…</div>';
   const isAdmin = S.me?.role === 'admin';
   let accounts = [], ins30 = [], settings = null, mls = null;
   const today = iso(new Date()); const since = iso(new Date(Date.now() - 29 * 86400000));
   try { [accounts, ins30, settings] = await Promise.all([DB.listAdAccounts(), DB.listInsights(since, today).catch(() => []), DB.getTracking().catch(() => null), DB.metaLeadsStatus().catch(() => null)]).then((r) => { mls = r[3]; return r.slice(0, 3); }); } catch (e) { fail(e); }
-  if (!el.isConnected) return;
+  if (stale()) return;
   const appId = window.TRACTO_CONFIG?.metaAppId || '';
   const hasApp = /^\d{8,20}$/.test(appId);
   const profiles = [...new Set(accounts.filter((a) => a.fb_user_name).map((a) => a.fb_user_name))];

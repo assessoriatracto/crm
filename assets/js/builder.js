@@ -1,7 +1,7 @@
 // Construtor de formulários (estilo Typeform): lista, editor de etapas, lógica, tema e prévia ao vivo
 import { DB } from '@shared/db.js';
 import { FORMS, formPath } from '@shared/forms.js';
-import { go, S, $, $$, esc, ICON, num, pct, toast, fail, modal, confirmBox, menu, popover, closePop } from './util.js?v=2610191540';
+import { go, S, $, $$, esc, ICON, num, pct, toast, fail, modal, confirmBox, menu, popover, closePop, renderTicket } from './util.js?v=2610191753';
 import { BTN_ICONS } from '@shared/form-engine.js';
 
 const SITE = window.TRACTO_CONFIG?.siteUrl || 'https://assessoriatracto.com.br';
@@ -109,6 +109,7 @@ function blankField(type) {
 // LISTA
 // ============================================================
 export async function renderBuilder(el) {
+  const stale = renderTicket(el);
   const id = new URLSearchParams(location.search).get('id');
   el.innerHTML = '<div class="loading">Carregando…</div>';
   try {
@@ -119,7 +120,7 @@ export async function renderBuilder(el) {
       B.forms = await DB.listForms();
     }
   } catch (e) { fail(e); }
-  if (!el.isConnected) return;
+  if (stale()) return;
   if (id) { const f = B.forms.find((x) => x.id === id); if (f) return openEditor(el, structuredClone(f)); }
   B.editing = null;
   const since = Date.now() - 30 * 86400000;

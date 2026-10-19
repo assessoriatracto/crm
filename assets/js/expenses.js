@@ -1,6 +1,6 @@
 // Financeiro > Despesas: fixas (cadastradas uma vez, lançadas todo mês) e variáveis (lançamentos avulsos)
 import { DB } from '@shared/db.js';
-import { S, esc, ICON, brl, num, toast, fail, modal, menu, confirmBox } from './util.js?v=2610191540';
+import { S, esc, ICON, brl, num, toast, fail, modal, menu, confirmBox, renderTicket } from './util.js?v=2610191753';
 
 const E = { type: 'todas' };
 const CATS_FIXED = ['Ferramentas', 'Equipe', 'Contador', 'Aluguel', 'Impostos', 'Outros'];
@@ -27,6 +27,7 @@ function nextDue(r, today = new Date()) {
 const statusOf = (r) => (r.end_date && r.end_date < iso(new Date()) ? 'encerrada' : r.active ? 'ativa' : 'pausada');
 
 export async function renderExpenses(host, F, { range, entryModal }) {
+  const stale = renderTicket(host);
   host.innerHTML = '<div class="loading">Carregando…</div>';
   const r = range();
   let recur = [], entries = [], ins = [];
@@ -34,7 +35,7 @@ export async function renderExpenses(host, F, { range, entryModal }) {
     await DB.runRecurring();
     [recur, entries, ins] = await Promise.all([DB.listRecurring(), DB.listFinance(r[0], r[1]), DB.listInsights(r[0], r[1]).catch(() => [])]);
   } catch (e) { fail(e); }
-  if (!host.isConnected) return;
+  if (stale()) return;
   const reload = () => renderExpenses(host, F, { range, entryModal });
 
   const exp = entries.filter((e) => e.kind === 'despesa');

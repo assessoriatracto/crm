@@ -1,7 +1,7 @@
 // "Meu perfil": página própria (/perfil) com dados pessoais, notificações e segurança
 import { DB, LIVE } from '@shared/db.js';
-import { S, esc, toast, fail, modal, ICON } from './util.js?v=2610191540';
-import { passwordCheck } from './auth.js?v=2610191540';
+import { S, esc, toast, fail, modal, ICON, renderTicket } from './util.js?v=2610191753';
+import { passwordCheck } from './auth.js?v=2610191753';
 
 const ROLE = { admin: 'Admin', gestor: 'Gestor', sdr: 'SDR' };
 const ROLE_HELP = { admin: 'Acesso total ao CRM, incluindo usuários e integrações.', gestor: 'Gerencia leads, financeiro, formulários e ajustes da equipe.', sdr: 'Atende e move os leads atribuídos no pipeline.' };
@@ -24,9 +24,10 @@ const pwField = (k, label, ac) => `<div class="row"><label class="lbl" for="pf-$
 let tab = 'perfil';
 
 export async function renderProfile(el, onSaved) {
+  const stale = renderTicket(el);
   let factors = [];
   try { factors = (await DB.mfaFactors()).filter((f) => f.status === 'verified'); } catch (e) {}
-  if (!el.isConnected) return;
+  if (stale()) return;
   const me = S.me || {};
   const mfaOn = factors.length > 0;
   const scope = me.pushcut_scope || (['admin', 'gestor'].includes(me.role) ? 'all' : 'mine');

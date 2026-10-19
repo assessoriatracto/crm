@@ -1,9 +1,9 @@
 // Financeiro > Clientes: contratos ativos, cancelamentos (churn) e origem de cada venda (campanha › conjunto › anúncio).
 import { DB } from '@shared/db.js';
-import { S, esc, ICON, brl, num, toast, fail, modal, menu, dateRange } from './util.js?v=2610191540';
-import { contracts, activeAt } from './dashboard.js?v=2610191540';
-import { entryModal } from './entry.js?v=2610191540';
-import { contractTags, SERVICES } from './contract.js?v=2610191540';
+import { S, esc, ICON, brl, num, toast, fail, modal, menu, dateRange, renderTicket } from './util.js?v=2610191753';
+import { contracts, activeAt } from './dashboard.js?v=2610191753';
+import { entryModal } from './entry.js?v=2610191753';
+import { contractTags, SERVICES } from './contract.js?v=2610191753';
 
 const C = { status: 'ativos', q: '', svc: '' };
 const REASONS = ['Preço', 'Resultado abaixo do esperado', 'Atendimento', 'Fechou ou vendeu a loja', 'Cortou custos', 'Foi para outra agência', 'Outro'];
@@ -13,6 +13,7 @@ const statusOf = (c, t = new Date()) => (c.oneTime ? 'unico' : c.canceled && c.c
 const originTxt = (o) => [o?.utm_campaign, o?.utm_term, o?.utm_content].filter(Boolean).join(' › ');
 
 export async function renderClients(host, F, reload) {
+  const stale = renderTicket(host);
   host.innerHTML = '<div class="loading">Carregando…</div>';
   let entries = [], settings = null, ins = [];
   try {
@@ -21,7 +22,7 @@ export async function renderClients(host, F, reload) {
       DB.listInsights(iso(new Date(Date.now() - 400 * 86400000)), iso(new Date())).catch(() => [])
     ]);
   } catch (e) { fail(e); }
-  if (!host.isConnected) return;
+  if (stale()) return;
   const months = settings?.contract_months || 12;
   const list = contracts(entries, months);
   const now = new Date();

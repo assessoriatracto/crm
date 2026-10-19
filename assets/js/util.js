@@ -123,6 +123,9 @@ export const ago = (iso) => {
 };
 export const sourceLabel = (s) => ({ pago: 'Pago', organico: 'Orgânico', manual: 'Manual' }[s] || s);
 export const formName = (l) => S.forms[l.form_id]?.name || l.form_name || (l.form_id === 'manual' ? 'Cadastro manual' : l.form_id);
+// cada desenho de tela pega uma "senha"; se outra tela começou a ser desenhada depois, o desenho antigo
+// desiste ao terminar de carregar (evita clicar numa aba e aparecer outra)
+export function renderTicket(el) { const t = (el._rt = (el._rt || 0) + 1); return () => !el.isConnected || el._rt !== t; }
 export const waLink = (l, msg) => {
   const first = (l.nome || '').split(' ')[0];
   // quem manda se apresenta pelo próprio nome (primeiro nome de quem está logado)

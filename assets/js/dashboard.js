@@ -1,7 +1,7 @@
 // Dashboard: visão executiva e enxuta da saúde do negócio.
 // O detalhe (campanhas, lançamentos, gráficos por dia) fica no Financeiro e na Central de leads.
 import { DB } from '@shared/db.js';
-import { PERIOD, REVENUE, setRevenueMode, revenueToggle, dateRange, datePicker, dateBtn, S, $, $$, esc, ICON, brl, num, isDue, isInactive, fail, fmtDays } from './util.js?v=2610191540';
+import { PERIOD, REVENUE, setRevenueMode, revenueToggle, dateRange, datePicker, dateBtn, S, $, $$, esc, ICON, brl, num, isDue, isInactive, fail, fmtDays, renderTicket } from './util.js?v=2610191753';
 
 const D = PERIOD;
 const DAY = 86400000;
@@ -143,6 +143,7 @@ const money = (v) => (v == null ? '—' : brl(v));
 const kpi = (label, value, sub, dl = '', cls = '') => `<section class="panel kx ${cls}"><span class="kx-l" title="${label}">${label}</span><div class="kx-vr"><span class="kx-v">${value}</span>${dl}</div><div class="kx-s">${sub}</div></section>`;
 
 export async function renderDashboard(el) {
+  const stale = renderTicket(el);
   const canMoney = ['admin', 'gestor'].includes(S.me?.role);
   const [ra, rb] = dateRange(D);
   const b = rb || new Date();
@@ -164,7 +165,7 @@ export async function renderDashboard(el) {
       canMoney && DB.listRecurring ? DB.listRecurring().catch(() => []) : []
     ]);
   } catch (e) { fail(e); }
-  if (!el.isConnected) return;
+  if (stale()) return;
 
   const months = settings?.contract_months || 12;
   // MRR e clientes ativos são a carteira no fim do período (hoje, ou o último dia escolhido)

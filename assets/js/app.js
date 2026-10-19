@@ -2,18 +2,17 @@ import { DB, LIVE, CONFIGURED } from '@shared/db.js';
 import {
   go, routeName, S, $, $$, esc, ICON, FAT, COLORS, initials, isHot, stageOf, profileOf, labelOf, isInactive, isDue, fatShort, brl, pct, num,
   fmtPhone, fullDate, longDate, addedAt, ago, sourceLabel, formName, waLink, toast, fail, popover, closePop, menu, multiSelect,
-  modal, confirmBox, downloadCSV, dateRange, datePicker, dateBtn, daysToSale, fmtDays
-} from './util.js?v=2610191540';
-import { importModal } from './import.js?v=2610191540';
-import { renderDashboard } from './dashboard.js?v=2610191540';
-import { renderSettings } from './admin.js?v=2610191540';
-import { renderIntegrations, renderPixel, leadMetaEvents, statusPill } from './integrations.js?v=2610191540';
-import { renderRecovery, loadPartials } from './recovery.js?v=2610191540';
-import { showSignIn, showSignUp, showForgot, showReset, showMfa, showPending, watchIdle, AUTH_ROUTES } from './auth.js?v=2610191540';
-import { SERVICES, PLANS, planMonths, planFactor, VALUE_LABEL, contractFields, bindContract } from './contract.js?v=2610191540';
-import { openProfile, renderProfile } from './profile.js?v=2610191540';
-import { renderBuilder } from './builder.js?v=2610191540';
-import { renderFinance } from './finance.js?v=2610191540';
+  modal, confirmBox, downloadCSV, dateRange, datePicker, dateBtn, daysToSale, fmtDays, renderTicket } from './util.js?v=2610191753';
+import { importModal } from './import.js?v=2610191753';
+import { renderDashboard } from './dashboard.js?v=2610191753';
+import { renderSettings } from './admin.js?v=2610191753';
+import { renderIntegrations, renderPixel, leadMetaEvents, statusPill } from './integrations.js?v=2610191753';
+import { renderRecovery, loadPartials } from './recovery.js?v=2610191753';
+import { showSignIn, showSignUp, showForgot, showReset, showMfa, showPending, watchIdle, AUTH_ROUTES } from './auth.js?v=2610191753';
+import { SERVICES, PLANS, planMonths, planFactor, VALUE_LABEL, contractFields, bindContract } from './contract.js?v=2610191753';
+import { openProfile, renderProfile } from './profile.js?v=2610191753';
+import { renderBuilder } from './builder.js?v=2610191753';
+import { renderFinance } from './finance.js?v=2610191753';
 
 // ============================================================
 // preferências locais (por navegador)
@@ -242,6 +241,7 @@ function route() {
   $$('.side a[data-route]').forEach((a) => a.classList.toggle('on', a.dataset.route === r));
   $('#meBtn')?.classList.toggle('on', r === 'perfil');
   const view = $('#view');
+  renderTicket(view); // trocou de tela: carregamentos pendentes da tela anterior não desenham mais por cima
   if (r === 'dashboard') renderDashboard(view);
   else if (r === 'formularios') renderBuilder(view);
   else if (r === 'financeiro') renderFinance(view);

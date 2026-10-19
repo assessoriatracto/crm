@@ -1,7 +1,7 @@
 // Abas "Integrações" (API + webhooks) e "Pixel" (Meta Pixel + Conversions API)
 import { DB, LIVE } from '@shared/db.js';
-import { S, $, $$, esc, FAT, ICON, BRAND, num, pct, brl, fullDate, ago, toast, fail, modal, confirmBox, menu } from './util.js?v=2610191540';
-import { hbars } from './dashboard.js?v=2610191540';
+import { S, $, $$, esc, FAT, ICON, BRAND, num, pct, brl, fullDate, ago, toast, fail, modal, confirmBox, menu, renderTicket } from './util.js?v=2610191753';
+import { hbars } from './dashboard.js?v=2610191753';
 import { PIXEL_EVENTS_RECOMMENDED } from '@shared/db.js';
 
 const EVENTS = [
@@ -45,13 +45,14 @@ const demoNote = () => (LIVE ? '' : '<div class="demo-inline">Modo demo: nada é
 // INTEGRAÇÕES
 // ============================================================
 export async function renderIntegrations(el, { quiet = false } = {}) {
+  const stale = renderTicket(el);
   if (!quiet) el.innerHTML = '<div class="loading">Carregando…</div>';
   let keys = [], hooks = [], dels = [];
   try {
     await DB.refreshIntegrations();
     [keys, hooks, dels] = await Promise.all([DB.listApiKeys(), DB.listWebhooks(), DB.listDeliveries(60)]);
   } catch (e) { fail(e); }
-  if (!el.isConnected) return;
+  if (stale()) return;
   const hookName = (id) => hooks.find((w) => w.id === id)?.name || '—';
 
   const createEx = JSON.stringify({ api_key: 'trk_SUA_CHAVE', lead: { nome: 'João da Silva', whatsapp: '62999998888', email: 'joao@loja.com', instagram: 'lojadojoao', faturamento: 'De R$30.000 a R$50.000', estagio: 'Em análise', utm_source: 'google', utm_campaign: 'pesquisa-ferragens', respostas: [{ label: 'Como conheceu?', value: 'Indicação' }] } }, null, 2);
@@ -238,13 +239,14 @@ function matchScore(leads, px) {
 const PX = { platform: '' , q: '' };
 
 export async function renderPixel(el, { quiet = false } = {}) {
+  const stale = renderTicket(el);
   if (!quiet) el.innerHTML = '<div class="loading">Carregando…</div>';
   let settings = null, pixels = [], events = [];
   try {
     await DB.refreshIntegrations();
     [settings, pixels, events] = await Promise.all([DB.getTracking(), DB.listPixels(), DB.listTrackingEvents({ limit: 100 })]);
   } catch (e) { fail(e); }
-  if (!el.isConnected) return;
+  if (stale()) return;
   if (!settings) { el.innerHTML = '<div class="panel empty"><h3>Configuração não encontrada</h3><p>Rode o supabase/schema.sql atualizado no Supabase.</p></div>'; return; }
 
   const since = Date.now() - 30 * 86400000;
