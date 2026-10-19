@@ -1,12 +1,13 @@
 // Financeiro (estilo UTMify): gasto da Meta Ads × leads e vendas do CRM × receitas e despesas lançadas
 import { DB } from '@shared/db.js';
-import { renderClients } from './clients.js?v=2610191921';
-import { renderExpenses } from './expenses.js?v=2610191921';
-import { renderCashflow } from './cashflow.js?v=2610191921';
-import { contracts, result, fromAds, saleRevenue } from './dashboard.js?v=2610191921';
-import { contractTags } from './contract.js?v=2610191921';
-import { entryModal } from './entry.js?v=2610191921';
-import { PERIOD, REVENUE, setRevenueMode, revenueToggle, BRAND, popover, dateRange, datePicker, dateBtn, S, $, $$, esc, ICON, brl, num, pct, fullDate, ago, toast, fail, modal, confirmBox, renderTicket } from './util.js?v=2610191921';
+import { renderClients } from './clients.js?v=2610191927';
+import { renderExpenses } from './expenses.js?v=2610191927';
+import { renderCashflow } from './cashflow.js?v=2610191927';
+import { contracts, result, fromAds, saleRevenue } from './dashboard.js?v=2610191927';
+import { contractTags } from './contract.js?v=2610191927';
+import { renderPixel } from './integrations.js?v=2610191927';
+import { entryModal } from './entry.js?v=2610191927';
+import { PERIOD, REVENUE, setRevenueMode, revenueToggle, BRAND, popover, dateRange, datePicker, dateBtn, S, $, $$, esc, ICON, brl, num, pct, fullDate, ago, toast, fail, modal, confirmBox, renderTicket } from './util.js?v=2610191927';
 
 const F = { period: '30', from: '', to: '', level: 'campaign', revenue: 'mensal', sort: 'spend', tab: 'geral' };
 const GRAPH = 'v21.0';
@@ -221,7 +222,7 @@ async function renderCampaigns(host) {
     [ins, entries, settings, accounts, OBJS] = await Promise.all([DB.listInsights(r[0], r[1]), DB.listFinance('2000-01-01', iso(new Date(Date.now() + 400 * 86400000))), DB.getTracking().catch(() => null), DB.listAdAccounts().catch(() => []), DB.listMetaObjects().then((l) => new Map(l.map((o) => [o.id, o]))).catch(() => new Map())]);
   } catch (e) { fail(e); }
   if (stale()) return;
-  if (!accounts.length) { host.innerHTML = ''; return; }
+  if (!accounts.length) { host.innerHTML = `<section class="panel ad-empty">${META_ICON}<h3>Nenhuma conta de anúncio conectada</h3><p class="help">Conecte o perfil do Facebook pra ver, pausar e ajustar as campanhas daqui.</p><a class="b b-primary" href="/campanhas/conexao">Conectar perfil</a></section>`; return; }
   LEAD_TYPES = Array.isArray(settings?.meta_lead_actions) && settings.meta_lead_actions.length ? settings.meta_lead_actions : null;
   const months = settings?.contract_months || 12;
   const leads = S.leads.filter((l) => inRange(l.created_at, r));
@@ -312,7 +313,6 @@ async function fbAccounts(FB) {
 const ACC_STATUS = { 1: 'Ativa', 2: 'Desativada', 3: 'Pagamento pendente', 7: 'Em análise', 8: 'Pagamento pendente', 9: 'Em período de carência', 100: 'Encerrando', 101: 'Encerrada' };
 
 // página Campanhas (menu lateral): Facebook conectado, contas de anúncio e campanhas (pausar, ativar, renomear, orçamento)
-export function renderAds(el) { F.period = PERIOD.period; F.from = PERIOD.from; F.to = PERIOD.to; return renderAccounts(el); }
 async function renderAccounts(el) {
   const stale = renderTicket(el);
   el.innerHTML = '<div class="loading">Carregando…</div>';
@@ -327,9 +327,6 @@ async function renderAccounts(el) {
   const soonest = accounts.filter((a) => a.connected_via === 'facebook' && a.token_expires_at).map((a) => daysLeft(a.token_expires_at)).sort((a, b) => a - b)[0];
 
   el.innerHTML = `
-    <div class="topline"><h1>Campanhas</h1><div class="grow"></div>${accounts.length ? revenueToggle() + dateBtn(F) : ''}</div>
-    <div class="tab-body">
-    <div data-camps></div>
     <section class="panel int-card fb-card">
       <div class="fb-hero">
         <span class="fb-badge">${FB_ICON}</span>
@@ -344,7 +341,7 @@ async function renderAccounts(el) {
       ${isAdmin ? `<details class="docs" style="margin-top:12px"><summary>Permissões do Facebook que o CRM usa</summary>
         <ul class="how" style="margin-top:8px">
           <li><b>ads_read</b>: gastos, resultados e métricas das campanhas.</li>
-          <li><b>ads_management</b>: pausar, ativar, renomear e mudar orçamento de campanhas, conjuntos e anúncios pelo Financeiro.</li>
+          <li><b>ads_management</b>: pausar, ativar, renomear e mudar orçamento de campanhas, conjuntos e anúncios aqui em Campanhas.</li>
           <li><b>leads_retrieval</b>, <b>pages_show_list</b>, <b>pages_read_engagement</b>, <b>pages_manage_ads</b>: trazer os leads dos formulários da Meta.</li>
           <li><b>business_management</b>: ver as contas do portfólio da Tracto.</li>
         </ul>
@@ -361,16 +358,11 @@ async function renderAccounts(el) {
         : `<div class="empty-mini"><p class="muted">${isAdmin ? 'Nenhuma conta ativa ainda. Conecte o Facebook acima e escolha as contas.' : 'Peça pra um admin conectar o Facebook.'}</p></div>`}
     </section>
     ${metaLeadsCard(mls, accounts.length > 0)}
-    ${leadActionsCard(ins30, settings, isAdmin || S.me?.role === 'gestor')}
-    </div>`;
+    ${leadActionsCard(ins30, settings, isAdmin || S.me?.role === 'gestor')}`;
 
   const reload = () => renderAccounts(el);
   bindLeadActions(el, reload);
   bindMetaLeads(el, reload);
-  // campanhas no topo, com o mesmo período do Dashboard
-  renderCampaigns(el.querySelector('[data-camps]'));
-  el.querySelectorAll('[data-rev]').forEach((b) => b.addEventListener('click', () => { if (REVENUE.mode === b.dataset.rev) return; setRevenueMode(b.dataset.rev); el.querySelectorAll('[data-rev]').forEach((x) => { x.classList.toggle('on', x === b); x.setAttribute('aria-checked', x === b); }); renderCampaigns(el.querySelector('[data-camps]')); }));
-  el.querySelector('[data-date]')?.addEventListener('click', (e) => datePicker(e.currentTarget, F, (st) => { Object.assign(F, st); Object.assign(PERIOD, st); renderAccounts(el); }));
 
   el.querySelector('[data-fb]')?.addEventListener('click', async (e) => {
     const btn = e.currentTarget; btn.disabled = true; btn.classList.add('is-busy');
@@ -889,4 +881,129 @@ function accountModal(a, done) {
       } catch (e) { fail(e); }
     });
   });
+}
+
+// ================= Campanhas (menu lateral): Visão geral · Campanhas · Pixel · Conectar perfil =================
+const AD_IC = (d) => `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${d}</svg>`;
+const AD_TABS = [
+  ['geral', 'Visão geral', AD_IC('<rect x="3" y="3" width="7" height="9" rx="1.5"/><rect x="14" y="3" width="7" height="5" rx="1.5"/><rect x="14" y="12" width="7" height="9" rx="1.5"/><rect x="3" y="16" width="7" height="5" rx="1.5"/>')],
+  ['lista', 'Campanhas', AD_IC('<path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/>')],
+  ['pixel', 'Pixel', AD_IC('<circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="5"/><circle cx="12" cy="12" r="1.3" fill="currentColor"/>'), 'admin'],
+  ['conexao', 'Conectar perfil', AD_IC('<path d="M10 13a5 5 0 0 0 7.5.5l3-3a5 5 0 0 0-7-7l-1.7 1.7"/><path d="M14 11a5 5 0 0 0-7.5-.5l-3 3a5 5 0 0 0 7 7l1.7-1.7"/>')]
+];
+const adTab = () => { const t = location.pathname.split('/')[2] || 'geral'; return AD_TABS.some(([k, , , role]) => k === t && (!role || S.me?.role === role)) ? t : 'geral'; };
+
+export function renderAds(el) {
+  F.period = PERIOD.period; F.from = PERIOD.from; F.to = PERIOD.to;
+  const tabs = AD_TABS.filter(([, , , role]) => !role || S.me?.role === role);
+  const tab = adTab();
+  const timed = tab === 'geral' || tab === 'lista'; // período e forma de contar as vendas só valem pra essas
+  el.innerHTML = `
+    <div class="topline"><h1>Campanhas</h1><div class="grow"></div>${timed ? revenueToggle() + dateBtn(F) : ''}</div>
+    <nav class="ptabs" role="tablist" aria-label="Seções de campanhas">${tabs.map(([k, n, ic]) => `<a role="tab" href="/campanhas${k === 'geral' ? '' : '/' + k}" class="ptab ${tab === k ? 'on' : ''}" aria-selected="${tab === k}" data-adtab="${k}">${ic}<span>${n}</span></a>`).join('')}</nav>
+    <div class="tab-body" data-ad-body></div>`;
+  const bar = el.querySelector('.ptabs'); const on = bar.querySelector('.ptab.on');
+  if (bar.scrollWidth > bar.clientWidth && on) bar.scrollLeft = Math.max(0, on.offsetLeft - (bar.clientWidth - on.offsetWidth) / 2);
+  const host = el.querySelector('[data-ad-body]');
+  if (tab === 'geral') renderAdsOverview(host);
+  else if (tab === 'lista') renderCampaigns(host);
+  else if (tab === 'pixel') renderPixel(host, { embedded: true });
+  else renderAccounts(host);
+  el.querySelector('[data-date]')?.addEventListener('click', (e) => datePicker(e.currentTarget, F, (st) => { Object.assign(F, st); Object.assign(PERIOD, st); renderAds(el); }));
+  el.querySelectorAll('[data-rev]').forEach((b) => b.addEventListener('click', () => { if (REVENUE.mode === b.dataset.rev) return; setRevenueMode(b.dataset.rev); renderAds(el); }));
+}
+
+// Visão geral das campanhas: investimento, resultados, vendas e retorno no período
+async function renderAdsOverview(host) {
+  const stale = renderTicket(host);
+  host.innerHTML = '<div class="loading">Carregando…</div>';
+  const r = range();
+  let ins = [], entries = [], settings = null, accounts = [];
+  try {
+    await DB.processAds();
+    [ins, entries, settings, accounts] = await Promise.all([DB.listInsights(r[0], r[1]), DB.listFinance('2000-01-01', iso(new Date(Date.now() + 400 * 86400000))), DB.getTracking().catch(() => null), DB.listAdAccounts().catch(() => [])]);
+  } catch (e) { fail(e); }
+  if (stale()) return;
+  if (!accounts.length) { host.innerHTML = `<section class="panel ad-empty">${META_ICON}<h3>Conecte suas contas de anúncio</h3><p class="help">Depois de conectar o perfil do Facebook, aqui aparece o resumo das campanhas: investimento, leads, custo por lead, vendas e ROAS.</p><a class="b b-primary" href="/campanhas/conexao">Conectar perfil</a></section>`; return; }
+  LEAD_TYPES = Array.isArray(settings?.meta_lead_actions) && settings.meta_lead_actions.length ? settings.meta_lead_actions : null;
+  const [ra, rb] = [new Date(r[0] + 'T00:00'), new Date(r[1] + 'T23:59:59')];
+  const sum = (k) => ins.reduce((a, x) => a + Number(x[k] || 0), 0);
+  const spend = sum('spend'); const imp = sum('impressions'); const link = sum('link_clicks') || sum('clicks');
+  const results = ins.reduce((a, x) => a + (x.results != null ? Number(x.results) : rowLeads(x)), 0);
+  const sales = contracts(entries, settings?.contract_months || 12).filter((c) => c.start >= ra && c.start <= rb && fromAds(c));
+  const rev = sales.reduce((a, c) => a + saleRevenue(c), 0);
+  const ratio = (a, b) => (b ? a / b : null);
+  const money = (v) => (v == null ? '—' : brl(v));
+  const crmLeads = S.leads.filter((l) => inRange(l.created_at, r) && l.source === 'pago').length;
+  const kx = (l, v, sub, cls = '') => `<section class="panel kx ${cls}"><span class="kx-l">${l}</span><div class="kx-vr"><span class="kx-v">${v}</span></div><div class="kx-s">${sub}</div></section>`;
+  const roas = ratio(rev, spend);
+
+  // por campanha (ranking)
+  const camps = new Map();
+  ins.forEach((x) => { const k = x.campaign_id || x.campaign_name; const c = camps.get(k) || { name: x.campaign_name || '(sem nome)', spend: 0, res: 0 }; c.spend += Number(x.spend); c.res += x.results != null ? Number(x.results) : rowLeads(x); camps.set(k, c); });
+  const top = [...camps.values()].sort((a, b) => b.res - a.res || b.spend - a.spend).slice(0, 6);
+  const maxRes = Math.max(1, ...top.map((c) => c.res));
+  // funil: base = impressões
+  const funnel = [['Impressões', imp], ['Cliques no link', link], ['Resultados', results], ['Vendas', sales.length]];
+
+  host.innerHTML = `
+    <div class="kx-grid kx-4">
+      ${kx('Investimento', brl(spend), `${num(imp)} impressões`, 'accent')}
+      ${kx('Resultados', num(results), crmLeads ? `${num(crmLeads)} leads de anúncio no CRM` : 'leads e conversões da Meta')}
+      ${kx('Custo por resultado', money(ratio(spend, results)), 'investimento ÷ resultados')}
+      ${kx('ROAS', roas == null ? '—' : roas.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + 'x', `${brl(rev)} em vendas ÷ investimento`, roas == null ? '' : roas >= 1 ? 'ok' : 'neg')}
+      ${kx('Vendas de anúncio', num(sales.length), sales.length ? `custo por venda ${money(ratio(spend, sales.length))}` : 'nenhuma no período')}
+      ${kx('CTR (link)', imp ? pct(link, imp) : '—', `${num(link)} cliques no link`)}
+      ${kx('CPC (link)', money(ratio(spend, link)), 'investimento ÷ cliques')}
+      ${kx('CPM', money(imp ? (spend / imp) * 1000 : null), 'custo por mil impressões')}
+    </div>
+    <section class="panel chart-card" style="margin-top:12px"><h3>Investimento por dia</h3><p class="sub">Passe o cursor num dia pra ver resultados e custo por resultado</p>
+      <div class="chart" data-ad-chart></div></section>
+    <div class="fin-split">
+      <section class="panel ex-card">
+        <div class="ex-h"><div><h3>Funil das campanhas</h3><p class="help">Da impressão à venda, no período</p></div></div>
+        <ol class="ad-steps">${funnel.map(([n, v], i) => `${i ? `<li class="ads-conv" aria-hidden="true"><span>${funnel[i - 1][1] ? pct(v, funnel[i - 1][1]) : '—'}</span></li>` : ''}<li class="ads-step"><span class="n">${n}</span><b>${num(v)}</b></li>`).join('')}</ol>
+        <p class="help" style="margin:10px 0 0">Entre as etapas, a taxa de conversão da etapa anterior para a próxima.</p>
+      </section>
+      <section class="panel ex-card">
+        <div class="ex-h"><div><h3>Campanhas com mais resultado</h3><p class="help">No período</p></div><a class="link" href="/campanhas/lista">ver todas</a></div>
+        ${top.length ? `<div class="ex-bars">${top.map((c) => `<div class="ex-bar"><span class="n" title="${esc(c.name)}">${esc(c.name)}</span><span class="track"><span class="fill" style="--w:${(c.res / maxRes) * 100}%"></span></span><span class="v">${num(c.res)}<small>${c.res ? brl(c.spend / c.res) + ' cada' : brl(c.spend) + ' gastos'}</small></span></div>`).join('')}</div>` : '<p class="muted empty-line">Sem campanhas com gasto no período.</p>'}
+      </section>
+    </div>`;
+  // desenha com a largura real do card e redesenha quando ela muda (tela montando, janela redimensionada)
+  const ch = host.querySelector('[data-ad-chart]'); let lastW = 0;
+  const draw = () => { const w = ch.clientWidth; if (w && Math.abs(w - lastW) > 4) { lastW = w; adsChart(ch, r, ins); } };
+  new ResizeObserver(draw).observe(ch); requestAnimationFrame(draw);
+}
+
+// colunas de investimento por dia (um eixo só); resultados e custo por resultado no tooltip
+function adsChart(host, r, ins) {
+  const days = [];
+  for (let d = new Date(r[0] + 'T12:00'); iso(d) <= r[1]; d = new Date(d.getTime() + 86400000)) days.push(iso(d));
+  const data = days.map((d) => { const xs = ins.filter((x) => x.date === d); return { d, spend: xs.reduce((a, x) => a + Number(x.spend), 0), res: xs.reduce((a, x) => a + (x.results != null ? Number(x.results) : rowLeads(x)), 0) }; });
+  const W = Math.max(320, host.clientWidth); const H = 220; const padL = 58; const padB = 24; const padT = 10;
+  const maxV = Math.max(1, ...data.map((x) => x.spend));
+  const p = Math.pow(10, Math.floor(Math.log10(maxV))); const max = [1, 2, 2.5, 5, 10].map((m) => m * p).find((m) => m >= maxV);
+  const iw = W - padL; const ih = H - padB - padT; const bw = iw / data.length; const barW = Math.max(2, Math.min(18, bw - 4));
+  const y = (v) => padT + ih - (v / max) * ih;
+  const every = Math.ceil(data.length / Math.max(2, Math.floor(iw / 64)));
+  const short = (v) => (v >= 1000 ? 'R$' + (v / 1000).toLocaleString('pt-BR', { maximumFractionDigits: 1 }) + 'k' : 'R$' + Math.round(v));
+  host.innerHTML = `<svg viewBox="0 0 ${W} ${H}" height="${H}" role="img" aria-label="Investimento por dia">
+    ${[0, max / 2, max].map((t) => `<line class="gl" x1="${padL}" x2="${W}" y1="${y(t)}" y2="${y(t)}"/><text class="ax" x="${padL - 8}" y="${y(t) + 4}" text-anchor="end">${short(t)}</text>`).join('')}
+    ${data.map((x, i) => { if (!x.spend) return ''; const bx = padL + i * bw + (bw - barW) / 2; const top = y(x.spend); const h = padT + ih - top; const rr = Math.min(4, barW / 2, h); return `<path class="bar hot" data-i="${i}" d="M${bx},${padT + ih} V${top + rr} Q${bx},${top} ${bx + rr},${top} H${bx + barW - rr} Q${bx + barW},${top} ${bx + barW},${top + rr} V${padT + ih} Z"/>`; }).join('')}
+    ${data.map((x, i) => (i % every === 0 ? `<text class="ax" x="${padL + i * bw + bw / 2}" y="${H - 6}" text-anchor="middle">${x.d.slice(8, 10)}/${x.d.slice(5, 7)}</text>` : '')).join('')}
+    ${data.map((x, i) => `<rect class="hit" data-i="${i}" x="${padL + i * bw}" y="${padT}" width="${bw}" height="${ih}"/>`).join('')}
+  </svg><div class="ctip" hidden></div>`;
+  const tip = host.querySelector('.ctip'); const svg = host.querySelector('svg');
+  svg.addEventListener('mousemove', (e) => {
+    const h = e.target.closest('.hit'); if (!h) return;
+    const i = +h.dataset.i; const x = data[i];
+    host.querySelectorAll('.bar').forEach((b) => b.classList.toggle('dim', +b.dataset.i !== i));
+    tip.innerHTML = `<div class="muted">${new Date(x.d + 'T12:00').toLocaleDateString('pt-BR', { weekday: 'short', day: '2-digit', month: 'short' })}</div>Investimento <b>${brl(x.spend)}</b><br>Resultados <b>${num(x.res)}</b><br><span class="muted">${x.res ? brl(x.spend / x.res) + ' por resultado' : 'sem resultados'}</span>`;
+    tip.hidden = false;
+    const scale = svg.getBoundingClientRect().width / W;
+    tip.style.left = Math.min(Math.max((padL + i * bw + bw / 2) * scale, 80), host.clientWidth - 80) + 'px';
+    tip.style.top = y(Math.max(x.spend, max * 0.15)) * scale + 'px';
+  });
+  svg.addEventListener('mouseleave', () => { tip.hidden = true; host.querySelectorAll('.bar').forEach((b) => b.classList.remove('dim')); });
 }

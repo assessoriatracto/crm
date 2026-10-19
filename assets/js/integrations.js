@@ -1,7 +1,7 @@
 // Abas "Integrações" (API + webhooks) e "Pixel" (Meta Pixel + Conversions API)
 import { DB, LIVE } from '@shared/db.js';
-import { S, $, $$, esc, FAT, ICON, BRAND, num, pct, brl, fullDate, ago, toast, fail, modal, confirmBox, menu, renderTicket } from './util.js?v=2610191921';
-import { hbars } from './dashboard.js?v=2610191921';
+import { S, $, $$, esc, FAT, ICON, BRAND, num, pct, brl, fullDate, ago, toast, fail, modal, confirmBox, menu, renderTicket } from './util.js?v=2610191927';
+import { hbars } from './dashboard.js?v=2610191927';
 import { PIXEL_EVENTS_RECOMMENDED } from '@shared/db.js';
 
 const EVENTS = [
@@ -238,7 +238,7 @@ function matchScore(leads, px) {
 
 const PX = { platform: '' , q: '' };
 
-export async function renderPixel(el, { quiet = false } = {}) {
+export async function renderPixel(el, { quiet = false, embedded = false } = {}) {
   const stale = renderTicket(el);
   if (!quiet) el.innerHTML = '<div class="loading">Carregando…</div>';
   let settings = null, pixels = [], events = [];
@@ -258,7 +258,7 @@ export async function renderPixel(el, { quiet = false } = {}) {
   const sent = events.filter((e) => !e.test);
 
   el.innerHTML = `
-    <div class="topline"><h1>Pixels de rastreamento</h1><div class="grow"></div><button class="b b-refresh" data-refresh>${ICON.refresh}Atualizar status</button></div>
+    ${embedded ? `<div class="sub-top"><div><h2>Pixels de rastreamento</h2><p class="help">Meta, GA4, Google Ads e GTM. Instalados em todos os formulários e enviando os eventos pelo servidor.</p></div><button class="b b-refresh" data-refresh>${ICON.refresh}Atualizar status</button></div>` : `<div class="topline"><h1>Pixels de rastreamento</h1><div class="grow"></div><button class="b b-refresh" data-refresh>${ICON.refresh}Atualizar status</button></div>`}
     <section class="panel px-toolbar">
       <label class="search">${ICON.search}<input class="inp" data-q type="search" placeholder="Buscar…" value="${esc(PX.q)}"></label>
       <button class="b ${PX.platform ? 'on' : ''}" data-plat data-pop-anchor><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M12 8v8M8 12h8"/></svg>${PX.platform ? PLATFORMS[PX.platform].name : 'Plataforma'}</button>
@@ -343,7 +343,7 @@ export async function renderPixel(el, { quiet = false } = {}) {
   ];
   hbars($('[data-coverage]', el), COV.map(([name, fn]) => { const c = formLeads.filter(fn).length; const r = c / (n || 1); return { name, value: c, note: n ? pct(c, n) : '—', color: r >= 0.7 ? 'var(--viz-1)' : r >= 0.3 ? 'var(--ramp-2)' : 'var(--viz-gray)' }; }), { max: n || 1 });
 
-  const reload = () => renderPixel(el, { quiet: true });
+  const reload = () => renderPixel(el, { quiet: true, embedded });
   bindCopy(el);
   el.querySelector('[data-refresh]').addEventListener('click', (e) => { e.currentTarget.classList.add('is-spinning'); reload(); });
   el.querySelector('[data-add]').addEventListener('click', () => pixelDrawer(null, formLeads, reload));

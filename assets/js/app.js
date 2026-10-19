@@ -2,17 +2,17 @@ import { DB, LIVE, CONFIGURED } from '@shared/db.js';
 import {
   go, routeName, S, $, $$, esc, ICON, FAT, COLORS, initials, isHot, stageOf, profileOf, labelOf, isInactive, isDue, fatShort, brl, pct, num,
   fmtPhone, fullDate, longDate, addedAt, ago, sourceLabel, formName, waLink, toast, fail, popover, closePop, menu, multiSelect,
-  modal, confirmBox, downloadCSV, dateRange, datePicker, dateBtn, daysToSale, fmtDays, renderTicket } from './util.js?v=2610191921';
-import { importModal } from './import.js?v=2610191921';
-import { renderDashboard } from './dashboard.js?v=2610191921';
-import { renderSettings } from './admin.js?v=2610191921';
-import { renderIntegrations, renderPixel, leadMetaEvents, statusPill } from './integrations.js?v=2610191921';
-import { renderRecovery, loadPartials } from './recovery.js?v=2610191921';
-import { showSignIn, showSignUp, showForgot, showReset, showMfa, showPending, watchIdle, AUTH_ROUTES } from './auth.js?v=2610191921';
-import { SERVICES, PLANS, planMonths, planFactor, VALUE_LABEL, contractFields, bindContract } from './contract.js?v=2610191921';
-import { openProfile, renderProfile } from './profile.js?v=2610191921';
-import { renderBuilder } from './builder.js?v=2610191921';
-import { renderFinance, renderAds } from './finance.js?v=2610191921';
+  modal, confirmBox, downloadCSV, dateRange, datePicker, dateBtn, daysToSale, fmtDays, renderTicket } from './util.js?v=2610191927';
+import { importModal } from './import.js?v=2610191927';
+import { renderDashboard } from './dashboard.js?v=2610191927';
+import { renderSettings } from './admin.js?v=2610191927';
+import { renderIntegrations, renderPixel, leadMetaEvents, statusPill } from './integrations.js?v=2610191927';
+import { renderRecovery, loadPartials } from './recovery.js?v=2610191927';
+import { showSignIn, showSignUp, showForgot, showReset, showMfa, showPending, watchIdle, AUTH_ROUTES } from './auth.js?v=2610191927';
+import { SERVICES, PLANS, planMonths, planFactor, VALUE_LABEL, contractFields, bindContract } from './contract.js?v=2610191927';
+import { openProfile, renderProfile } from './profile.js?v=2610191927';
+import { renderBuilder } from './builder.js?v=2610191927';
+import { renderFinance, renderAds } from './finance.js?v=2610191927';
 
 // ============================================================
 // preferências locais (por navegador)
@@ -230,6 +230,7 @@ function route() {
   refreshNewBadge();
   let r = hashRoute();
   if (r === 'integracoes') { r = 'dashboard'; history.replaceState(null, '', '/dashboard'); } // aba escondida por enquanto
+  if (r === 'pixel') { r = 'campanhas'; history.replaceState(null, '', '/campanhas/pixel'); } // Pixel agora fica dentro de Campanhas
   if (!can(r)) { r = 'dashboard'; history.replaceState(null, '', '/dashboard'); }
   // animação grande só quando a página muda (refiltrar/atualizar não anima)
   const key = location.pathname + (location.search.includes('id=') ? '#editor' : '');
@@ -249,7 +250,6 @@ function route() {
   else if (r === 'perfil') renderProfile(view, applyRole);
   else if (r === 'ajustes') renderSettings(view, async () => { await loadAll(false); });
   else if (r === 'integracoes') renderIntegrations(view);
-  else if (r === 'pixel') renderPixel(view);
   else if (r === 'recuperacao') renderRecovery(view).then(refreshPartialsBadge);
   else renderLeads();
 }
