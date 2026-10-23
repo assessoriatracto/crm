@@ -1,7 +1,7 @@
 // Página "Ajustes": estágios, rótulos, equipe, times e auditoria
 import { DB, LIVE } from '@shared/db.js';
-import { S, $, $$, esc, ICON, COLORS, num, pct, ago, toast, fail, confirmBox, renderTicket } from './util.js?v=2610191927';
-import { stageModal, moveStage, deleteStageFlow } from './app.js?v=2610191927';
+import { S, $, $$, esc, ICON, COLORS, num, pct, ago, toast, fail, confirmBox, renderTicket } from './util.js?v=2610230929';
+import { stageModal, moveStage, deleteStageFlow } from './app.js?v=2610230929';
 
 // ============================================================
 // AJUSTES

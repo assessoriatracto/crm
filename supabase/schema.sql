@@ -150,6 +150,8 @@ alter table public.profiles add constraint profiles_pushcut_check check (pushcut
 -- quais leads avisam no celular: 'all' = todo lead novo · 'mine' = só os atribuídos a mim (vazio: admin/gestor todos, SDR os seus)
 alter table public.profiles add column if not exists pushcut_scope text check (pushcut_scope in ('all', 'mine'));
 alter table public.profiles add column if not exists pushcut_test_req bigint;
+-- preferências de tela da pessoa (ex.: painel personalizado de Campanhas)
+alter table public.profiles add column if not exists prefs jsonb not null default '{}'::jsonb;
 
 create or replace function public.handle_new_user() returns trigger
 language plpgsql security definer set search_path = public as $$
@@ -2132,7 +2134,7 @@ begin
 end $$;
 
 -- versão do banco (diagnóstico: dá pra conferir de fora se a última atualização entrou)
-create or replace function public.schema_version() returns text language sql immutable as $$ select '2026-10-19.1'::text $$;
+create or replace function public.schema_version() returns text language sql immutable as $$ select '2026-10-23.1'::text $$;
 grant execute on function public.schema_version() to anon, authenticated;
 
 -- quantidade de uma ação no "actions" dos insights da Meta (null se não vier)

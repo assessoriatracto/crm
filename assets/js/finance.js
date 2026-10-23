@@ -1,13 +1,14 @@
 // Financeiro (estilo UTMify): gasto da Meta Ads × leads e vendas do CRM × receitas e despesas lançadas
 import { DB } from '@shared/db.js';
-import { renderClients } from './clients.js?v=2610191927';
-import { renderExpenses } from './expenses.js?v=2610191927';
-import { renderCashflow } from './cashflow.js?v=2610191927';
-import { contracts, result, fromAds, saleRevenue } from './dashboard.js?v=2610191927';
-import { contractTags } from './contract.js?v=2610191927';
-import { renderPixel } from './integrations.js?v=2610191927';
-import { entryModal } from './entry.js?v=2610191927';
-import { PERIOD, REVENUE, setRevenueMode, revenueToggle, BRAND, popover, dateRange, datePicker, dateBtn, S, $, $$, esc, ICON, brl, num, pct, fullDate, ago, toast, fail, modal, confirmBox, renderTicket } from './util.js?v=2610191927';
+import { renderClients } from './clients.js?v=2610230929';
+import { renderExpenses } from './expenses.js?v=2610230929';
+import { renderCashflow } from './cashflow.js?v=2610230929';
+import { contracts, result, fromAds, saleRevenue } from './dashboard.js?v=2610230929';
+import { contractTags } from './contract.js?v=2610230929';
+import { renderBoard, gradBars, gradArea } from './board.js?v=2610230929';
+import { renderPixel } from './integrations.js?v=2610230929';
+import { entryModal } from './entry.js?v=2610230929';
+import { PERIOD, REVENUE, setRevenueMode, revenueToggle, BRAND, popover, dateRange, datePicker, dateBtn, S, $, $$, esc, ICON, brl, num, pct, fullDate, ago, toast, fail, modal, confirmBox, renderTicket } from './util.js?v=2610230929';
 
 const F = { period: '30', from: '', to: '', level: 'campaign', revenue: 'mensal', sort: 'spend', tab: 'geral' };
 const GRAPH = 'v21.0';
@@ -913,7 +914,7 @@ export function renderAds(el) {
   el.querySelectorAll('[data-rev]').forEach((b) => b.addEventListener('click', () => { if (REVENUE.mode === b.dataset.rev) return; setRevenueMode(b.dataset.rev); renderAds(el); }));
 }
 
-// Visão geral das campanhas: investimento, resultados, vendas e retorno no período
+// Visão geral das campanhas: painel montado pela pessoa (catálogo de blocos, no padrão do Nox)
 async function renderAdsOverview(host) {
   const stale = renderTicket(host);
   host.innerHTML = '<div class="loading">Carregando…</div>';
@@ -926,84 +927,70 @@ async function renderAdsOverview(host) {
   if (stale()) return;
   if (!accounts.length) { host.innerHTML = `<section class="panel ad-empty">${META_ICON}<h3>Conecte suas contas de anúncio</h3><p class="help">Depois de conectar o perfil do Facebook, aqui aparece o resumo das campanhas: investimento, leads, custo por lead, vendas e ROAS.</p><a class="b b-primary" href="/campanhas/conexao">Conectar perfil</a></section>`; return; }
   LEAD_TYPES = Array.isArray(settings?.meta_lead_actions) && settings.meta_lead_actions.length ? settings.meta_lead_actions : null;
+  renderBoard(host, { key: 'ads_overview', widgets: AD_WIDGETS, defaults: AD_DEFAULT, ctx: adsCtx(r, ins, entries, settings) });
+}
+
+// todos os números do período, calculados uma vez para os blocos
+function adsCtx(r, ins, entries, settings) {
   const [ra, rb] = [new Date(r[0] + 'T00:00'), new Date(r[1] + 'T23:59:59')];
+  const res = (x) => (x.results != null ? Number(x.results) : rowLeads(x));
   const sum = (k) => ins.reduce((a, x) => a + Number(x[k] || 0), 0);
-  const spend = sum('spend'); const imp = sum('impressions'); const link = sum('link_clicks') || sum('clicks');
-  const results = ins.reduce((a, x) => a + (x.results != null ? Number(x.results) : rowLeads(x)), 0);
   const sales = contracts(entries, settings?.contract_months || 12).filter((c) => c.start >= ra && c.start <= rb && fromAds(c));
-  const rev = sales.reduce((a, c) => a + saleRevenue(c), 0);
-  const ratio = (a, b) => (b ? a / b : null);
-  const money = (v) => (v == null ? '—' : brl(v));
-  const crmLeads = S.leads.filter((l) => inRange(l.created_at, r) && l.source === 'pago').length;
-  const kx = (l, v, sub, cls = '') => `<section class="panel kx ${cls}"><span class="kx-l">${l}</span><div class="kx-vr"><span class="kx-v">${v}</span></div><div class="kx-s">${sub}</div></section>`;
-  const roas = ratio(rev, spend);
-
-  // por campanha (ranking)
-  const camps = new Map();
-  ins.forEach((x) => { const k = x.campaign_id || x.campaign_name; const c = camps.get(k) || { name: x.campaign_name || '(sem nome)', spend: 0, res: 0 }; c.spend += Number(x.spend); c.res += x.results != null ? Number(x.results) : rowLeads(x); camps.set(k, c); });
-  const top = [...camps.values()].sort((a, b) => b.res - a.res || b.spend - a.spend).slice(0, 6);
-  const maxRes = Math.max(1, ...top.map((c) => c.res));
-  // funil: base = impressões
-  const funnel = [['Impressões', imp], ['Cliques no link', link], ['Resultados', results], ['Vendas', sales.length]];
-
-  host.innerHTML = `
-    <div class="kx-grid kx-4">
-      ${kx('Investimento', brl(spend), `${num(imp)} impressões`, 'accent')}
-      ${kx('Resultados', num(results), crmLeads ? `${num(crmLeads)} leads de anúncio no CRM` : 'leads e conversões da Meta')}
-      ${kx('Custo por resultado', money(ratio(spend, results)), 'investimento ÷ resultados')}
-      ${kx('ROAS', roas == null ? '—' : roas.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + 'x', `${brl(rev)} em vendas ÷ investimento`, roas == null ? '' : roas >= 1 ? 'ok' : 'neg')}
-      ${kx('Vendas de anúncio', num(sales.length), sales.length ? `custo por venda ${money(ratio(spend, sales.length))}` : 'nenhuma no período')}
-      ${kx('CTR (link)', imp ? pct(link, imp) : '—', `${num(link)} cliques no link`)}
-      ${kx('CPC (link)', money(ratio(spend, link)), 'investimento ÷ cliques')}
-      ${kx('CPM', money(imp ? (spend / imp) * 1000 : null), 'custo por mil impressões')}
-    </div>
-    <section class="panel chart-card" style="margin-top:12px"><h3>Investimento por dia</h3><p class="sub">Passe o cursor num dia pra ver resultados e custo por resultado</p>
-      <div class="chart" data-ad-chart></div></section>
-    <div class="fin-split">
-      <section class="panel ex-card">
-        <div class="ex-h"><div><h3>Funil das campanhas</h3><p class="help">Da impressão à venda, no período</p></div></div>
-        <ol class="ad-steps">${funnel.map(([n, v], i) => `${i ? `<li class="ads-conv" aria-hidden="true"><span>${funnel[i - 1][1] ? pct(v, funnel[i - 1][1]) : '—'}</span></li>` : ''}<li class="ads-step"><span class="n">${n}</span><b>${num(v)}</b></li>`).join('')}</ol>
-        <p class="help" style="margin:10px 0 0">Entre as etapas, a taxa de conversão da etapa anterior para a próxima.</p>
-      </section>
-      <section class="panel ex-card">
-        <div class="ex-h"><div><h3>Campanhas com mais resultado</h3><p class="help">No período</p></div><a class="link" href="/campanhas/lista">ver todas</a></div>
-        ${top.length ? `<div class="ex-bars">${top.map((c) => `<div class="ex-bar"><span class="n" title="${esc(c.name)}">${esc(c.name)}</span><span class="track"><span class="fill" style="--w:${(c.res / maxRes) * 100}%"></span></span><span class="v">${num(c.res)}<small>${c.res ? brl(c.spend / c.res) + ' cada' : brl(c.spend) + ' gastos'}</small></span></div>`).join('')}</div>` : '<p class="muted empty-line">Sem campanhas com gasto no período.</p>'}
-      </section>
-    </div>`;
-  // desenha com a largura real do card e redesenha quando ela muda (tela montando, janela redimensionada)
-  const ch = host.querySelector('[data-ad-chart]'); let lastW = 0;
-  const draw = () => { const w = ch.clientWidth; if (w && Math.abs(w - lastW) > 4) { lastW = w; adsChart(ch, r, ins); } };
-  new ResizeObserver(draw).observe(ch); requestAnimationFrame(draw);
-}
-
-// colunas de investimento por dia (um eixo só); resultados e custo por resultado no tooltip
-function adsChart(host, r, ins) {
-  const days = [];
-  for (let d = new Date(r[0] + 'T12:00'); iso(d) <= r[1]; d = new Date(d.getTime() + 86400000)) days.push(iso(d));
-  const data = days.map((d) => { const xs = ins.filter((x) => x.date === d); return { d, spend: xs.reduce((a, x) => a + Number(x.spend), 0), res: xs.reduce((a, x) => a + (x.results != null ? Number(x.results) : rowLeads(x)), 0) }; });
-  const W = Math.max(320, host.clientWidth); const H = 220; const padL = 58; const padB = 24; const padT = 10;
-  const maxV = Math.max(1, ...data.map((x) => x.spend));
-  const p = Math.pow(10, Math.floor(Math.log10(maxV))); const max = [1, 2, 2.5, 5, 10].map((m) => m * p).find((m) => m >= maxV);
-  const iw = W - padL; const ih = H - padB - padT; const bw = iw / data.length; const barW = Math.max(2, Math.min(18, bw - 4));
-  const y = (v) => padT + ih - (v / max) * ih;
-  const every = Math.ceil(data.length / Math.max(2, Math.floor(iw / 64)));
-  const short = (v) => (v >= 1000 ? 'R$' + (v / 1000).toLocaleString('pt-BR', { maximumFractionDigits: 1 }) + 'k' : 'R$' + Math.round(v));
-  host.innerHTML = `<svg viewBox="0 0 ${W} ${H}" height="${H}" role="img" aria-label="Investimento por dia">
-    ${[0, max / 2, max].map((t) => `<line class="gl" x1="${padL}" x2="${W}" y1="${y(t)}" y2="${y(t)}"/><text class="ax" x="${padL - 8}" y="${y(t) + 4}" text-anchor="end">${short(t)}</text>`).join('')}
-    ${data.map((x, i) => { if (!x.spend) return ''; const bx = padL + i * bw + (bw - barW) / 2; const top = y(x.spend); const h = padT + ih - top; const rr = Math.min(4, barW / 2, h); return `<path class="bar hot" data-i="${i}" d="M${bx},${padT + ih} V${top + rr} Q${bx},${top} ${bx + rr},${top} H${bx + barW - rr} Q${bx + barW},${top} ${bx + barW},${top + rr} V${padT + ih} Z"/>`; }).join('')}
-    ${data.map((x, i) => (i % every === 0 ? `<text class="ax" x="${padL + i * bw + bw / 2}" y="${H - 6}" text-anchor="middle">${x.d.slice(8, 10)}/${x.d.slice(5, 7)}</text>` : '')).join('')}
-    ${data.map((x, i) => `<rect class="hit" data-i="${i}" x="${padL + i * bw}" y="${padT}" width="${bw}" height="${ih}"/>`).join('')}
-  </svg><div class="ctip" hidden></div>`;
-  const tip = host.querySelector('.ctip'); const svg = host.querySelector('svg');
-  svg.addEventListener('mousemove', (e) => {
-    const h = e.target.closest('.hit'); if (!h) return;
-    const i = +h.dataset.i; const x = data[i];
-    host.querySelectorAll('.bar').forEach((b) => b.classList.toggle('dim', +b.dataset.i !== i));
-    tip.innerHTML = `<div class="muted">${new Date(x.d + 'T12:00').toLocaleDateString('pt-BR', { weekday: 'short', day: '2-digit', month: 'short' })}</div>Investimento <b>${brl(x.spend)}</b><br>Resultados <b>${num(x.res)}</b><br><span class="muted">${x.res ? brl(x.spend / x.res) + ' por resultado' : 'sem resultados'}</span>`;
-    tip.hidden = false;
-    const scale = svg.getBoundingClientRect().width / W;
-    tip.style.left = Math.min(Math.max((padL + i * bw + bw / 2) * scale, 80), host.clientWidth - 80) + 'px';
-    tip.style.top = y(Math.max(x.spend, max * 0.15)) * scale + 'px';
+  const t = { spend: sum('spend'), imp: sum('impressions'), link: sum('link_clicks') || sum('clicks'), lpv: sum('landing_views'), msgs: sum('messages'), results: ins.reduce((a, x) => a + res(x), 0), sales: sales.length, rev: sales.reduce((a, c) => a + saleRevenue(c), 0) };
+  t.profit = t.rev - t.spend;
+  t.crm = S.leads.filter((l) => inRange(l.created_at, r) && l.source === 'pago').length;
+  // por dia
+  const days = []; for (let d = new Date(r[0] + 'T12:00'); iso(d) <= r[1]; d = new Date(d.getTime() + 86400000)) days.push(iso(d));
+  const series = days.map((d) => { const xs = ins.filter((x) => x.date === d); const a = new Date(d + 'T00:00'); const b = new Date(d + 'T23:59:59'); return { d, spend: xs.reduce((s2, x) => s2 + Number(x.spend), 0), res: xs.reduce((s2, x) => s2 + res(x), 0), rev: sales.filter((c) => c.start >= a && c.start <= b).reduce((s2, c) => s2 + saleRevenue(c), 0) }; });
+  // por campanha e por anúncio (vendas ligadas pela UTM ou pelo id da campanha)
+  const group = (keyId, keyName) => { const m = new Map(); ins.forEach((x) => { const k = x[keyId] || x[keyName]; const g = m.get(k) || { id: x[keyId], name: x[keyName] || '(sem nome)', campaign: x.campaign_name, spend: 0, res: 0, sales: 0, rev: 0 }; g.spend += Number(x.spend); g.res += res(x); m.set(k, g); }); return m; };
+  const camps = group('campaign_id', 'campaign_name'); const ads = group('ad_id', 'ad_name');
+  sales.forEach((c) => {
+    const o = c.origin || {};
+    const cg = [...camps.values()].find((g) => (o.utm_id && o.utm_id === g.id) || (o.utm_campaign && o.utm_campaign === g.name));
+    if (cg) { cg.sales++; cg.rev += saleRevenue(c); }
+    const ag = o.utm_content && [...ads.values()].find((g) => g.name === o.utm_content);
+    if (ag) { ag.sales++; ag.rev += saleRevenue(c); }
   });
-  svg.addEventListener('mouseleave', () => { tip.hidden = true; host.querySelectorAll('.bar').forEach((b) => b.classList.remove('dim')); });
+  return { t, series, camps: [...camps.values()].map((g) => ({ ...g, profit: g.rev - g.spend, roas: g.spend ? g.rev / g.spend : null })), ads: [...ads.values()] };
 }
+
+const ratio = (a, b) => (b ? a / b : null);
+const money0 = (v) => (v == null ? '—' : brl(v));
+const pctv = (a, b) => (b ? pct(a, b) : '—');
+const toneOf = (v) => (v > 0 ? 'pos' : v < 0 ? 'neg' : '');
+const akpi = (id, label, desc, value, sub, tone) => ({ id, group: 'Indicadores', label, desc, sizes: [1, 2], tone, render: (c) => `<span class="wk-l">${label}</span><b class="wk-v">${value(c)}</b><small>${sub(c)}</small>` });
+const achart = (id, group, label, desc, sizes, body, after) => ({ id, group, label, desc, sizes, render: (c) => `<h3 class="w-h">${label}</h3><p class="w-d">${desc}</p>${body(c)}`, after });
+const rankRows = (rows, cols) => (rows.length ? `<div class="rank"><div class="rank-h">${cols.map(([n]) => `<span>${n}</span>`).join('')}</div>${rows.map((r) => `<div>${cols.map(([, f], k) => (k ? `<span>${f(r)}</span>` : `<span title="${esc(r.name)}">${esc(String(r.name).split('|')[0])}${r.campaign && r.campaign !== r.name ? `<small>${esc(String(r.campaign).split('|')[0])}</small>` : ''}</span>`)).join('')}</div>`).join('')}</div>` : '<p class="muted">Nada para listar no período.</p>');
+const nameAd = (r) => r.name;
+const AD_WIDGETS = [
+  akpi('spend', 'Investimento', 'Quanto foi gasto em anúncios', (c) => brl(c.t.spend), (c) => `${num(c.t.imp)} impressões`, () => 'lead'),
+  akpi('results', 'Resultados', 'Leads e conversões contados pela Meta', (c) => num(c.t.results), (c) => (c.t.crm ? `${num(c.t.crm)} leads de anúncio no CRM` : 'coluna Resultados da Meta')),
+  akpi('cpr', 'Custo por resultado', 'Investimento dividido pelos resultados', (c) => money0(ratio(c.t.spend, c.t.results)), () => 'investimento ÷ resultados'),
+  akpi('roas', 'ROAS', 'Vendas de anúncio divididas pelo investimento', (c) => { const v = ratio(c.t.rev, c.t.spend); return v == null ? '—' : v.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + 'x'; }, (c) => `${brl(c.t.rev)} ÷ investimento`, (c) => (c.t.spend ? (c.t.rev >= c.t.spend ? 'pos' : 'neg') : '')),
+  akpi('profit', 'Lucro das campanhas', 'Vendas de anúncio menos o investimento', (c) => brl(c.t.profit), (c) => (c.t.rev ? `margem ${pctv(c.t.profit, c.t.rev)}` : 'vendas − investimento'), (c) => toneOf(c.t.profit)),
+  akpi('sales', 'Vendas de anúncio', 'Clientes que vieram dos anúncios', (c) => num(c.t.sales), (c) => (c.t.sales ? `${brl(c.t.rev)} em vendas` : 'nenhuma no período')),
+  akpi('rev', 'Faturamento de anúncio', 'Vendas que vieram dos anúncios', (c) => brl(c.t.rev), () => (REVENUE.mode === 'contrato' ? 'pelo contrato inteiro' : 'pela 1ª mensalidade')),
+  akpi('cpa', 'Custo por venda', 'Investimento dividido pelas vendas', (c) => money0(ratio(c.t.spend, c.t.sales)), () => 'investimento ÷ vendas'),
+  akpi('conv', 'Taxa de conversão', 'Vendas divididas pelos resultados', (c) => pctv(c.t.sales, c.t.results), () => 'vendas ÷ resultados'),
+  akpi('ticket', 'Ticket médio', 'Valor médio de cada venda de anúncio', (c) => money0(ratio(c.t.rev, c.t.sales)), () => 'faturamento ÷ vendas'),
+  akpi('ctr', 'CTR (link)', 'Cliques no link divididos pelas impressões', (c) => pctv(c.t.link, c.t.imp), (c) => `${num(c.t.link)} cliques no link`),
+  akpi('cpc', 'CPC (link)', 'Custo por clique no link', (c) => money0(ratio(c.t.spend, c.t.link)), () => 'investimento ÷ cliques'),
+  akpi('cpm', 'CPM', 'Custo por mil impressões', (c) => money0(c.t.imp ? (c.t.spend / c.t.imp) * 1000 : null), (c) => `${num(c.t.imp)} impressões`),
+  akpi('imp', 'Impressões', 'Quantas vezes os anúncios apareceram', (c) => num(c.t.imp), () => 'no período'),
+  akpi('link', 'Cliques no link', 'Quem clicou para ir ao formulário ou à página', (c) => num(c.t.link), () => 'no período'),
+  akpi('connect', 'Connect rate', 'Views da página divididas pelos cliques', (c) => pctv(c.t.lpv, c.t.link), (c) => `${num(c.t.lpv)} views da página`),
+  akpi('msgs', 'Conversas iniciadas', 'Conversas no WhatsApp ou Direct vindas dos anúncios', (c) => num(c.t.msgs), (c) => (c.t.msgs ? `${money0(ratio(c.t.spend, c.t.msgs))} cada` : 'no período')),
+  akpi('crm', 'Leads de anúncio no CRM', 'Leads com origem paga que chegaram no CRM', (c) => num(c.t.crm), (c) => (c.t.crm ? `${money0(ratio(c.t.spend, c.t.crm))} cada` : 'no período')),
+  achart('daily', 'Gráficos', 'Investimento e faturamento por dia', 'O que foi gasto em anúncios contra as vendas que vieram deles.', [4, 2], () => `<div class="legend"><span><i class="lg-hot"></i>Faturamento</span><span><i class="lg-rest"></i>Investimento</span></div><div class="chart" data-g></div>`,
+    (el, c) => gradBars(el.querySelector('[data-g]'), { data: c.series, series: [{ key: 'rev', label: 'Faturamento', cls: 'hot' }, { key: 'spend', label: 'Investimento', cls: 'rest' }], tip: (x) => `<div class="muted">${new Date(x.d + 'T12:00').toLocaleDateString('pt-BR', { weekday: 'short', day: '2-digit', month: 'short' })}</div>Faturamento <b>${brl(x.rev)}</b><br>Investimento <b>${brl(x.spend)}</b><br><span class="muted">Resultado ${brl(x.rev - x.spend)}</span>` })),
+  achart('results_day', 'Gráficos', 'Resultados por dia', 'Leads e conversões da Meta em cada dia.', [4, 2], () => '<div class="chart" data-g></div>',
+    (el, c) => gradArea(el.querySelector('[data-g]'), { data: c.series, key: 'res', fmt: (v) => num(Math.round(v)), tip: (x) => `<div class="muted">${new Date(x.d + 'T12:00').toLocaleDateString('pt-BR', { weekday: 'short', day: '2-digit', month: 'short' })}</div>Resultados <b>${num(x.res)}</b><br><span class="muted">${x.res ? brl(x.spend / x.res) + ' por resultado' : 'sem resultados'}</span>` })),
+  achart('day_result', 'Gráficos', 'Resultado por dia', 'Vendas menos investimento em cada dia: verde acima da linha, vermelho abaixo.', [2, 4], (c) => { const max = Math.max(1, ...c.series.map((s) => Math.abs(s.rev - s.spend))); return `<div class="updown" role="img" aria-label="Resultado por dia">${c.series.map((s) => { const v = s.rev - s.spend; return `<span title="${s.d.slice(8)}/${s.d.slice(5, 7)}: ${brl(v)}" class="${v >= 0 ? 'pos' : 'neg'}"><i style="height:${(Math.abs(v) / max) * 50}%"></i></span>`; }).join('')}</div>`; }),
+  achart('funnel', 'Gráficos', 'Funil das campanhas', 'Da impressão à venda, com a conversão entre as etapas.', [2, 4], (c) => { const f = [['Impressões', c.t.imp], ['Cliques no link', c.t.link], ['Resultados', c.t.results], ['Vendas', c.t.sales]]; return `<ol class="ad-steps">${f.map(([n, v], i) => `${i ? `<li class="ads-conv" aria-hidden="true"><span>${f[i - 1][1] ? pct(v, f[i - 1][1]) : '—'}</span></li>` : ''}<li class="ads-step"><span class="n">${n}</span><b>${num(v)}</b></li>`).join('')}</ol>`; }),
+  achart('top_results', 'Relatórios', 'Campanhas com mais resultado', 'As que mais trouxeram leads no período.', [2, 4], (c) => rankRows([...c.camps].sort((a, b) => b.res - a.res).slice(0, 6), [['Campanha', nameAd], ['Gasto', (r) => brl(r.spend)], ['Result.', (r) => num(r.res)], ['Custo', (r) => money0(ratio(r.spend, r.res))]])),
+  achart('top_profit', 'Relatórios', 'Campanhas com mais lucro', 'Vendas menos o gasto de cada campanha.', [2, 4], (c) => rankRows([...c.camps].filter((g) => g.sales).sort((a, b) => b.profit - a.profit).slice(0, 6), [['Campanha', nameAd], ['Gasto', (r) => brl(r.spend)], ['Vendas', (r) => num(r.sales)], ['Lucro', (r) => `<em class="${toneOf(r.profit)}">${brl(r.profit)}</em>`]])),
+  achart('worst', 'Relatórios', 'Campanhas no prejuízo', 'Onde o gasto passou do que voltou em vendas.', [2, 4], (c) => rankRows([...c.camps].filter((g) => g.spend > g.rev).sort((a, b) => a.profit - b.profit).slice(0, 6), [['Campanha', nameAd], ['Gasto', (r) => brl(r.spend)], ['Vendas', (r) => num(r.sales)], ['Resultado', (r) => `<em class="neg">${brl(r.profit)}</em>`]])),
+  achart('top_ads', 'Relatórios', 'Anúncios com mais resultado', 'Os criativos que mais trouxeram leads.', [2, 4], (c) => rankRows([...c.ads].sort((a, b) => b.res - a.res).slice(0, 6), [['Anúncio', nameAd], ['Gasto', (r) => brl(r.spend)], ['Result.', (r) => num(r.res)], ['Custo', (r) => money0(ratio(r.spend, r.res))]]))
+];
+const AD_DEFAULT = [['spend', 1], ['results', 1], ['cpr', 1], ['roas', 1], ['daily', 4], ['sales', 1], ['profit', 1], ['cpa', 1], ['ctr', 1], ['results_day', 2], ['funnel', 2], ['top_results', 2], ['top_profit', 2]];

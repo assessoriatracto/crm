@@ -2,17 +2,17 @@ import { DB, LIVE, CONFIGURED } from '@shared/db.js';
 import {
   go, routeName, S, $, $$, esc, ICON, FAT, COLORS, initials, isHot, stageOf, profileOf, labelOf, isInactive, isDue, fatShort, brl, pct, num,
   fmtPhone, fullDate, longDate, addedAt, ago, sourceLabel, formName, waLink, toast, fail, popover, closePop, menu, multiSelect,
-  modal, confirmBox, downloadCSV, dateRange, datePicker, dateBtn, daysToSale, fmtDays, renderTicket } from './util.js?v=2610191927';
-import { importModal } from './import.js?v=2610191927';
-import { renderDashboard } from './dashboard.js?v=2610191927';
-import { renderSettings } from './admin.js?v=2610191927';
-import { renderIntegrations, renderPixel, leadMetaEvents, statusPill } from './integrations.js?v=2610191927';
-import { renderRecovery, loadPartials } from './recovery.js?v=2610191927';
-import { showSignIn, showSignUp, showForgot, showReset, showMfa, showPending, watchIdle, AUTH_ROUTES } from './auth.js?v=2610191927';
-import { SERVICES, PLANS, planMonths, planFactor, VALUE_LABEL, contractFields, bindContract } from './contract.js?v=2610191927';
-import { openProfile, renderProfile } from './profile.js?v=2610191927';
-import { renderBuilder } from './builder.js?v=2610191927';
-import { renderFinance, renderAds } from './finance.js?v=2610191927';
+  modal, confirmBox, downloadCSV, dateRange, datePicker, dateBtn, daysToSale, fmtDays, renderTicket } from './util.js?v=2610230929';
+import { importModal } from './import.js?v=2610230929';
+import { renderDashboard } from './dashboard.js?v=2610230929';
+import { renderSettings } from './admin.js?v=2610230929';
+import { renderIntegrations, renderPixel, leadMetaEvents, statusPill } from './integrations.js?v=2610230929';
+import { renderRecovery, loadPartials } from './recovery.js?v=2610230929';
+import { showSignIn, showSignUp, showForgot, showReset, showMfa, showPending, watchIdle, AUTH_ROUTES } from './auth.js?v=2610230929';
+import { SERVICES, PLANS, planMonths, planFactor, VALUE_LABEL, contractFields, bindContract } from './contract.js?v=2610230929';
+import { openProfile, renderProfile } from './profile.js?v=2610230929';
+import { renderBuilder } from './builder.js?v=2610230929';
+import { renderFinance, renderAds } from './finance.js?v=2610230929';
 
 // ============================================================
 // preferências locais (por navegador)
