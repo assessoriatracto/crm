@@ -1831,3 +1831,13 @@ input.inp.dp-native{display:none !important;}
 @media (max-width:1100px){.ov-grid{grid-template-columns:repeat(2,minmax(0,1fr));} .ow.w4,.ow.w2{grid-column:1/-1;}}
 @media (max-width:560px){.ow{padding:14px;} .ow .wk-v{font-size:22px;} .wpick{grid-template-columns:minmax(0,1fr);} .ov-grid.editing .ow{padding-top:44px;} .rank > div{grid-template-columns:minmax(0,1.4fr) repeat(3,minmax(0,.9fr));font-size:12.5px;}}
 .rank em{font-family:inherit !important;font-style:normal !important;font-weight:500;}
+/* lançamento de venda: origem e contato */
+.en-origin{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:6px;width:100%;}
+.en-origin .b{justify-content:center;}
+.en-contact{display:flex;gap:8px;}
+.en-contact .inp{flex:1;min-width:0;}
+.en-contact .b{flex:none;}
+.en-newc{padding:12px;border:1px dashed var(--c-line-strong);border-radius:10px;background:var(--c-sunken);}
+.en-newc .help{margin:0;}
+.en-newc .link{border:0;background:none;color:var(--amber-ink);font:inherit;cursor:pointer;padding:0;text-decoration:underline;}
+@media (max-width:560px){.en-origin{grid-template-columns:repeat(2,minmax(0,1fr));} .en-contact{flex-direction:column;}}

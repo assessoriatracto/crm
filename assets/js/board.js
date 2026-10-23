@@ -1,7 +1,7 @@
 // Painel personalizável (no padrão do Nox): catálogo de blocos (indicadores, gráficos, relatórios),
 // a pessoa escolhe quais aparecem, a ordem e o tamanho. Fica salvo no perfil (profiles.prefs[key]).
 import { DB } from '@shared/db.js';
-import { S, esc, ICON, toast, fail, modal } from './util.js?v=2610230929';
+import { S, esc, ICON, toast, fail, modal } from './util.js?v=2610230934';
 
 const GROUPS = ['Indicadores', 'Gráficos', 'Relatórios'];
 const I = (d) => `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${d}</svg>`;

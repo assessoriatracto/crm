@@ -121,7 +121,7 @@ export const ago = (iso) => {
   if (s < 86400 * 30) return Math.floor(s / 86400) + ' d';
   return new Date(iso).toLocaleDateString('pt-BR', { day: '2-digit', month: 'short' });
 };
-export const sourceLabel = (s) => ({ pago: 'Pago', organico: 'Orgânico', manual: 'Manual' }[s] || s);
+export const sourceLabel = (s) => ({ pago: 'Pago', organico: 'Orgânico', manual: 'Manual', local: 'Local', indicacao: 'Indicação', api: 'API' }[s] || s);
 export const formName = (l) => S.forms[l.form_id]?.name || l.form_name || (l.form_id === 'manual' ? 'Cadastro manual' : l.form_id);
 // cada desenho de tela pega uma "senha"; se outra tela começou a ser desenhada depois, o desenho antigo
 // desiste ao terminar de carregar (evita clicar numa aba e aparecer outra)

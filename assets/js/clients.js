@@ -1,9 +1,9 @@
 // Financeiro > Clientes: contratos ativos, cancelamentos (churn) e origem de cada venda (campanha › conjunto › anúncio).
 import { DB } from '@shared/db.js';
-import { S, esc, ICON, brl, num, toast, fail, modal, menu, dateRange, renderTicket } from './util.js?v=2610230929';
-import { contracts, activeAt } from './dashboard.js?v=2610230929';
-import { entryModal } from './entry.js?v=2610230929';
-import { contractTags, SERVICES } from './contract.js?v=2610230929';
+import { S, esc, ICON, brl, num, toast, fail, modal, menu, dateRange, renderTicket } from './util.js?v=2610230934';
+import { contracts, activeAt } from './dashboard.js?v=2610230934';
+import { entryModal } from './entry.js?v=2610230934';
+import { contractTags, SERVICES } from './contract.js?v=2610230934';
 
 const C = { status: 'ativos', q: '', svc: '' };
 const REASONS = ['Preço', 'Resultado abaixo do esperado', 'Atendimento', 'Fechou ou vendeu a loja', 'Cortou custos', 'Foi para outra agência', 'Outro'];
@@ -33,7 +33,7 @@ export async function renderClients(host, F, reload) {
   const mrr = active.reduce((s, c) => s + c.monthly, 0);
   const lostMrr = canceledR.reduce((s, c) => s + c.monthly, 0);
   const churn = activeStart.length ? canceledR.length / activeStart.length : null;
-  const org = (c) => (c.kind === 'entry' ? c.entry?.source === 'organico' : c.lead?.source === 'organico');
+  const org = (c) => ['organico', 'local', 'indicacao'].includes(c.kind === 'entry' ? c.entry?.source : c.lead?.source);
   const noOrigin = list.filter((c) => !c.origin?.utm_campaign && !c.origin?.utm_id && !org(c)).length;
 
   const q = C.q.trim().toLowerCase();
@@ -42,7 +42,7 @@ export async function renderClients(host, F, reload) {
     if (C.status === 'ativos' && st !== 'ativo') return false;
     if (C.status === 'cancelados' && st !== 'cancelado') return false;
     if (C.status === 'encerrados' && st !== 'encerrado') return false;
-    if (C.status === 'sem_origem' && (c.origin?.utm_campaign || c.origin?.utm_id || c.entry?.source === 'organico' || c.lead?.source === 'organico')) return false;
+    if (C.status === 'sem_origem' && (c.origin?.utm_campaign || c.origin?.utm_id || ['organico', 'local', 'indicacao'].includes(c.entry?.source) || ['organico', 'local', 'indicacao'].includes(c.lead?.source))) return false;
     if (C.status === 'periodo' && !(c.start >= a && c.start <= b)) return false;
     if (C.svc && c.service !== C.svc) return false;
     return !q || `${c.name} ${originTxt(c.origin)}`.toLowerCase().includes(q);
@@ -72,7 +72,7 @@ export async function renderClients(host, F, reload) {
           <td class="num">${brl(['semestral', 'anual'].includes(c.plan) || c.oneTime ? c.value : c.monthly)}${c.oneTime ? '' : `<small class="muted">${({ semestral: '/semestre', anual: '/ano' })[c.plan] || '/mês'}</small>`}</td>
           <td class="nowrap">${fmt(c.start)}${c.kind === 'entry' && c.entry.created_at && iso(new Date(c.entry.created_at)) !== iso(c.start) ? `<small class="muted">lançado em ${fmt(new Date(c.entry.created_at))}</small>` : ''}</td>
           <td class="nowrap">${c.oneTime ? '<span class="muted">—</span>' : c.plan === 'mensal' && st !== 'cancelado' ? '<span class="muted">até cancelar</span>' : fmt(st === 'cancelado' ? c.canceled : c.end)}</td>
-          <td>${(c.kind === 'entry' ? c.entry.source === 'organico' : c.lead?.source === 'organico') ? '<span class="pill">Indicação / orgânico</span>' : originTxt(c.origin) ? `<span class="cl-origin" title="${esc(originTxt(c.origin))}">${esc(originTxt(c.origin))}</span>${c.lead ? '' : '<small class="muted">sem lead: não vai pra Meta</small>'}` : '<button class="b b-sm" data-origin>Definir origem</button>'}</td>
+          <td>${(() => { const src = c.kind === 'entry' ? c.entry.source : c.lead?.source; return ['organico', 'local', 'indicacao'].includes(src) ? `<span class="pill">${({ organico: 'Orgânico', local: 'Local', indicacao: 'Indicação' })[src]}</span>` : ''; })() || originTxt(c.origin) ? `<span class="cl-origin" title="${esc(originTxt(c.origin))}">${esc(originTxt(c.origin))}</span>${c.lead ? '' : '<small class="muted">sem lead: não vai pra Meta</small>'}` : '<button class="b b-sm" data-origin>Definir origem</button>'}</td>
           <td class="cl-act"><button class="b b-sm b-ghost" data-more aria-label="Ações">${ICON.dotsH}</button></td></tr>`; }).join('')}
       </tbody></table></div>` : `<p class="muted empty-line">${list.length ? 'Nenhum cliente nesse filtro.' : 'Ainda não há vendas. Elas aparecem aqui quando um lead vai pra "Venda realizada" com mensalidade, ou quando você lança uma venda no Financeiro.'}</p>`}
     </section>`;

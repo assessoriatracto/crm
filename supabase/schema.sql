@@ -358,7 +358,7 @@ alter table public.leads add column if not exists external_id text;
 create unique index if not exists leads_external_idx on public.leads (external_id) where external_id is not null;
 create index if not exists leads_email_idx on public.leads (lower(email));
 alter table public.leads drop constraint if exists leads_source_check;
-alter table public.leads add constraint leads_source_check check (source in ('pago', 'organico', 'manual', 'api'));
+alter table public.leads add constraint leads_source_check check (source in ('pago', 'organico', 'manual', 'api', 'local', 'indicacao'));
 
 create index if not exists leads_created_idx on public.leads (created_at desc);
 create index if not exists leads_stage_idx on public.leads (stage_id);
@@ -688,7 +688,10 @@ alter table public.finance_entries add column if not exists utm_term text;
 alter table public.finance_entries add column if not exists utm_content text;
 alter table public.finance_entries add column if not exists utm_id text;
 alter table public.finance_entries add column if not exists meta_sent_at timestamptz;
-alter table public.finance_entries add column if not exists source text check (source in ('pago', 'organico')); -- canal da venda (vazio = anúncio)
+alter table public.finance_entries add column if not exists source text; -- canal da venda (vazio = anúncio)
+-- origem da venda: anúncio (pago), orgânico, local (presencial) ou indicação
+alter table public.finance_entries drop constraint if exists finance_entries_source_check;
+alter table public.finance_entries add constraint finance_entries_source_check check (source in ('pago', 'organico', 'local', 'indicacao'));
 -- serviço e tipo do contrato (vendas)
 alter table public.finance_entries add column if not exists service text check (service in ('marketing', 'marketplace'));
 alter table public.finance_entries add column if not exists plan text check (plan in ('mensal', 'semestral', 'anual', 'unico'));
@@ -962,6 +965,7 @@ declare l leads; st stages; px tracking_pixels; n int := 0;
 begin
   begin
     if new.kind <> 'receita' or new.category not in ('Venda (contrato)', 'Contrato') or new.lead_id is null or new.meta_sent_at is not null then return null; end if;
+    if new.source in ('local', 'indicacao') then return null; end if; -- cliente que não veio de anúncio não ensina a Meta
     -- a venda desse cliente já foi pra Meta (pela Central de leads): não manda de novo
     if exists (select 1 from tracking_events where event_id = 'sale:' || new.lead_id::text) then
       update finance_entries set meta_sent_at = now() where id = new.id;
@@ -1028,7 +1032,7 @@ begin
                                    lead_id, source, from_pipeline, meta_sent_at, created_by)
       values ('receita', 'Venda (contrato)', new.nome, (new.won_at at time zone 'America/Sao_Paulo')::date, v_amount, new.valor, new.first_amount, v_months,
               new.service, new.plan, new.canceled_at, new.cancel_reason, new.id,
-              case when new.source in ('organico', 'manual') then 'organico' end, true, now(),
+              case when new.source in ('organico', 'manual') then 'organico' when new.source in ('local', 'indicacao') then new.source end, true, now(),
               (select id from profiles where id = auth.uid()));
     else
       update finance_entries set description = new.nome, date = (new.won_at at time zone 'America/Sao_Paulo')::date, amount = v_amount,
@@ -1584,6 +1588,7 @@ declare l leads; st stages; px tracking_pixels; n int := 0;
 begin
   select * into l from leads where id = p_lead_id;
   if not found then return 0; end if;
+  if p_kind = 'sale' and l.source in ('local', 'indicacao') then return 0; end if; -- venda local/indicação não vai pra Meta
   if p_kind = 'lead' and exists (select 1 from forms where id = l.form_id and (settings->>'pixels') = 'false') then return 0; end if;
   if p_stage is not null then select * into st from stages where id = p_stage; end if;
 
@@ -2134,7 +2139,7 @@ begin
 end $$;
 
 -- versão do banco (diagnóstico: dá pra conferir de fora se a última atualização entrou)
-create or replace function public.schema_version() returns text language sql immutable as $$ select '2026-10-23.1'::text $$;
+create or replace function public.schema_version() returns text language sql immutable as $$ select '2026-10-23.2'::text $$;
 grant execute on function public.schema_version() to anon, authenticated;
 
 -- quantidade de uma ação no "actions" dos insights da Meta (null se não vier)

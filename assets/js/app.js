@@ -2,17 +2,17 @@ import { DB, LIVE, CONFIGURED } from '@shared/db.js';
 import {
   go, routeName, S, $, $$, esc, ICON, FAT, COLORS, initials, isHot, stageOf, profileOf, labelOf, isInactive, isDue, fatShort, brl, pct, num,
   fmtPhone, fullDate, longDate, addedAt, ago, sourceLabel, formName, waLink, toast, fail, popover, closePop, menu, multiSelect,
-  modal, confirmBox, downloadCSV, dateRange, datePicker, dateBtn, daysToSale, fmtDays, renderTicket } from './util.js?v=2610230929';
-import { importModal } from './import.js?v=2610230929';
-import { renderDashboard } from './dashboard.js?v=2610230929';
-import { renderSettings } from './admin.js?v=2610230929';
-import { renderIntegrations, renderPixel, leadMetaEvents, statusPill } from './integrations.js?v=2610230929';
-import { renderRecovery, loadPartials } from './recovery.js?v=2610230929';
-import { showSignIn, showSignUp, showForgot, showReset, showMfa, showPending, watchIdle, AUTH_ROUTES } from './auth.js?v=2610230929';
-import { SERVICES, PLANS, planMonths, planFactor, VALUE_LABEL, contractFields, bindContract } from './contract.js?v=2610230929';
-import { openProfile, renderProfile } from './profile.js?v=2610230929';
-import { renderBuilder } from './builder.js?v=2610230929';
-import { renderFinance, renderAds } from './finance.js?v=2610230929';
+  modal, confirmBox, downloadCSV, dateRange, datePicker, dateBtn, daysToSale, fmtDays, renderTicket } from './util.js?v=2610230934';
+import { importModal } from './import.js?v=2610230934';
+import { renderDashboard } from './dashboard.js?v=2610230934';
+import { renderSettings } from './admin.js?v=2610230934';
+import { renderIntegrations, renderPixel, leadMetaEvents, statusPill } from './integrations.js?v=2610230934';
+import { renderRecovery, loadPartials } from './recovery.js?v=2610230934';
+import { showSignIn, showSignUp, showForgot, showReset, showMfa, showPending, watchIdle, AUTH_ROUTES } from './auth.js?v=2610230934';
+import { SERVICES, PLANS, planMonths, planFactor, VALUE_LABEL, contractFields, bindContract } from './contract.js?v=2610230934';
+import { openProfile, renderProfile } from './profile.js?v=2610230934';
+import { renderBuilder } from './builder.js?v=2610230934';
+import { renderFinance, renderAds } from './finance.js?v=2610230934';
 
 // ============================================================
 // preferências locais (por navegador)
@@ -293,7 +293,7 @@ function openFilter(btn, key) {
     campaigns: () => [...new Set(S.leads.map((l) => l.utm_campaign || '__none'))].sort().map((c) => ({ value: c, label: c === '__none' ? 'Sem campanha' : c })),
     forms: () => [...new Set([...Object.keys(S.forms), ...S.leads.map((l) => l.form_id)])].map((id) => ({ value: id, label: S.forms[id]?.name || (id === 'manual' ? 'Cadastro manual' : id) })),
     stages: () => S.stages.map((s) => ({ value: s.id, label: s.name, swatch: s.color })),
-    sources: () => [['pago', 'Pago'], ['organico', 'Orgânico'], ['manual', 'Manual']].map(([value, label]) => ({ value, label })),
+    sources: () => [['pago', 'Pago'], ['organico', 'Orgânico'], ['local', 'Local'], ['indicacao', 'Indicação'], ['manual', 'Manual']].map(([value, label]) => ({ value, label })),
     assignees: () => [{ value: '__none', label: 'Não atribuído' }, ...S.profiles.filter((p) => p.ativo).map((p) => ({ value: p.id, label: p.nome }))],
     labels: () => S.labels.map((x) => ({ value: x.id, label: x.name, swatch: x.color }))
   };
