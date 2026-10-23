@@ -1,8 +1,8 @@
 // Lançamento único do Financeiro: Venda, Outra receita ou Despesa.
 // A venda é a mesma da Central de leads: ligada a um contato, o banco atualiza o lead (valor, contrato, data e estágio) e vice-versa.
 import { DB } from '@shared/db.js';
-import { S, esc, ICON, toast, fail, modal, confirmBox } from './util.js?v=2610230934';
-import { contractFields, bindContract } from './contract.js?v=2610230934';
+import { S, esc, ICON, toast, fail, modal, confirmBox } from './util.js?v=2610230944';
+import { contractFields, bindContract } from './contract.js?v=2610230944';
 
 const SALE_CATS = ['Venda (contrato)', 'Contrato'];
 const CATS = { despesa: ['Ferramentas', 'Equipe', 'Comissões', 'Impostos', 'Tráfego (outras plataformas)', 'Outros'], receita: ['Setup', 'Consultoria', 'Outros'] };
@@ -38,14 +38,14 @@ export function entryModal(done, entry = null, opts = {}) {
       <div class="row"><span class="lbl">Origem da venda</span><div class="seg en-origin" role="radiogroup" aria-label="Origem da venda">${ORIGINS.map(([k, n]) => `<button type="button" class="b ${originOf(entry, lead) === k ? 'on' : ''}" role="radio" aria-checked="${originOf(entry, lead) === k}" data-origin="${k}">${n}</button>`).join('')}</div>
         <p class="help" data-origin-help></p></div>
       ${lead ? '' : `<div class="row" data-contact><label class="lbl" for="enLead">Contato do cliente <span class="muted" style="text-transform:none;letter-spacing:0">(opcional)</span></label>
-        <div class="en-contact" data-pick-contact><input class="inp" id="enLead" list="enLeads" data-lead placeholder="Busque pelo nome ou WhatsApp" autocomplete="off"><button type="button" class="b" data-new-contact>${ICON.user}Cadastrar novo</button></div>
+        <div class="en-contact" data-pick-contact><input class="inp" id="enLead" list="enLeads" data-lead placeholder="Nome, WhatsApp ou e-mail" autocomplete="off"><button type="button" class="b" data-new-contact>${ICON.user}Cadastrar novo</button></div>
         <datalist id="enLeads">${leadOpts.slice(0, 800).map((l) => `<option value="${esc(leadLabel(l))}"></option>`).join('')}</datalist>
         <div class="en-newc" data-newc hidden>
           <div class="grid2"><div class="row"><label class="lbl" for="enNcW">WhatsApp</label><input class="inp" id="enNcW" data-nc-wa inputmode="tel" placeholder="(62) 99999-9999"></div>
             <div class="row"><label class="lbl" for="enNcE">E-mail <span class="muted" style="text-transform:none;letter-spacing:0">(opcional)</span></label><input class="inp" id="enNcE" data-nc-email type="email" autocomplete="off"></div></div>
           <p class="help">O contato entra na Central de leads já como venda, com o nome do cliente acima. <button type="button" class="link" data-cancel-newc>Buscar um contato existente</button></p>
         </div>
-        <p class="help" data-contact-help>Sem contato, a venda fica só no Financeiro. Com contato, ela aparece também na Central de leads.</p></div>`}
+        <p class="help" data-contact-help>Escolha da lista ou digite o WhatsApp ou o e-mail: se o contato não existir, ele é cadastrado na hora. Sem contato, a venda fica só no Financeiro.</p></div>`}
       ${contractFields({ service: entry?.service, plan: entry?.plan || (isSale(entry) ? ({ 6: 'semestral', 12: 'anual' })[entry.months] || 'mensal' : 'mensal'), months: entry?.months, monthly: entry?.monthly_amount, total: isSale(entry) ? entry.amount : null, first: entry?.first_amount })}
       <div class="row" data-cancel-row><label class="lbl" for="enCan">Contrato cancelado em <span class="muted" style="text-transform:none;letter-spacing:0">(opcional, entra no churn)</span></label><input class="inp" type="date" id="enCan" data-canceled value="${entry?.canceled_at || ''}"></div>
     </div>
@@ -98,7 +98,18 @@ export function entryModal(done, entry = null, opts = {}) {
         const name = $('[data-name]').value.trim(); const date = $('[data-sdate]').value;
         let leadId = lead?.id || null;
         const txt = $('[data-lead]')?.value.trim();
-        if (txt && !newContact) { const l = S.leads.find((x) => leadLabel(x) === txt); if (!l) return toast('Escolha um contato da lista, cadastre um novo ou deixe em branco', true); leadId = l.id; }
+        if (txt && !newContact) {
+          // aceita escolher da lista, ou digitar o WhatsApp/e-mail: acha o contato que já existe ou cadastra um novo
+          const digits = txt.replace(/\D/g, '').replace(/^55(?=\d{10,11}$)/, '');
+          const email = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(txt) ? txt.toLowerCase() : '';
+          const l = S.leads.find((x) => leadLabel(x) === txt)
+            || (digits.length >= 10 && S.leads.find((x) => String(x.whatsapp || '').replace(/\D/g, '').endsWith(digits)))
+            || (email && S.leads.find((x) => (x.email || '').toLowerCase() === email));
+          if (l) leadId = l.id;
+          else if (digits.length >= 10 && digits.length <= 11) { newContact = true; $('[data-nc-wa]').value = digits; }
+          else if (email) { newContact = true; $('[data-nc-email]').value = email; }
+          else return toast('Contato não encontrado. Digite o WhatsApp com DDD ou o e-mail para cadastrar, ou escolha um da lista.', true);
+        }
         if (!name && !leadId) return toast('Informe o cliente', true);
         if (!date) return toast('Informe a data da venda', true);
         const v = ctr.read(); if (v.error) return toast(v.error, true);
