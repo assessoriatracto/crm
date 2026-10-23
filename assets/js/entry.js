@@ -1,8 +1,8 @@
 // Lançamento único do Financeiro: Venda, Outra receita ou Despesa.
 // A venda é a mesma da Central de leads: ligada a um contato, o banco atualiza o lead (valor, contrato, data e estágio) e vice-versa.
 import { DB } from '@shared/db.js';
-import { S, esc, ICON, toast, fail, modal, confirmBox } from './util.js?v=2610230944';
-import { contractFields, bindContract } from './contract.js?v=2610230944';
+import { S, esc, ICON, toast, fail, modal, confirmBox } from './util.js?v=2610230946';
+import { contractFields, bindContract } from './contract.js?v=2610230946';
 
 const SALE_CATS = ['Venda (contrato)', 'Contrato'];
 const CATS = { despesa: ['Ferramentas', 'Equipe', 'Comissões', 'Impostos', 'Tráfego (outras plataformas)', 'Outros'], receita: ['Setup', 'Consultoria', 'Outros'] };

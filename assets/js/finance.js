@@ -1,14 +1,14 @@
 // Financeiro (estilo UTMify): gasto da Meta Ads × leads e vendas do CRM × receitas e despesas lançadas
 import { DB } from '@shared/db.js';
-import { renderClients } from './clients.js?v=2610230944';
-import { renderExpenses } from './expenses.js?v=2610230944';
-import { renderCashflow } from './cashflow.js?v=2610230944';
-import { contracts, result, fromAds, saleRevenue } from './dashboard.js?v=2610230944';
-import { contractTags } from './contract.js?v=2610230944';
-import { renderBoard, gradBars, gradArea } from './board.js?v=2610230944';
-import { renderPixel } from './integrations.js?v=2610230944';
-import { entryModal } from './entry.js?v=2610230944';
-import { PERIOD, REVENUE, setRevenueMode, revenueToggle, BRAND, popover, dateRange, datePicker, dateBtn, S, $, $$, esc, ICON, brl, num, pct, fullDate, ago, toast, fail, modal, confirmBox, renderTicket } from './util.js?v=2610230944';
+import { renderClients } from './clients.js?v=2610230946';
+import { renderExpenses } from './expenses.js?v=2610230946';
+import { renderCashflow } from './cashflow.js?v=2610230946';
+import { contracts, result, fromAds, saleRevenue } from './dashboard.js?v=2610230946';
+import { contractTags } from './contract.js?v=2610230946';
+import { renderBoard, gradBars, gradArea } from './board.js?v=2610230946';
+import { renderPixel } from './integrations.js?v=2610230946';
+import { entryModal } from './entry.js?v=2610230946';
+import { PERIOD, REVENUE, setRevenueMode, revenueToggle, BRAND, popover, dateRange, datePicker, dateBtn, S, $, $$, esc, ICON, brl, num, pct, fullDate, ago, toast, fail, modal, confirmBox, renderTicket } from './util.js?v=2610230946';
 
 const F = { period: '30', from: '', to: '', level: 'campaign', revenue: 'mensal', sort: 'spend', tab: 'geral' };
 const GRAPH = 'v21.0';
@@ -933,7 +933,7 @@ async function renderAdsOverview(host) {
 // todos os números do período, calculados uma vez para os blocos
 function adsCtx(r, ins, entries, settings) {
   const [ra, rb] = [new Date(r[0] + 'T00:00'), new Date(r[1] + 'T23:59:59')];
-  const res = (x) => (x.results != null ? Number(x.results) : rowLeads(x));
+  const res = (x) => rowLeads(x); // só leads: a coluna Resultados da Meta pode ser alcance, clique ou view, conforme o objetivo
   const sum = (k) => ins.reduce((a, x) => a + Number(x[k] || 0), 0);
   const sales = contracts(entries, settings?.contract_months || 12).filter((c) => c.start >= ra && c.start <= rb && fromAds(c));
   const t = { spend: sum('spend'), imp: sum('impressions'), link: sum('link_clicks') || sum('clicks'), lpv: sum('landing_views'), msgs: sum('messages'), results: ins.reduce((a, x) => a + res(x), 0), sales: sales.length, rev: sales.reduce((a, c) => a + saleRevenue(c), 0) };
@@ -965,14 +965,14 @@ const rankRows = (rows, cols) => (rows.length ? `<div class="rank"><div class="r
 const nameAd = (r) => r.name;
 const AD_WIDGETS = [
   akpi('spend', 'Investimento', 'Quanto foi gasto em anúncios', (c) => brl(c.t.spend), (c) => `${num(c.t.imp)} impressões`, () => 'lead'),
-  akpi('results', 'Resultados', 'Leads e conversões contados pela Meta', (c) => num(c.t.results), (c) => (c.t.crm ? `${num(c.t.crm)} leads de anúncio no CRM` : 'coluna Resultados da Meta')),
-  akpi('cpr', 'Custo por resultado', 'Investimento dividido pelos resultados', (c) => money0(ratio(c.t.spend, c.t.results)), () => 'investimento ÷ resultados'),
+  akpi('results', 'Leads', 'Leads que os anúncios trouxeram (pela Meta)', (c) => num(c.t.results), (c) => (c.t.crm ? `${num(c.t.crm)} leads de anúncio no CRM` : 'contados pela Meta')),
+  akpi('cpr', 'Custo por lead', 'Investimento dividido pelos leads', (c) => money0(ratio(c.t.spend, c.t.results)), () => 'investimento ÷ leads'),
   akpi('roas', 'ROAS', 'Vendas de anúncio divididas pelo investimento', (c) => { const v = ratio(c.t.rev, c.t.spend); return v == null ? '—' : v.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + 'x'; }, (c) => `${brl(c.t.rev)} ÷ investimento`, (c) => (c.t.spend ? (c.t.rev >= c.t.spend ? 'pos' : 'neg') : '')),
   akpi('profit', 'Lucro das campanhas', 'Vendas de anúncio menos o investimento', (c) => brl(c.t.profit), (c) => (c.t.rev ? `margem ${pctv(c.t.profit, c.t.rev)}` : 'vendas − investimento'), (c) => toneOf(c.t.profit)),
   akpi('sales', 'Vendas de anúncio', 'Clientes que vieram dos anúncios', (c) => num(c.t.sales), (c) => (c.t.sales ? `${brl(c.t.rev)} em vendas` : 'nenhuma no período')),
   akpi('rev', 'Faturamento de anúncio', 'Vendas que vieram dos anúncios', (c) => brl(c.t.rev), () => (REVENUE.mode === 'contrato' ? 'pelo contrato inteiro' : 'pela 1ª mensalidade')),
   akpi('cpa', 'Custo por venda', 'Investimento dividido pelas vendas', (c) => money0(ratio(c.t.spend, c.t.sales)), () => 'investimento ÷ vendas'),
-  akpi('conv', 'Taxa de conversão', 'Vendas divididas pelos resultados', (c) => pctv(c.t.sales, c.t.results), () => 'vendas ÷ resultados'),
+  akpi('conv', 'Taxa de conversão', 'Vendas divididas pelos leads', (c) => pctv(c.t.sales, c.t.results), () => 'vendas ÷ leads'),
   akpi('ticket', 'Ticket médio', 'Valor médio de cada venda de anúncio', (c) => money0(ratio(c.t.rev, c.t.sales)), () => 'faturamento ÷ vendas'),
   akpi('ctr', 'CTR (link)', 'Cliques no link divididos pelas impressões', (c) => pctv(c.t.link, c.t.imp), (c) => `${num(c.t.link)} cliques no link`),
   akpi('cpc', 'CPC (link)', 'Custo por clique no link', (c) => money0(ratio(c.t.spend, c.t.link)), () => 'investimento ÷ cliques'),
@@ -984,13 +984,13 @@ const AD_WIDGETS = [
   akpi('crm', 'Leads de anúncio no CRM', 'Leads com origem paga que chegaram no CRM', (c) => num(c.t.crm), (c) => (c.t.crm ? `${money0(ratio(c.t.spend, c.t.crm))} cada` : 'no período')),
   achart('daily', 'Gráficos', 'Investimento e faturamento por dia', 'O que foi gasto em anúncios contra as vendas que vieram deles.', [4, 2], () => `<div class="legend"><span><i class="lg-hot"></i>Faturamento</span><span><i class="lg-rest"></i>Investimento</span></div><div class="chart" data-g></div>`,
     (el, c) => gradBars(el.querySelector('[data-g]'), { data: c.series, series: [{ key: 'rev', label: 'Faturamento', cls: 'hot' }, { key: 'spend', label: 'Investimento', cls: 'rest' }], tip: (x) => `<div class="muted">${new Date(x.d + 'T12:00').toLocaleDateString('pt-BR', { weekday: 'short', day: '2-digit', month: 'short' })}</div>Faturamento <b>${brl(x.rev)}</b><br>Investimento <b>${brl(x.spend)}</b><br><span class="muted">Resultado ${brl(x.rev - x.spend)}</span>` })),
-  achart('results_day', 'Gráficos', 'Resultados por dia', 'Leads e conversões da Meta em cada dia.', [4, 2], () => '<div class="chart" data-g></div>',
-    (el, c) => gradArea(el.querySelector('[data-g]'), { data: c.series, key: 'res', fmt: (v) => num(Math.round(v)), tip: (x) => `<div class="muted">${new Date(x.d + 'T12:00').toLocaleDateString('pt-BR', { weekday: 'short', day: '2-digit', month: 'short' })}</div>Resultados <b>${num(x.res)}</b><br><span class="muted">${x.res ? brl(x.spend / x.res) + ' por resultado' : 'sem resultados'}</span>` })),
+  achart('results_day', 'Gráficos', 'Leads por dia', 'Leads que os anúncios trouxeram em cada dia.', [4, 2], () => '<div class="chart" data-g></div>',
+    (el, c) => gradArea(el.querySelector('[data-g]'), { data: c.series, key: 'res', fmt: (v) => num(Math.round(v)), tip: (x) => `<div class="muted">${new Date(x.d + 'T12:00').toLocaleDateString('pt-BR', { weekday: 'short', day: '2-digit', month: 'short' })}</div>Leads <b>${num(x.res)}</b><br><span class="muted">${x.res ? brl(x.spend / x.res) + ' por lead' : 'sem leads'}</span>` })),
   achart('day_result', 'Gráficos', 'Resultado por dia', 'Vendas menos investimento em cada dia: verde acima da linha, vermelho abaixo.', [2, 4], (c) => { const max = Math.max(1, ...c.series.map((s) => Math.abs(s.rev - s.spend))); return `<div class="updown" role="img" aria-label="Resultado por dia">${c.series.map((s) => { const v = s.rev - s.spend; return `<span title="${s.d.slice(8)}/${s.d.slice(5, 7)}: ${brl(v)}" class="${v >= 0 ? 'pos' : 'neg'}"><i style="height:${(Math.abs(v) / max) * 50}%"></i></span>`; }).join('')}</div>`; }),
-  achart('funnel', 'Gráficos', 'Funil das campanhas', 'Da impressão à venda, com a conversão entre as etapas.', [2, 4], (c) => { const f = [['Impressões', c.t.imp], ['Cliques no link', c.t.link], ['Resultados', c.t.results], ['Vendas', c.t.sales]]; return `<ol class="ad-steps">${f.map(([n, v], i) => `${i ? `<li class="ads-conv" aria-hidden="true"><span>${f[i - 1][1] ? pct(v, f[i - 1][1]) : '—'}</span></li>` : ''}<li class="ads-step"><span class="n">${n}</span><b>${num(v)}</b></li>`).join('')}</ol>`; }),
-  achart('top_results', 'Relatórios', 'Campanhas com mais resultado', 'As que mais trouxeram leads no período.', [2, 4], (c) => rankRows([...c.camps].sort((a, b) => b.res - a.res).slice(0, 6), [['Campanha', nameAd], ['Gasto', (r) => brl(r.spend)], ['Result.', (r) => num(r.res)], ['Custo', (r) => money0(ratio(r.spend, r.res))]])),
+  achart('funnel', 'Gráficos', 'Funil das campanhas', 'Da impressão à venda, com a conversão entre as etapas.', [2, 4], (c) => { const f = [['Impressões', c.t.imp], ['Cliques no link', c.t.link], ['Leads', c.t.results], ['Vendas', c.t.sales]]; return `<ol class="ad-steps">${f.map(([n, v], i) => `${i ? `<li class="ads-conv" aria-hidden="true"><span>${f[i - 1][1] ? pct(v, f[i - 1][1]) : '—'}</span></li>` : ''}<li class="ads-step"><span class="n">${n}</span><b>${num(v)}</b></li>`).join('')}</ol>`; }),
+  achart('top_results', 'Relatórios', 'Campanhas com mais leads', 'As que mais trouxeram leads no período.', [2, 4], (c) => rankRows([...c.camps].sort((a, b) => b.res - a.res).slice(0, 6), [['Campanha', nameAd], ['Gasto', (r) => brl(r.spend)], ['Leads', (r) => num(r.res)], ['Custo', (r) => money0(ratio(r.spend, r.res))]])),
   achart('top_profit', 'Relatórios', 'Campanhas com mais lucro', 'Vendas menos o gasto de cada campanha.', [2, 4], (c) => rankRows([...c.camps].filter((g) => g.sales).sort((a, b) => b.profit - a.profit).slice(0, 6), [['Campanha', nameAd], ['Gasto', (r) => brl(r.spend)], ['Vendas', (r) => num(r.sales)], ['Lucro', (r) => `<em class="${toneOf(r.profit)}">${brl(r.profit)}</em>`]])),
   achart('worst', 'Relatórios', 'Campanhas no prejuízo', 'Onde o gasto passou do que voltou em vendas.', [2, 4], (c) => rankRows([...c.camps].filter((g) => g.spend > g.rev).sort((a, b) => a.profit - b.profit).slice(0, 6), [['Campanha', nameAd], ['Gasto', (r) => brl(r.spend)], ['Vendas', (r) => num(r.sales)], ['Resultado', (r) => `<em class="neg">${brl(r.profit)}</em>`]])),
-  achart('top_ads', 'Relatórios', 'Anúncios com mais resultado', 'Os criativos que mais trouxeram leads.', [2, 4], (c) => rankRows([...c.ads].sort((a, b) => b.res - a.res).slice(0, 6), [['Anúncio', nameAd], ['Gasto', (r) => brl(r.spend)], ['Result.', (r) => num(r.res)], ['Custo', (r) => money0(ratio(r.spend, r.res))]]))
+  achart('top_ads', 'Relatórios', 'Anúncios com mais leads', 'Os criativos que mais trouxeram leads.', [2, 4], (c) => rankRows([...c.ads].sort((a, b) => b.res - a.res).slice(0, 6), [['Anúncio', nameAd], ['Gasto', (r) => brl(r.spend)], ['Leads', (r) => num(r.res)], ['Custo', (r) => money0(ratio(r.spend, r.res))]]))
 ];
 const AD_DEFAULT = [['spend', 1], ['results', 1], ['cpr', 1], ['roas', 1], ['daily', 4], ['sales', 1], ['profit', 1], ['cpa', 1], ['ctr', 1], ['results_day', 2], ['funnel', 2], ['top_results', 2], ['top_profit', 2]];

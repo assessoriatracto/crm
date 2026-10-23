@@ -1841,3 +1841,7 @@ input.inp.dp-native{display:none !important;}
 .en-newc .help{margin:0;}
 .en-newc .link{border:0;background:none;color:var(--amber-ink);font:inherit;cursor:pointer;padding:0;text-decoration:underline;}
 @media (max-width:560px){.en-origin{grid-template-columns:repeat(2,minmax(0,1fr));} .en-contact{flex-direction:column;}}
+/* números do painel no mesmo padrão dos outros indicadores (sem negrito) */
+.ow .wk-v{font-size:28px;font-weight:400;line-height:1.1;letter-spacing:-.01em;}
+.ow .wk-l{font-size:13px;color:var(--gray-2);}
+@media (max-width:760px){.ow .wk-v{font-size:22px;}}
