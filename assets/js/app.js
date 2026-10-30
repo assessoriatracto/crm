@@ -2,19 +2,20 @@ import { DB, LIVE, CONFIGURED } from '@shared/db.js';
 import {
   go, routeName, S, $, $$, esc, ICON, FAT, COLORS, initials, isHot, stageOf, profileOf, labelOf, isInactive, isDue, fatShort, brl, pct, num,
   fmtPhone, fullDate, longDate, addedAt, ago, sourceLabel, formName, waLink, toast, fail, popover, closePop, menu, multiSelect,
-  modal, confirmBox, downloadCSV, dateRange, datePicker, dateBtn, daysToSale, fmtDays, renderTicket } from './util.js?v=2610301503';
-import { importModal } from './import.js?v=2610301503';
-import { renderDashboard } from './dashboard.js?v=2610301503';
-import { renderSettings } from './admin.js?v=2610301503';
-import { renderIntegrations, renderPixel, leadMetaEvents, statusPill } from './integrations.js?v=2610301503';
-import { renderRecovery, loadPartials } from './recovery.js?v=2610301503';
-import { renderFollowup, followupDueCount } from './followup.js?v=2610301503';
-import { renderTasks, refreshTasksBadge } from './tasks.js?v=2610301503';
-import { showSignIn, showSignUp, showForgot, showReset, showMfa, showPending, watchIdle, AUTH_ROUTES } from './auth.js?v=2610301503';
-import { SERVICES, PLANS, planMonths, planFactor, VALUE_LABEL, contractFields, bindContract } from './contract.js?v=2610301503';
-import { openProfile, renderProfile } from './profile.js?v=2610301503';
-import { renderBuilder } from './builder.js?v=2610301503';
-import { renderFinance, renderAds } from './finance.js?v=2610301503';
+  modal, confirmBox, downloadCSV, dateRange, datePicker, dateBtn, daysToSale, fmtDays, renderTicket } from './util.js?v=2610302026';
+import { importModal } from './import.js?v=2610302026';
+import { renderDashboard } from './dashboard.js?v=2610302026';
+import { renderSettings } from './admin.js?v=2610302026';
+import { renderIntegrations, renderPixel, leadMetaEvents, statusPill } from './integrations.js?v=2610302026';
+import { renderRecovery, loadPartials } from './recovery.js?v=2610302026';
+import { renderFollowup, followupDueCount } from './followup.js?v=2610302026';
+import { renderTasks, refreshTasksBadge } from './tasks.js?v=2610302026';
+import { renderAtendimento } from './atendimento.js?v=2610302026';
+import { showSignIn, showSignUp, showForgot, showReset, showMfa, showPending, watchIdle, AUTH_ROUTES } from './auth.js?v=2610302026';
+import { SERVICES, PLANS, planMonths, planFactor, VALUE_LABEL, contractFields, bindContract } from './contract.js?v=2610302026';
+import { openProfile, renderProfile } from './profile.js?v=2610302026';
+import { renderBuilder } from './builder.js?v=2610302026';
+import { renderFinance, renderAds } from './finance.js?v=2610302026';
 
 // ============================================================
 // preferências locais (por navegador)
@@ -93,7 +94,9 @@ async function boot() {
     clearTimeout(boot._t);
     boot._t = setTimeout(async () => {
       if (table === 'partial_leads') { await refreshPartialsBadge(); refreshFuBadge(); if (['recuperacao', 'followup'].includes(routeName())) route(); return; }
-      await loadAll(false); route();
+      await loadAll(false);
+      // no Atendimento a conversa aberta não pode ser redesenhada do zero: só atualiza os dados do lead
+      if (routeName() === 'atendimento') { refreshNewBadge(); refreshFuBadge(); window.dispatchEvent(new Event('tracto:leads-updated')); } else route();
     }, 400);
   });
   window.addEventListener('tracto:reload-leads', async () => { await loadAll(false); });
@@ -111,7 +114,7 @@ window.addEventListener('popstate', () => window.dispatchEvent(new Event('tracto
 if (LIVE) DB.onAuth((event) => { if (event === 'PASSWORD_RECOVERY') { go('redefinir', { replace: true }); } if (event === 'SIGNED_OUT' && started) location.reload(); });
 
 // o menu mostra só o que o papel permite (o banco também bloqueia)
-const ROLE_ROUTES = { admin: null, gestor: ['leads', 'followup', 'tarefas', 'recuperacao', 'dashboard', 'financeiro', 'campanhas', 'formularios', 'ajustes', 'perfil'], sdr: ['leads', 'followup', 'tarefas', 'recuperacao', 'dashboard', 'ajustes', 'perfil'] };
+const ROLE_ROUTES = { admin: null, gestor: ['leads', 'atendimento', 'followup', 'tarefas', 'recuperacao', 'dashboard', 'financeiro', 'campanhas', 'formularios', 'ajustes', 'perfil'], sdr: ['leads', 'atendimento', 'followup', 'tarefas', 'recuperacao', 'dashboard', 'ajustes', 'perfil'] };
 export const can = (routeName) => !ROLE_ROUTES[S.me?.role || 'sdr'] || ROLE_ROUTES[S.me?.role || 'sdr'].includes(routeName);
 function applyRole() {
   $$('.side a[data-route]').forEach((a) => { a.hidden = !can(a.dataset.route); });
@@ -152,7 +155,7 @@ syncSide();
 
 // mobile: barra inferior só com o essencial; o resto fica em "Mais"
 const M_PRIMARY = ['dashboard', 'leads', 'followup', 'tarefas'];
-const M_LABEL = { leads: 'Leads', followup: 'Follow-up', tarefas: 'Tarefas', recuperacao: 'Recuperar', dashboard: 'Dashboard', financeiro: 'Financeiro', campanhas: 'Campanhas', formularios: 'Formulários', integracoes: 'Integrações', pixel: 'Pixel', ajustes: 'Ajustes' };
+const M_LABEL = { leads: 'Leads', atendimento: 'WhatsApp', followup: 'Follow-up', tarefas: 'Tarefas', recuperacao: 'Recuperar', dashboard: 'Dashboard', financeiro: 'Financeiro', campanhas: 'Campanhas', formularios: 'Formulários', integracoes: 'Integrações', pixel: 'Pixel', ajustes: 'Ajustes' };
 $$('.side a[data-route]').forEach((a) => { a.dataset.m = M_LABEL[a.dataset.route] || ''; a.classList.toggle('m-sec', !M_PRIMARY.includes(a.dataset.route)); });
 $('[data-more]').dataset.m = 'Mais';
 function openMore() {
@@ -265,6 +268,7 @@ function route() {
   else if (r === 'recuperacao') renderRecovery(view).then(refreshPartialsBadge);
   else if (r === 'followup') renderFollowup(view).then(refreshFuBadge);
   else if (r === 'tarefas') renderTasks(view);
+  else if (r === 'atendimento') renderAtendimento(view);
   else renderLeads();
 }
 export const rerender = route;

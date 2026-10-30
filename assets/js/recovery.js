@@ -1,8 +1,8 @@
 // Aba "Recuperação": formulários começados e não concluídos (salvos automaticamente a cada resposta)
 import { DB, LIVE } from '@shared/db.js';
 import { formPath } from '@shared/forms.js';
-import { loadSteps, stepsOf, fillMsg } from './followup.js?v=2610301503';
-import { go, S, $, $$, esc, ICON, initials, fmtPhone, fullDate, ago, num, pct, toast, fail, modal, confirmBox, renderTicket } from './util.js?v=2610301503';
+import { loadSteps, stepsOf, fillMsg } from './followup.js?v=2610302026';
+import { go, S, $, $$, esc, ICON, initials, fmtPhone, fullDate, ago, num, pct, toast, fail, modal, confirmBox, renderTicket } from './util.js?v=2610302026';
 
 const SITE = window.TRACTO_CONFIG?.siteUrl || 'https://assessoriatracto.com.br';
 const STATUS = {

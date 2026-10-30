@@ -2144,7 +2144,7 @@ begin
 end $$;
 
 -- versão do banco (diagnóstico: dá pra conferir de fora se a última atualização entrou)
-create or replace function public.schema_version() returns text language sql immutable as $$ select '2026-10-30.2'::text $$;
+create or replace function public.schema_version() returns text language sql immutable as $$ select '2026-10-30.3'::text $$;
 grant execute on function public.schema_version() to anon, authenticated;
 
 -- quantidade de uma ação no "actions" dos insights da Meta (null se não vier)
@@ -2617,6 +2617,44 @@ create policy "excluir" on public.tasks for delete to authenticated using (publi
 create policy "criar" on public.task_comments for insert to authenticated with check (public.is_team() and author_id = auth.uid());
 create policy "excluir" on public.task_comments for delete to authenticated using (public.is_manager() or author_id = auth.uid());
 revoke all on function public.tasks_before() from public, anon, authenticated;
+
+-- ============================================================
+-- 16c. WHATSAPP (Atendimento): avisos da ponte com a Evolution API
+-- A ponte (Railway) chama wa_event com uma senha interna; aqui fica só o hash dela.
+-- ============================================================
+alter table public.leads add column if not exists wa_last_in_at timestamptz;   -- última mensagem recebida do lead
+alter table public.leads add column if not exists wa_last_out_at timestamptz;  -- última mensagem enviada pra ele
+
+create or replace function public.wa_event(p_secret text, p_phone text, p_from_me boolean, p_text text, p_name text default null)
+returns void language plpgsql security definer set search_path = public as $$
+declare d text := regexp_replace(coalesce(p_phone, ''), '\D', '', 'g'); l record; ddd text;
+begin
+  if encode(sha256(convert_to(coalesce(p_secret, ''), 'UTF8')), 'hex') <> 'cb5332946fd68f0bde32a8f87980b2581603d0eb49c6e2bd81a5c7019de6f028' then raise exception 'não autorizado'; end if;
+  if length(d) < 10 then return; end if;
+  ddd := case when d like '55%' then substr(d, 3, 2) else null end;
+  -- mesmo número com ou sem o 9 da frente (o WhatsApp às vezes tira)
+  select * into l from public.leads x
+   where x.whatsapp is not null and right(regexp_replace(x.whatsapp, '\D', '', 'g'), 8) = right(d, 8)
+     and (ddd is null or substr(regexp_replace(x.whatsapp, '\D', '', 'g'), 3, 2) = ddd)
+   order by x.created_at desc limit 1;
+  if not found then return; end if;
+  if p_from_me then
+    update public.leads set wa_last_out_at = now(),
+      fu_last_at = case when fu_status in ('respondeu', 'negociacao') then now() else fu_last_at end
+    where id = l.id;
+  else
+    update public.leads set wa_last_in_at = now(), last_activity_at = now(),
+      fu_status = case when fu_status is null or fu_status = 'sem_resposta' then 'respondeu' else fu_status end,
+      fu_next_at = case when fu_status is null or fu_status = 'sem_resposta' then now() + interval '1 day' else fu_next_at end
+    where id = l.id;
+    if l.fu_status is null or l.fu_status = 'sem_resposta' then
+      insert into public.lead_activity (lead_id, type, body, author_name)
+      values (l.id, 'followup', left('Respondeu no WhatsApp' || coalesce(': "' || nullif(p_text, '') || '"', ''), 1000), 'WhatsApp');
+    end if;
+  end if;
+end $$;
+revoke all on function public.wa_event(text, text, boolean, text, text) from public;
+grant execute on function public.wa_event(text, text, boolean, text, text) to anon, authenticated;
 
 -- ============================================================
 -- 17. REALTIME E AGENDAMENTOS

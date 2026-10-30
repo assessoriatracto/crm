@@ -1,9 +1,9 @@
 // Follow-up: todos os leads em aberto (e formulários incompletos) num lugar só, com cadência de mensagens
 // por segmento (Marketing e Marketplace), status de cada conversa e quem precisa de um novo contato hoje.
 import { DB, LIVE } from '@shared/db.js';
-import { go, S, esc, ICON, initials, fmtPhone, ago, num, toast, fail, modal, confirmBox, menu, popover, closePop, renderTicket, stageOf, profileOf } from './util.js?v=2610301503';
-import { resumeLink } from './recovery.js?v=2610301503';
-import { serviceName } from './contract.js?v=2610301503';
+import { go, S, esc, ICON, initials, fmtPhone, ago, num, toast, fail, modal, confirmBox, menu, popover, closePop, renderTicket, stageOf, profileOf } from './util.js?v=2610302026';
+import { resumeLink } from './recovery.js?v=2610302026';
+import { serviceName } from './contract.js?v=2610302026';
 
 const DAY = 86400000;
 // "agora", "há 5 min", "há 2 d" ou a data
@@ -259,7 +259,7 @@ function moreMenu(anchor, it, done) {
     { label: 'Reagendar próximo contato', action: () => reschedule(anchor, it, done) },
     ...(['novo', 'sem_resposta'].includes(it.status) && it.step < stepsOf(it.seg).length ? [{ label: `Pular toque ${it.step + 1}`, action: async () => { const nx = stepsOf(it.seg)[it.step + 1]; try { await patchItem(it, { fu_step: it.step + 1, fu_next_at: nx ? new Date().toISOString() : null }); toast('Toque pulado'); } catch (e) { fail(e); } done(); } }] : []),
     ...(it.step > 0 || it.status !== 'novo' ? [{ label: 'Reiniciar cadência', action: async () => { try { await patchItem(it, isLead ? { fu_step: 0, fu_status: null, fu_next_at: new Date().toISOString() } : { fu_step: 0, fu_next_at: new Date().toISOString() }); log(it, 'Follow-up: cadência reiniciada'); toast('Cadência reiniciada'); } catch (e) { fail(e); } done(); } }] : []),
-    { label: 'Criar tarefa', action: async () => { const { taskModal } = await import('./tasks.js?v=2610301503'); taskModal({ title: `Retornar ${it.nome || ''}`.trim(), lead_id: isLead ? it.id : null, due_date: new Date().toISOString().slice(0, 10), assignee_id: S.me?.id || null }); } },
+    { label: 'Criar tarefa', action: async () => { const { taskModal } = await import('./tasks.js?v=2610302026'); taskModal({ title: `Retornar ${it.nome || ''}`.trim(), lead_id: isLead ? it.id : null, due_date: new Date().toISOString().slice(0, 10), assignee_id: S.me?.id || null }); } },
     { label: isLead ? 'Abrir lead' : 'Abrir em Recuperação', action: () => openItem(it) },
     { sep: true },
     isLead
