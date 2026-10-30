@@ -1,7 +1,7 @@
 // Painel personalizável (no padrão do Nox): catálogo de blocos (indicadores, gráficos, relatórios),
 // a pessoa escolhe quais aparecem, a ordem e o tamanho. Fica salvo no perfil (profiles.prefs[key]).
 import { DB } from '@shared/db.js';
-import { S, esc, ICON, toast, fail, modal } from './util.js?v=2610230946';
+import { S, esc, ICON, toast, fail, modal } from './util.js?v=2610300939';
 
 const GROUPS = ['Indicadores', 'Gráficos', 'Relatórios'];
 const I = (d) => `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${d}</svg>`;
@@ -111,23 +111,23 @@ const short = (v) => (Math.abs(v) >= 1000 ? 'R$' + (v / 1000).toLocaleString('pt
 const nice = (v) => { const p = Math.pow(10, Math.floor(Math.log10(Math.max(1, v)))); return [1, 2, 2.5, 5, 10].map((m) => m * p).find((m) => m >= v) || v; };
 
 // colunas lado a lado com degradê. series: [{key, label, cls:'hot'|'rest'}], data: [{d, ...}], fmt(v), tip(x) -> html
-export function gradBars(host, { data, series, fmt = short, tip }) {
+export function gradBars(host, { data, series, fmt = short, tip, label = (x) => `${x.d.slice(8, 10)}/${x.d.slice(5, 7)}`, faded = () => false, height = 230, aria = 'por dia' }) {
   const draw = () => {
-    const W = Math.max(300, host.clientWidth); const H = 230; const padL = 54; const padB = 24; const padT = 12; const id = 'g' + (++gid);
+    const W = Math.max(300, host.clientWidth); const H = height; const padL = 54; const padB = 24; const padT = 12; const id = 'g' + (++gid);
     const max = nice(Math.max(1, ...data.flatMap((x) => series.map((s) => x[s.key] || 0))));
     const iw = W - padL; const ih = H - padB - padT; const bw = iw / Math.max(1, data.length); const n = series.length;
-    const barW = Math.max(2, Math.min(16, (bw - 6) / n)); const gap = 2;
+    const barW = Math.max(2, Math.min(data.length <= 15 ? 24 : 16, (bw - 10) / n)); const gap = 2;
     const y = (v) => padT + ih - (v / max) * ih;
     const every = Math.ceil(data.length / Math.max(2, Math.floor(iw / 62)));
-    const bar = (x, v, cls, i) => { if (!v) return ''; const top = y(v); const h = padT + ih - top; const rr = Math.min(4, barW / 2, h); return `<path class="gb ${cls}" data-i="${i}" fill="url(#${id}-${cls})" d="M${x},${padT + ih} V${top + rr} Q${x},${top} ${x + rr},${top} H${x + barW - rr} Q${x + barW},${top} ${x + barW},${top + rr} V${padT + ih} Z"/>`; };
-    host.innerHTML = `<svg class="gchart" viewBox="0 0 ${W} ${H}" height="${H}" role="img" aria-label="${esc(series.map((s) => s.label).join(' e '))} por dia">
+    const bar = (x, v, cls, i) => { if (!v) return ''; const top = y(v); const h = padT + ih - top; const rr = Math.min(4, barW / 2, h); return `<path class="gb ${cls}${faded(data[i]) ? ' fc' : ''}" data-i="${i}" fill="url(#${id}-${cls})" d="M${x},${padT + ih} V${top + rr} Q${x},${top} ${x + rr},${top} H${x + barW - rr} Q${x + barW},${top} ${x + barW},${top + rr} V${padT + ih} Z"/>`; };
+    host.innerHTML = `<svg class="gchart" viewBox="0 0 ${W} ${H}" height="${H}" role="img" aria-label="${esc(series.map((s) => s.label).join(' e '))} ${aria}">
       <defs>
         <linearGradient id="${id}-hot" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#FFD27A"/><stop offset=".55" stop-color="#FFAD00"/><stop offset="1" stop-color="#B57600" stop-opacity=".85"/></linearGradient>
         <linearGradient id="${id}-rest" x1="0" y1="0" x2="0" y2="1"><stop offset="0" style="stop-color:var(--gb-rest-top)"/><stop offset="1" style="stop-color:var(--gb-rest-bot)"/></linearGradient>
       </defs>
       ${[0, max / 2, max].map((t) => `<line class="gl" x1="${padL}" x2="${W}" y1="${y(t)}" y2="${y(t)}"/><text class="ax" x="${padL - 8}" y="${y(t) + 4}" text-anchor="end">${fmt(t)}</text>`).join('')}
       ${data.map((x, i) => { const cx = padL + i * bw + bw / 2; const tot = n * barW + (n - 1) * gap; return series.map((s, k) => bar(cx - tot / 2 + k * (barW + gap), x[s.key] || 0, s.cls, i)).join(''); }).join('')}
-      ${data.map((x, i) => (i % every === 0 ? `<text class="ax" x="${padL + i * bw + bw / 2}" y="${H - 6}" text-anchor="middle">${x.d.slice(8, 10)}/${x.d.slice(5, 7)}</text>` : '')).join('')}
+      ${data.map((x, i) => (i % every === 0 ? `<text class="ax" x="${padL + i * bw + bw / 2}" y="${H - 6}" text-anchor="middle">${esc(label(x))}</text>` : '')).join('')}
       ${data.map((x, i) => `<rect class="hit" data-i="${i}" x="${padL + i * bw}" y="${padT}" width="${bw}" height="${ih}"/>`).join('')}
     </svg><div class="ctip" hidden></div>`;
     const tipEl = host.querySelector('.ctip'); const svg = host.querySelector('svg');

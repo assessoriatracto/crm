@@ -1,7 +1,7 @@
 // Dashboard: visão executiva e enxuta da saúde do negócio.
 // O detalhe (campanhas, lançamentos, gráficos por dia) fica no Financeiro e na Central de leads.
 import { DB } from '@shared/db.js';
-import { PERIOD, REVENUE, setRevenueMode, revenueToggle, dateRange, datePicker, dateBtn, S, $, $$, esc, ICON, brl, num, isDue, isInactive, fail, fmtDays, renderTicket } from './util.js?v=2610230946';
+import { PERIOD, REVENUE, setRevenueMode, revenueToggle, dateRange, datePicker, dateBtn, S, $, $$, esc, ICON, brl, num, isDue, isInactive, fail, fmtDays, renderTicket } from './util.js?v=2610300939';
 
 const D = PERIOD;
 const DAY = 86400000;
@@ -23,14 +23,14 @@ export function contracts(entries, months) {
     out.push({
       id: e.id, kind: 'entry', entry: e, lead: l, pipeline: !!(e.from_pipeline || l), name: e.description || l?.nome || 'Venda', start: new Date(e.date + 'T12:00'),
       monthly: e.plan === 'unico' ? Number(e.amount) : Number(e.monthly_amount || (e.months ? e.amount / e.months : e.amount)), months: e.plan === 'unico' ? 1 : Number(e.months || months),
-      plan: e.plan || null, service: e.service || null, value: Number(e.amount) || null, first: e.first_amount != null ? Number(e.first_amount) : null,
+      plan: e.plan || null, service: e.service || null, value: Number(e.amount) || null, first: e.first_amount != null ? Number(e.first_amount) : null, firstDue: e.first_due || null, payDay: e.pay_day || null,
       canceled: e.canceled_at ? new Date(e.canceled_at + 'T12:00') : null, reason: e.cancel_reason || '',
       origin: o.utm_campaign || o.utm_id ? o : lo, sent: !!e.meta_sent_at
     });
   });
   S.leads.filter((l) => l.won_at && Number(l.valor) > 0 && !withEntry.has(l.id)).forEach((l) => out.push({
     id: l.id, kind: 'lead', lead: l, pipeline: true, name: l.nome, start: new Date(l.won_at), monthly: Number(l.valor), months: l.plan === 'unico' ? 1 : Number(l.contract_months || months),
-    plan: l.plan || null, service: l.service || null, value: Number(l.contract_value) || null, first: l.first_amount != null ? Number(l.first_amount) : null,
+    plan: l.plan || null, service: l.service || null, value: Number(l.contract_value) || null, first: l.first_amount != null ? Number(l.first_amount) : null, firstDue: l.first_due || null, payDay: l.pay_day || null,
     canceled: l.canceled_at ? new Date(l.canceled_at + 'T12:00') : null, reason: l.cancel_reason || '', origin: org(l), sent: true
   }));
   out.forEach((c) => {
@@ -44,16 +44,22 @@ export function contracts(entries, months) {
   return out;
 }
 // quanto entra de cada contrato em [a, b]: valor inteiro na venda (marketplace/único) ou mensalidade na data de cada mês
-export function received(c, a, b) {
-  if (c.upfront) return c.start >= a && c.start <= b ? c.value : 0;
-  let sum = 0;
+// parcelas do contrato entre a e b: [{date, amount, n, of}]. 1º pagamento na data informada (ou na venda);
+// marketplace e único: valor inteiro nessa data; marketing: mensalidade todo mês no dia do vencimento
+export function payments(c, a, b) {
+  const first = c.firstDue ? new Date(c.firstDue + 'T12:00') : new Date(c.start.getFullYear(), c.start.getMonth(), c.start.getDate(), 12);
+  if (c.upfront) return first >= a && first <= b ? [{ date: first, amount: c.value, n: 1, of: 1 }] : [];
+  const day = c.payDay || first.getDate();
+  const total = c.plan === 'mensal' ? null : c.months; // mensal renova até cancelar; os demais (e os antigos sem tipo) têm duração fixa
+  const out = [];
   for (let k = 0; k < 1200; k++) {
-    const d = new Date(c.start.getFullYear(), c.start.getMonth() + k, Math.min(c.start.getDate(), new Date(c.start.getFullYear(), c.start.getMonth() + k + 1, 0).getDate()), 12);
-    if (d > b || d >= c.end || (c.canceled && d >= c.canceled)) break;
-    if (d >= a) sum += k === 0 && c.first != null ? c.first : c.monthly; // 1ª mensalidade pode ser diferente
+    const d = k === 0 ? first : new Date(first.getFullYear(), first.getMonth() + k, Math.min(day, new Date(first.getFullYear(), first.getMonth() + k + 1, 0).getDate()), 12);
+    if (d > b || (total != null && k >= total) || (c.plan === 'mensal' && d >= c.end) || (c.canceled && d >= c.canceled)) break;
+    if (d >= a) out.push({ date: d, amount: k === 0 && c.first != null ? c.first : c.monthly, n: k + 1, of: total });
   }
-  return sum;
+  return out;
 }
+export const received = (c, a, b) => payments(c, a, b).reduce((s, p) => s + p.amount, 0);
 // a venda veio de anúncio? (tudo que não foi marcado como indicação/orgânico; a captação da Tracto é por anúncio)
 // valor que a venda conta no faturamento: contrato inteiro, ou 1ª mensalidade (marketplace e único: sempre o valor inteiro)
 export const saleRevenue = (c, mode = REVENUE.mode) => (mode === 'contrato' || c.upfront ? c.value : c.first ?? c.monthly);

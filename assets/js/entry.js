@@ -1,8 +1,8 @@
 // Lançamento único do Financeiro: Venda, Outra receita ou Despesa.
 // A venda é a mesma da Central de leads: ligada a um contato, o banco atualiza o lead (valor, contrato, data e estágio) e vice-versa.
 import { DB } from '@shared/db.js';
-import { S, esc, ICON, toast, fail, modal, confirmBox } from './util.js?v=2610230946';
-import { contractFields, bindContract } from './contract.js?v=2610230946';
+import { S, esc, ICON, toast, fail, modal, confirmBox } from './util.js?v=2610300939';
+import { contractFields, bindContract } from './contract.js?v=2610300939';
 
 const SALE_CATS = ['Venda (contrato)', 'Contrato'];
 const CATS = { despesa: ['Ferramentas', 'Equipe', 'Comissões', 'Impostos', 'Tráfego (outras plataformas)', 'Outros'], receita: ['Setup', 'Consultoria', 'Outros'] };
@@ -46,7 +46,7 @@ export function entryModal(done, entry = null, opts = {}) {
           <p class="help">O contato entra na Central de leads já como venda, com o nome do cliente acima. <button type="button" class="link" data-cancel-newc>Buscar um contato existente</button></p>
         </div>
         <p class="help" data-contact-help>Escolha da lista ou digite o WhatsApp ou o e-mail: se o contato não existir, ele é cadastrado na hora. Sem contato, a venda fica só no Financeiro.</p></div>`}
-      ${contractFields({ service: entry?.service, plan: entry?.plan || (isSale(entry) ? ({ 6: 'semestral', 12: 'anual' })[entry.months] || 'mensal' : 'mensal'), months: entry?.months, monthly: entry?.monthly_amount, total: isSale(entry) ? entry.amount : null, first: entry?.first_amount })}
+      ${contractFields({ service: entry?.service, plan: entry?.plan || (isSale(entry) ? ({ 6: 'semestral', 12: 'anual' })[entry.months] || 'mensal' : 'mensal'), months: entry?.months, monthly: entry?.monthly_amount, total: isSale(entry) ? entry.amount : null, first: entry?.first_amount, firstDue: entry?.first_due, payDay: entry?.pay_day })}
       <div class="row" data-cancel-row><label class="lbl" for="enCan">Contrato cancelado em <span class="muted" style="text-transform:none;letter-spacing:0">(opcional, entra no churn)</span></label><input class="inp" type="date" id="enCan" data-canceled value="${entry?.canceled_at || ''}"></div>
     </div>
 
@@ -133,7 +133,7 @@ export function entryModal(done, entry = null, opts = {}) {
         const amount = parse($('[data-amount]').value); const date = $('[data-date]').value;
         if (!date) return toast('Informe a data', true);
         if (!(amount > 0)) return toast('Informe um valor', true);
-        row = { kind: type, category: $('[data-cat]').value, description: $('[data-desc]').value.trim() || null, date, amount, months: null, monthly_amount: null, first_amount: null, service: null, plan: null,
+        row = { kind: type, category: $('[data-cat]').value, description: $('[data-desc]').value.trim() || null, date, amount, months: null, monthly_amount: null, first_amount: null, first_due: null, pay_day: null, service: null, plan: null,
           expense_type: type === 'despesa' ? (fixedEntry ? 'fixa' : 'variavel') : null };
       }
       if (entry) row.id = entry.id; else row.created_by = S.me?.id?.startsWith('demo') ? null : S.me?.id;

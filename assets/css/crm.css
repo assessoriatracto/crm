@@ -1845,3 +1845,28 @@ input.inp.dp-native{display:none !important;}
 .ow .wk-v{font-size:28px;font-weight:400;line-height:1.1;letter-spacing:-.01em;}
 .ow .wk-l{font-size:13px;color:var(--gray-2);}
 @media (max-width:760px){.ow .wk-v{font-size:22px;}}
+
+/* Fluxo de caixa: gráfico + agenda de recebimentos */
+.cf-grid{display:grid;grid-template-columns:minmax(0,1.6fr) minmax(0,1fr);gap:12px;margin-top:12px;align-items:stretch;}
+.cf-grid > .panel{margin:0;padding:18px 20px;display:flex;flex-direction:column;min-width:0;}
+.cf-up-total{font-size:18px;font-weight:400;font-variant-numeric:tabular-nums;white-space:nowrap;}
+.cf-list{list-style:none;margin:12px 0 0;padding:0;display:flex;flex-direction:column;}
+.cf-list li{display:grid;grid-template-columns:44px minmax(0,1fr) auto;gap:12px;align-items:center;padding:10px 0;border-top:1px solid var(--c-line-soft);}
+.cf-list li:first-child{border-top:0;}
+.cf-date{display:flex;flex-direction:column;align-items:center;justify-content:center;height:44px;border-radius:10px;background:var(--c-line-soft);line-height:1.1;}
+.cf-date b{font-size:16px;font-weight:600;}
+.cf-date span{font-size:10.5px;color:var(--gray-3);text-transform:uppercase;letter-spacing:.04em;}
+.cf-list li.today .cf-date{background:var(--amber-soft);color:var(--amber-ink);}
+.cf-list li.today .cf-date span{color:var(--amber-ink);}
+.cf-name{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.cf-meta{font-size:12px;color:var(--gray-3);display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-top:2px;}
+.cf-meta .pill{font-size:10.5px;padding:1px 7px;}
+.cf-amt{font-variant-numeric:tabular-nums;white-space:nowrap;}
+.cf-more{margin-top:8px;align-self:flex-start;}
+.cf-empty{flex:1;display:flex;gap:12px;align-items:center;justify-content:center;text-align:left;color:var(--gray-2);font-size:13.5px;padding:24px 8px;line-height:1.5;}
+.cf-empty svg{flex:none;color:var(--gray-3);}
+.gchart .gb.fc{opacity:.42;}
+.gchart .gb.fc.dim{opacity:.18;}
+.ctr .ctr-pay.one{grid-template-columns:1fr;}
+@media (max-width:1100px){ .cf-grid{grid-template-columns:1fr;} }
+@media (max-width:760px){ .cf-grid > .panel{padding:16px;} }

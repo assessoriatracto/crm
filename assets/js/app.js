@@ -2,17 +2,17 @@ import { DB, LIVE, CONFIGURED } from '@shared/db.js';
 import {
   go, routeName, S, $, $$, esc, ICON, FAT, COLORS, initials, isHot, stageOf, profileOf, labelOf, isInactive, isDue, fatShort, brl, pct, num,
   fmtPhone, fullDate, longDate, addedAt, ago, sourceLabel, formName, waLink, toast, fail, popover, closePop, menu, multiSelect,
-  modal, confirmBox, downloadCSV, dateRange, datePicker, dateBtn, daysToSale, fmtDays, renderTicket } from './util.js?v=2610230946';
-import { importModal } from './import.js?v=2610230946';
-import { renderDashboard } from './dashboard.js?v=2610230946';
-import { renderSettings } from './admin.js?v=2610230946';
-import { renderIntegrations, renderPixel, leadMetaEvents, statusPill } from './integrations.js?v=2610230946';
-import { renderRecovery, loadPartials } from './recovery.js?v=2610230946';
-import { showSignIn, showSignUp, showForgot, showReset, showMfa, showPending, watchIdle, AUTH_ROUTES } from './auth.js?v=2610230946';
-import { SERVICES, PLANS, planMonths, planFactor, VALUE_LABEL, contractFields, bindContract } from './contract.js?v=2610230946';
-import { openProfile, renderProfile } from './profile.js?v=2610230946';
-import { renderBuilder } from './builder.js?v=2610230946';
-import { renderFinance, renderAds } from './finance.js?v=2610230946';
+  modal, confirmBox, downloadCSV, dateRange, datePicker, dateBtn, daysToSale, fmtDays, renderTicket } from './util.js?v=2610300939';
+import { importModal } from './import.js?v=2610300939';
+import { renderDashboard } from './dashboard.js?v=2610300939';
+import { renderSettings } from './admin.js?v=2610300939';
+import { renderIntegrations, renderPixel, leadMetaEvents, statusPill } from './integrations.js?v=2610300939';
+import { renderRecovery, loadPartials } from './recovery.js?v=2610300939';
+import { showSignIn, showSignUp, showForgot, showReset, showMfa, showPending, watchIdle, AUTH_ROUTES } from './auth.js?v=2610300939';
+import { SERVICES, PLANS, planMonths, planFactor, VALUE_LABEL, contractFields, bindContract } from './contract.js?v=2610300939';
+import { openProfile, renderProfile } from './profile.js?v=2610300939';
+import { renderBuilder } from './builder.js?v=2610300939';
+import { renderFinance, renderAds } from './finance.js?v=2610300939';
 
 // ============================================================
 // preferências locais (por navegador)
@@ -447,7 +447,7 @@ function saleModal(l) {
   modal(`<h3>Registrar venda</h3>
     <p class="help" style="margin-top:-4px"><b>${esc(l.nome)}</b> virou cliente. Preencha o contrato pra venda entrar no faturamento, no dashboard e ir pra Meta com o valor certo.</p>
     <div class="row"><label class="lbl" for="svD">Venda realizada em</label><input class="inp" type="date" id="svD" data-d value="${localDay(l.won_at || new Date().toISOString())}" max="${localDay(new Date().toISOString())}" required></div>
-    ${contractFields({ service: l.service, plan: l.plan, months: l.contract_months, monthly: l.valor, first: l.first_amount }, { defaultMonths: 12 })}
+    ${contractFields({ service: l.service, plan: l.plan, months: l.contract_months, monthly: l.valor, first: l.first_amount, firstDue: l.first_due, payDay: l.pay_day }, { defaultMonths: 12 })}
     <div class="modal-foot"><button class="b" data-close>Preencher depois</button><button class="b b-primary" data-ok>Salvar venda</button></div>`, (m, close) => {
     const ctr = bindContract(m);
     m.querySelector('[data-ok]').addEventListener('click', async (e) => {
@@ -455,7 +455,7 @@ function saleModal(l) {
       const v = ctr.read(); if (v.error) return toast(v.error, true);
       e.currentTarget.disabled = true;
       close();
-      await patch([l.id], { valor: v.monthly_amount, first_amount: v.first_amount ?? null, contract_value: ['semestral', 'anual', 'unico'].includes(v.plan) ? v.amount : null, contract_months: v.plan === 'mensal' ? v.months : v.months, service: v.service, plan: v.plan, won_at: new Date(d + 'T12:00').toISOString() }, 'Venda registrada');
+      await patch([l.id], { valor: v.monthly_amount, first_amount: v.first_amount ?? null, first_due: v.first_due ?? null, pay_day: v.pay_day ?? null, contract_value: ['semestral', 'anual', 'unico'].includes(v.plan) ? v.amount : null, contract_months: v.plan === 'mensal' ? v.months : v.months, service: v.service, plan: v.plan, won_at: new Date(d + 'T12:00').toISOString() }, 'Venda registrada');
     });
   });
 }
@@ -824,6 +824,8 @@ function renderDrawer() {
           ${!l.plan || l.plan === 'mensal' ? `<div><label class="lbl">Previsão (meses)</label><input class="inp" data-field="contract_months" inputmode="numeric" value="${l.contract_months ?? ''}" placeholder="12"></div>` : ''}</div>
         ${!l.plan || l.plan === 'mensal' ? `<div style="margin-top:10px"><label class="lbl">1ª mensalidade (R$) <span class="muted" style="text-transform:none;letter-spacing:0">(opcional, se for diferente)</span></label><input class="inp" data-field="first_amount" inputmode="decimal" value="${l.first_amount != null ? Number(l.first_amount).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : ''}" placeholder="Igual às demais"></div>` : ''}
         ${l.valor && ['semestral', 'anual'].includes(l.plan) ? `<p class="help" style="margin:6px 0 0">Equivale a ${brl2(Number(l.contract_value || l.valor * planFactor(l.plan)) / planFactor(l.plan))} por mês, por ${planMonths(l.plan)} meses.</p>` : ''}
+        ${l.won_at ? `<div class="grid2" style="margin-top:10px"><div><label class="lbl">1º pagamento em</label><input class="inp" type="date" data-field="first_due" value="${l.first_due || ''}"></div>
+          ${l.plan === 'unico' || l.service === 'marketplace' ? '<div></div>' : `<div><label class="lbl">Vence todo dia</label><input class="inp" data-field="pay_day" inputmode="numeric" maxlength="2" value="${l.pay_day || ''}" placeholder="Dia do 1º pagamento"></div>`}</div>` : ''}
         ${l.won_at ? `<div class="grid2" style="margin-top:10px"><div><label class="lbl">Venda realizada em</label><input class="inp" type="date" data-field="won_at" value="${localDay(l.won_at)}" max="${localDay(new Date().toISOString())}"></div>
           ${l.plan !== 'unico' ? `<div><label class="lbl">Contrato cancelado em</label><input class="inp" type="date" data-field="canceled_at" value="${l.canceled_at || ''}"></div>` : ''}</div>` : ''}
         <p class="ttc-line">${l.won_at ? (daysToSale(l) < 1 ? 'Virou venda <b>no mesmo dia</b> em que chegou como lead' : `Virou venda <b>${fmtDays(daysToSale(l))}</b> depois de chegar como lead`) : ((Date.now() - new Date(l.created_at)) / 86400000 < 1 ? 'Chegou como lead <b>hoje</b>' : `Lead há <b>${fmtDays((Date.now() - new Date(l.created_at)) / 86400000)}</b>`)}</p>
@@ -922,6 +924,9 @@ drawer.addEventListener('change', async (e) => {
     v = v ? Number(v.replace(/[^\d,.-]/g, '').replace(/\./g, '').replace(',', '.')) : null;
     if (v !== null && (Number.isNaN(v) || v < 0)) return toast('Valor inválido', true);
     if (v === 0) v = null;
+  } else if (f === 'pay_day') {
+    v = v ? Math.round(Number(v.replace(/\D/g, ''))) : null;
+    if (v !== null && !(v >= 1 && v <= 31)) return toast('Dia do vencimento entre 1 e 31', true);
   } else if (f === 'won_at') {
     if (!v) return toast('Informe a data da venda', true);
     v = new Date(v + 'T12:00').toISOString();
@@ -937,7 +942,7 @@ drawer.addEventListener('change', async (e) => {
     extra = { contract_months: v ? planMonths(v, null) : null, ...(v === 'unico' ? { canceled_at: null } : {}), ...(v && v !== 'mensal' ? { first_amount: null } : {}),
       contract_value: monthly && (fac > 1) ? Math.round(monthly * fac * 100) / 100 : v === 'unico' && monthly ? Math.round(monthly * 100) / 100 : null };
   }
-  patch([S.openId], { [f]: v, ...extra }, f === 'valor' ? 'Valor salvo' : f === 'won_at' ? 'Data da venda atualizada' : f === 'first_amount' ? (v ? '1ª mensalidade salva' : '1ª mensalidade igual às demais') : f === 'canceled_at' ? (v ? 'Cancelamento registrado' : 'Cancelamento removido') : f === 'service' || f === 'plan' || f === 'contract_months' ? 'Contrato atualizado' : null);
+  patch([S.openId], { [f]: v, ...extra }, f === 'valor' ? 'Valor salvo' : f === 'won_at' ? 'Data da venda atualizada' : f === 'first_due' || f === 'pay_day' ? 'Data de pagamento salva' : f === 'first_amount' ? (v ? '1ª mensalidade salva' : '1ª mensalidade igual às demais') : f === 'canceled_at' ? (v ? 'Cancelamento registrado' : 'Cancelamento removido') : f === 'service' || f === 'plan' || f === 'contract_months' ? 'Contrato atualizado' : null);
 });
 drawer.addEventListener('click', async (e) => {
   if (e.target.closest('[data-d="real"]')) {

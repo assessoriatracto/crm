@@ -1,6 +1,6 @@
 // Campos de contrato usados em todo lugar que lança venda: serviço (marketing/marketplace),
 // tipo (mensal, semestral, anual, pagamento único), duração e valores.
-import { esc, brl } from './util.js?v=2610230946';
+import { esc, brl } from './util.js?v=2610300939';
 
 export const SERVICES = [['marketing', 'Marketing'], ['marketplace', 'Marketplace']];
 // meses padrão de cada tipo (mensal renova todo mês até cancelar; usa a previsão só pra estimar o valor do contrato)
@@ -21,7 +21,7 @@ export function contractTags(service, plan) {
 export const planFactor = (k) => ({ semestral: 6, anual: 12 })[k] || 1;
 export const VALUE_LABEL = { mensal: 'Mensalidade (R$)', semestral: 'Valor do semestre (R$)', anual: 'Valor anual (R$)', unico: 'Valor do pagamento (R$)' };
 
-// v = { service, plan, months, monthly, total, first }
+// v = { service, plan, months, monthly, total, first, firstDue, payDay }
 export function contractFields(v = {}, { defaultMonths = 12 } = {}) {
   const plan = v.plan || 'mensal';
   const months = plan === 'mensal' ? v.months || defaultMonths : planMonths(plan, defaultMonths);
@@ -37,6 +37,10 @@ export function contractFields(v = {}, { defaultMonths = 12 } = {}) {
       <div class="row" data-mo-row><label class="lbl" for="ctrMo">Previsão (meses)</label><input class="inp" id="ctrMo" data-mo inputmode="numeric" value="${months}"></div>
     </div>
     <div class="row" data-first-row><label class="lbl" for="ctrFirst">1ª mensalidade (R$) <span class="muted" style="text-transform:none;letter-spacing:0">(opcional, se for diferente das demais)</span></label><input class="inp" id="ctrFirst" data-first inputmode="decimal" placeholder="Igual às demais" value="${fmtN(v.first)}"></div>
+    <div class="grid2 ctr-pay">
+      <div class="row"><label class="lbl" for="ctrDue">1º pagamento em <span class="muted" style="text-transform:none;letter-spacing:0">(opcional)</span></label><input class="inp" type="date" id="ctrDue" data-due value="${v.firstDue || ''}" placeholder="Na data da venda"></div>
+      <div class="row" data-payday-row><label class="lbl" for="ctrDay">Vence todo dia</label><input class="inp" id="ctrDay" data-payday inputmode="numeric" maxlength="2" placeholder="Dia do 1º pagamento" value="${v.payDay || ''}"></div>
+    </div>
     <p class="help ctr-help" data-ctr-help></p>
   </div>`;
 }
@@ -59,8 +63,14 @@ export function bindContract(root) {
     }[p];
     const f = parse($('[data-first]').value);
     const calc = !(v > 0) ? '' : p === 'unico' ? '' : p === 'mensal' ? ` Contrato estimado: ${brl((f > 0 ? f + v * Math.max(0, (m || 0) - 1) : v * (m || 0)))}${f > 0 ? ` (1ª de ${brl(f)} + ${Math.max(0, (m || 0) - 1)} × ${brl(v)})` : ''}.` : ` Equivale a ${(v / planFactor(p)).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL', minimumFractionDigits: 2, maximumFractionDigits: 2 })} por mês.`;
-    $('[data-ctr-help]').textContent = base + calc;
+    const due = $('[data-due]').value; const day = Number($('[data-payday]').value) || (due ? Number(due.slice(8, 10)) : null);
+    const upfront = p === 'unico' || service === 'marketplace';
+    const pay = upfront ? (due ? ` Pagamento em ${due.slice(8, 10)}/${due.slice(5, 7)}.` : ' Pagamento na data da venda.')
+      : day ? ` Mensalidades todo dia ${day}${due ? `, a partir de ${due.slice(8, 10)}/${due.slice(5, 7)}` : ''}.` : ' Mensalidades no mesmo dia da venda, todo mês.';
+    $('[data-ctr-help]').textContent = base + calc + pay;
   };
+  // marketplace e pagamento único pagam uma vez: não tem dia de vencimento mensal
+  const payLayout = () => { $('[data-payday-row]').hidden = plan() === 'unico' || service === 'marketplace'; $('[data-due]').closest('.ctr-pay').classList.toggle('one', $('[data-payday-row]').hidden); };
   const layout = (fromChange) => {
     const p = plan();
     $('[data-val-l]').textContent = VALUE_LABEL[p];
@@ -78,24 +88,31 @@ export function bindContract(root) {
   root.querySelectorAll('[data-svc]').forEach((b) => b.addEventListener('click', () => {
     service = b.dataset.svc;
     root.querySelectorAll('[data-svc]').forEach((x) => { const on = x === b; x.classList.toggle('on', on); x.setAttribute('aria-checked', on); });
+    payLayout(); help();
   }));
-  $('[data-plan]').addEventListener('change', () => layout(true));
+  $('[data-plan]').addEventListener('change', () => { layout(true); payLayout(); help(); });
+  $('[data-due]').addEventListener('change', help);
+  $('[data-payday]').addEventListener('input', (e) => { e.target.value = e.target.value.replace(/\D/g, '').slice(0, 2); help(); });
   $('[data-val]').addEventListener('input', help);
   $('[data-mo]').addEventListener('input', help);
   $('[data-first]').addEventListener('input', help);
   $('[data-first]').addEventListener('blur', (e) => { const v = parse(e.target.value); e.target.value = v > 0 ? fmtN(v) : ''; help(); });
   $('[data-val]').addEventListener('blur', (e) => { const v = parse(e.target.value); if (v > 0) e.target.value = fmtN(v); });
-  layout(false);
+  layout(false); payLayout(); help();
   return {
     read() {
       const p = plan(); const v = parse($('[data-val]').value); const months = monthsOf(p);
       if (!(v > 0)) return { error: `Informe o ${VALUE_LABEL[p].replace(' (R$)', '').toLowerCase()}` };
-      if (p === 'unico') return { service, plan: p, months: 1, monthly_amount: v, amount: v, first_amount: null };
+      const dayTxt = $('[data-payday]').value.trim(); const day = dayTxt ? Number(dayTxt) : null;
+      if (day != null && !(day >= 1 && day <= 31)) return { error: 'Dia do vencimento entre 1 e 31' };
+      const upfront = p === 'unico' || service === 'marketplace';
+      const pay = { first_due: $('[data-due]').value || null, pay_day: upfront ? null : day };
+      if (p === 'unico') return { service, plan: p, months: 1, monthly_amount: v, amount: v, first_amount: null, ...pay };
       if (!(months >= 1 && months <= 120)) return { error: 'Previsão entre 1 e 120 meses' };
       const monthly = v / planFactor(p);
       // 1ª mensalidade diferente (só no mensal): contrato = 1ª + mensalidade × (meses − 1)
       const first = p === 'mensal' && parse($('[data-first]').value) > 0 ? parse($('[data-first]').value) : null;
-      return { service, plan: p, months, monthly_amount: Math.round(monthly * 100) / 100, first_amount: first,
+      return { service, plan: p, months, monthly_amount: Math.round(monthly * 100) / 100, first_amount: first, ...pay,
         amount: p === 'mensal' ? (first != null ? first + v * (months - 1) : v * months) : v };
     }
   };

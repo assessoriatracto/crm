@@ -702,6 +702,11 @@ alter table public.leads add column if not exists contract_value numeric(12,2) c
 -- 1ª mensalidade com valor diferente das demais (opcional, contrato mensal)
 alter table public.leads add column if not exists first_amount numeric(12,2) check (first_amount >= 0);
 alter table public.finance_entries add column if not exists first_amount numeric(12,2) check (first_amount >= 0);
+-- quando o cliente paga: data do 1º pagamento (vazio = data da venda) e dia do vencimento das mensalidades seguintes
+alter table public.leads add column if not exists first_due date;
+alter table public.leads add column if not exists pay_day int check (pay_day between 1 and 31);
+alter table public.finance_entries add column if not exists first_due date;
+alter table public.finance_entries add column if not exists pay_day int check (pay_day between 1 and 31);
 
 -- despesas fixas: cadastradas uma vez, viram lançamento todo mês sozinhas (finance_recurring_run)
 create table if not exists public.finance_recurring (
@@ -1028,15 +1033,15 @@ begin
     v_months := case when new.plan = 'unico' then 1 else coalesce(new.contract_months, v_def) end;
     v_amount := coalesce(nullif(new.contract_value, 0), case when new.first_amount is not null and new.plan is distinct from 'unico' and v_months > 0 then new.first_amount + new.valor * (v_months - 1) else new.valor * v_months end);
     if v_e.id is null then
-      insert into finance_entries (kind, category, description, date, amount, monthly_amount, first_amount, months, service, plan, canceled_at, cancel_reason,
+      insert into finance_entries (kind, category, description, date, amount, monthly_amount, first_amount, first_due, pay_day, months, service, plan, canceled_at, cancel_reason,
                                    lead_id, source, from_pipeline, meta_sent_at, created_by)
-      values ('receita', 'Venda (contrato)', new.nome, (new.won_at at time zone 'America/Sao_Paulo')::date, v_amount, new.valor, new.first_amount, v_months,
+      values ('receita', 'Venda (contrato)', new.nome, (new.won_at at time zone 'America/Sao_Paulo')::date, v_amount, new.valor, new.first_amount, new.first_due, new.pay_day, v_months,
               new.service, new.plan, new.canceled_at, new.cancel_reason, new.id,
               case when new.source in ('organico', 'manual') then 'organico' when new.source in ('local', 'indicacao') then new.source end, true, now(),
               (select id from profiles where id = auth.uid()));
     else
       update finance_entries set description = new.nome, date = (new.won_at at time zone 'America/Sao_Paulo')::date, amount = v_amount,
-        monthly_amount = new.valor, first_amount = new.first_amount, months = v_months, service = new.service, plan = new.plan, canceled_at = new.canceled_at, cancel_reason = new.cancel_reason
+        monthly_amount = new.valor, first_amount = new.first_amount, first_due = new.first_due, pay_day = new.pay_day, months = v_months, service = new.service, plan = new.plan, canceled_at = new.canceled_at, cancel_reason = new.cancel_reason
       where id = v_e.id;
     end if;
   exception when others then
@@ -1045,7 +1050,7 @@ begin
   return null;
 end $$;
 drop trigger if exists lead_sale_sync on public.leads;
-create trigger lead_sale_sync after insert or update of won_at, valor, first_amount, contract_value, contract_months, plan, service, canceled_at, cancel_reason, nome, stage_id
+create trigger lead_sale_sync after insert or update of won_at, valor, first_amount, first_due, pay_day, contract_value, contract_months, plan, service, canceled_at, cancel_reason, nome, stage_id
 on public.leads for each row execute function public.lead_sale_sync();
 
 -- lançamento -> lead
@@ -1065,7 +1070,7 @@ begin
     update leads set
       valor = round(case when new.plan = 'unico' then new.amount else coalesce(new.monthly_amount, new.amount / nullif(new.months, 0)) end, 2),
       contract_value = case when new.plan in ('semestral', 'anual', 'unico') then new.amount end,
-      first_amount = new.first_amount,
+      first_amount = new.first_amount, first_due = new.first_due, pay_day = new.pay_day,
       contract_months = new.months, plan = new.plan, service = new.service, canceled_at = new.canceled_at, cancel_reason = new.cancel_reason,
       -- campanha informada na venda completa a do lead antes da venda ir pra Meta (sem apagar a que veio do formulário)
       utm_campaign = case when coalesce(utm_campaign, utm_id) is null and coalesce(new.utm_campaign, new.utm_id) is not null then new.utm_campaign else utm_campaign end,
@@ -2139,7 +2144,7 @@ begin
 end $$;
 
 -- versão do banco (diagnóstico: dá pra conferir de fora se a última atualização entrou)
-create or replace function public.schema_version() returns text language sql immutable as $$ select '2026-10-23.2'::text $$;
+create or replace function public.schema_version() returns text language sql immutable as $$ select '2026-10-30.1'::text $$;
 grant execute on function public.schema_version() to anon, authenticated;
 
 -- quantidade de uma ação no "actions" dos insights da Meta (null se não vier)
