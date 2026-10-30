@@ -1463,11 +1463,11 @@ select.inp.dd-native{display:none !important;}
 .cf-table th,.cf-table td{white-space:nowrap;font-variant-numeric:tabular-nums;}
 .cf-table thead th small{display:block;font-size:10.5px;font-weight:400;color:var(--gray-3);text-transform:none;letter-spacing:0;}
 .cf-table tbody th{position:sticky;left:0;background:var(--card);text-align:left;font-weight:400;color:var(--gray-2);padding-left:18px;z-index:1;}
-.cf-table tr.cf-head th,.cf-table tr.cf-total th{padding-left:0;color:var(--c-text);font-weight:600;}
-.cf-table tr.cf-head td{font-weight:600;}
-.cf-table tr.cf-head:not(:first-child) th,.cf-table tr.cf-head:not(:first-child) td{padding-top:16px;}
-.cf-table tr.cf-total th,.cf-table tr.cf-total td{border-top:1px solid var(--c-line-strong);font-weight:700;padding-top:12px;}
-.cf-table tr.cf-pct th,.cf-table tr.cf-acc th{padding-left:0;}
+.cf-table tr.cf-r-head th,.cf-table tr.cf-r-total th{padding-left:0;color:var(--c-text);font-weight:600;}
+.cf-table tr.cf-r-head td{font-weight:600;}
+.cf-table tr.cf-r-head:not(:first-child) th,.cf-table tr.cf-r-head:not(:first-child) td{padding-top:16px;}
+.cf-table tr.cf-r-total th,.cf-table tr.cf-r-total td{border-top:1px solid var(--c-line-strong);font-weight:700;padding-top:12px;}
+.cf-table tr.cf-r-pct th,.cf-table tr.cf-r-acc th{padding-left:0;}
 .cf-table .cf-fc{color:var(--gray-3);font-style:italic;background:repeating-linear-gradient(135deg,transparent 0 6px,var(--c-line-soft) 6px 7px);}
 .cf-table thead .cf-cur{color:var(--amber-ink);}
 .bar.fc{opacity:.4;}
@@ -1870,3 +1870,10 @@ input.inp.dp-native{display:none !important;}
 .ctr .ctr-pay.one{grid-template-columns:1fr;}
 @media (max-width:1100px){ .cf-grid{grid-template-columns:1fr;} }
 @media (max-width:760px){ .cf-grid > .panel{padding:16px;} }
+.cf-head .sub{margin:2px 0 0;}
+.cf-table tr.cf-r-head td,.cf-table tr.cf-r-total td{font-weight:400;}
+.cf-table tr.cf-r-total th{font-weight:600;}
+.table-wrap .cf-table tbody td{height:auto;padding-top:8px;padding-bottom:8px;}
+.cf-table tbody th{padding-top:8px;padding-bottom:8px;}
+.cf-grid .chart-card .legend{margin-top:10px;}
+@media (max-width:760px){ .cf-table tbody th{white-space:normal;min-width:128px;max-width:136px;font-size:12.5px;line-height:1.3;padding-left:10px;} .cf-table{min-width:0;} .cf-table td{min-width:84px;} }

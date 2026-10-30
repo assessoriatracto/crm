@@ -1,6 +1,6 @@
 // Campos de contrato usados em todo lugar que lança venda: serviço (marketing/marketplace),
 // tipo (mensal, semestral, anual, pagamento único), duração e valores.
-import { esc, brl } from './util.js?v=2610300939';
+import { esc, brl } from './util.js?v=2610300943';
 
 export const SERVICES = [['marketing', 'Marketing'], ['marketplace', 'Marketplace']];
 // meses padrão de cada tipo (mensal renova todo mês até cancelar; usa a previsão só pra estimar o valor do contrato)
@@ -39,7 +39,7 @@ export function contractFields(v = {}, { defaultMonths = 12 } = {}) {
     <div class="row" data-first-row><label class="lbl" for="ctrFirst">1ª mensalidade (R$) <span class="muted" style="text-transform:none;letter-spacing:0">(opcional, se for diferente das demais)</span></label><input class="inp" id="ctrFirst" data-first inputmode="decimal" placeholder="Igual às demais" value="${fmtN(v.first)}"></div>
     <div class="grid2 ctr-pay">
       <div class="row"><label class="lbl" for="ctrDue">1º pagamento em <span class="muted" style="text-transform:none;letter-spacing:0">(opcional)</span></label><input class="inp" type="date" id="ctrDue" data-due value="${v.firstDue || ''}" placeholder="Na data da venda"></div>
-      <div class="row" data-payday-row><label class="lbl" for="ctrDay">Vence todo dia</label><input class="inp" id="ctrDay" data-payday inputmode="numeric" maxlength="2" placeholder="Dia do 1º pagamento" value="${v.payDay || ''}"></div>
+      <div class="row" data-payday-row><label class="lbl" for="ctrDay">Dia do vencimento</label><input class="inp" id="ctrDay" data-payday inputmode="numeric" maxlength="2" placeholder="Dia do 1º pagamento" value="${v.payDay || ''}"></div>
     </div>
     <p class="help ctr-help" data-ctr-help></p>
   </div>`;
@@ -66,7 +66,8 @@ export function bindContract(root) {
     const due = $('[data-due]').value; const day = Number($('[data-payday]').value) || (due ? Number(due.slice(8, 10)) : null);
     const upfront = p === 'unico' || service === 'marketplace';
     const pay = upfront ? (due ? ` Pagamento em ${due.slice(8, 10)}/${due.slice(5, 7)}.` : ' Pagamento na data da venda.')
-      : day ? ` Mensalidades todo dia ${day}${due ? `, a partir de ${due.slice(8, 10)}/${due.slice(5, 7)}` : ''}.` : ' Mensalidades no mesmo dia da venda, todo mês.';
+      : p === 'mensal' ? (day ? ` Mensalidades todo dia ${day}${due ? `, a partir de ${due.slice(8, 10)}/${due.slice(5, 7)}` : ''}.` : ' Mensalidades no mesmo dia da venda, todo mês.')
+      : ` ${p === 'anual' ? 'Pagamento do ano' : 'Pagamento do semestre'} ${due ? `em ${due.slice(8, 10)}/${due.slice(5, 7)}` : 'na data da venda'}${day ? `, renovação no dia ${day}` : ''}.`;
     $('[data-ctr-help]').textContent = base + calc + pay;
   };
   // marketplace e pagamento único pagam uma vez: não tem dia de vencimento mensal

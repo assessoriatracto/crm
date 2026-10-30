@@ -1,10 +1,10 @@
 // Financeiro > Fluxo de caixa: o que entra e sai em cada mês, agenda de recebimentos pelo vencimento de cada cliente
 // e previsão dos próximos 3 meses
 import { DB } from '@shared/db.js';
-import { esc, brl, fail, renderTicket } from './util.js?v=2610300939';
-import { contracts, payments, result } from './dashboard.js?v=2610300939';
-import { gradBars } from './board.js?v=2610300939';
-import { contractTags } from './contract.js?v=2610300939';
+import { esc, brl, fail, renderTicket } from './util.js?v=2610300943';
+import { contracts, payments, result } from './dashboard.js?v=2610300943';
+import { gradBars } from './board.js?v=2610300943';
+import { contractTags } from './contract.js?v=2610300943';
 
 const CF = { months: 6, all: false };
 const DAYMS = 86400000;
@@ -19,8 +19,13 @@ const ICON = {
   cal: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>'
 };
 
-// texto da parcela: "2 de 6", "4ª mensalidade" (mensal sem fim) ou "Pagamento integral"
-const parcela = (c, p) => (c.upfront ? 'Pagamento integral' : p.of ? `${p.n} de ${p.of}` : `${p.n}ª mensalidade`);
+// texto da parcela: "1º semestre", "Mensalidade 2 de 6", "4ª mensalidade" (mensal sem fim) ou "Pagamento integral"
+const parcela = (c, p) => {
+  if (c.upfront) return 'Pagamento integral';
+  const unit = c.plan === 'semestral' ? 'semestre' : c.plan === 'anual' ? 'ano' : null;
+  if (unit) return `${p.n}º ${unit}${p.of > 1 ? ` de ${p.of}` : ''}`;
+  return p.of ? `Mensalidade ${p.n} de ${p.of}` : `${p.n}ª mensalidade`;
+};
 
 export async function renderCashflow(host) {
   const stale = renderTicket(host);
@@ -82,7 +87,7 @@ export async function renderCashflow(host) {
 
   const ROWS = [
     ['Entradas', 'revenue', 'head'],
-    ['Mensalidades (marketing)', 'recurring'], ['Pagamentos integrais (marketplace e únicos)', 'once'], ['Outras receitas', 'other'],
+    ['Contratos de marketing', 'recurring'], ['Marketplace e pagamentos únicos', 'once'], ['Outras receitas', 'other'],
     ['Saídas', 'costs', 'head neg'],
     ['Anúncios (Meta)', 'ads'], ['Despesas fixas', 'fixed'], ['Despesas variáveis', 'variable'],
     ['Resultado', 'profit', 'total'], ['Margem', 'margin', 'pct'], ['Acumulado', 'acc', 'acc']
@@ -132,7 +137,7 @@ export async function renderCashflow(host) {
       <div class="cf-head"><div><h3>Demonstrativo mensal</h3><p class="sub">Entradas pelo vencimento de cada cliente, menos anúncios e despesas do mês</p></div></div>
       <div class="table-wrap cf-wrap"><table class="int-table cf-table">
         <thead><tr><th></th>${months.map((m) => `<th class="num ${m.forecast ? 'cf-fc' : ''} ${m.current ? 'cf-cur' : ''}">${esc(m.label)}${m.forecast ? '<small>previsão</small>' : m.current ? '<small>em andamento</small>' : ''}</th>`).join('')}</tr></thead>
-        <tbody>${ROWS.map(([n, k, cls = '']) => `<tr class="cf-${cls.split(' ')[0] || 'row'}"><th scope="row">${n}</th>${months.map((m) => `<td class="num ${m.forecast ? 'cf-fc' : ''} ${m.current ? 'cf-cur' : ''}">${cell(m, k, cls)}</td>`).join('')}</tr>`).join('')}</tbody>
+        <tbody>${ROWS.map(([n, k, cls = '']) => `<tr class="cf-r-${cls.split(' ')[0] || 'row'}"><th scope="row">${n}</th>${months.map((m) => `<td class="num ${m.forecast ? 'cf-fc' : ''} ${m.current ? 'cf-cur' : ''}">${cell(m, k, cls)}</td>`).join('')}</tr>`).join('')}</tbody>
       </table></div>
       <p class="adt-note">Marketing entra mês a mês no dia do vencimento (mensais renovam até o cancelamento). Marketplace e pagamento único entram inteiros na data do 1º pagamento. A previsão soma as parcelas que vencem no mês, as despesas fixas cadastradas e a média dos últimos 3 meses de anúncios e despesas variáveis.</p>
     </section>`;

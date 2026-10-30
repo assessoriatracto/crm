@@ -1,7 +1,7 @@
 // Dashboard: visão executiva e enxuta da saúde do negócio.
 // O detalhe (campanhas, lançamentos, gráficos por dia) fica no Financeiro e na Central de leads.
 import { DB } from '@shared/db.js';
-import { PERIOD, REVENUE, setRevenueMode, revenueToggle, dateRange, datePicker, dateBtn, S, $, $$, esc, ICON, brl, num, isDue, isInactive, fail, fmtDays, renderTicket } from './util.js?v=2610300939';
+import { PERIOD, REVENUE, setRevenueMode, revenueToggle, dateRange, datePicker, dateBtn, S, $, $$, esc, ICON, brl, num, isDue, isInactive, fail, fmtDays, renderTicket } from './util.js?v=2610300943';
 
 const D = PERIOD;
 const DAY = 86400000;
@@ -50,12 +50,15 @@ export function payments(c, a, b) {
   const first = c.firstDue ? new Date(c.firstDue + 'T12:00') : new Date(c.start.getFullYear(), c.start.getMonth(), c.start.getDate(), 12);
   if (c.upfront) return first >= a && first <= b ? [{ date: first, amount: c.value, n: 1, of: 1 }] : [];
   const day = c.payDay || first.getDate();
-  const total = c.plan === 'mensal' ? null : c.months; // mensal renova até cancelar; os demais (e os antigos sem tipo) têm duração fixa
+  // semestral paga o semestre de uma vez e anual o ano; mensal (e os antigos sem tipo) mês a mês
+  const step = c.plan === 'semestral' ? 6 : c.plan === 'anual' ? 12 : 1;
+  const total = c.plan === 'mensal' ? null : Math.max(1, Math.ceil(c.months / step)); // mensal renova até cancelar; os demais têm duração fixa
   const out = [];
   for (let k = 0; k < 1200; k++) {
-    const d = k === 0 ? first : new Date(first.getFullYear(), first.getMonth() + k, Math.min(day, new Date(first.getFullYear(), first.getMonth() + k + 1, 0).getDate()), 12);
+    const m = k * step;
+    const d = k === 0 ? first : new Date(first.getFullYear(), first.getMonth() + m, Math.min(day, new Date(first.getFullYear(), first.getMonth() + m + 1, 0).getDate()), 12);
     if (d > b || (total != null && k >= total) || (c.plan === 'mensal' && d >= c.end) || (c.canceled && d >= c.canceled)) break;
-    if (d >= a) out.push({ date: d, amount: k === 0 && c.first != null ? c.first : c.monthly, n: k + 1, of: total });
+    if (d >= a) out.push({ date: d, amount: k === 0 && c.first != null ? c.first : c.monthly * step, n: k + 1, of: total });
   }
   return out;
 }

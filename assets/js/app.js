@@ -2,17 +2,17 @@ import { DB, LIVE, CONFIGURED } from '@shared/db.js';
 import {
   go, routeName, S, $, $$, esc, ICON, FAT, COLORS, initials, isHot, stageOf, profileOf, labelOf, isInactive, isDue, fatShort, brl, pct, num,
   fmtPhone, fullDate, longDate, addedAt, ago, sourceLabel, formName, waLink, toast, fail, popover, closePop, menu, multiSelect,
-  modal, confirmBox, downloadCSV, dateRange, datePicker, dateBtn, daysToSale, fmtDays, renderTicket } from './util.js?v=2610300939';
-import { importModal } from './import.js?v=2610300939';
-import { renderDashboard } from './dashboard.js?v=2610300939';
-import { renderSettings } from './admin.js?v=2610300939';
-import { renderIntegrations, renderPixel, leadMetaEvents, statusPill } from './integrations.js?v=2610300939';
-import { renderRecovery, loadPartials } from './recovery.js?v=2610300939';
-import { showSignIn, showSignUp, showForgot, showReset, showMfa, showPending, watchIdle, AUTH_ROUTES } from './auth.js?v=2610300939';
-import { SERVICES, PLANS, planMonths, planFactor, VALUE_LABEL, contractFields, bindContract } from './contract.js?v=2610300939';
-import { openProfile, renderProfile } from './profile.js?v=2610300939';
-import { renderBuilder } from './builder.js?v=2610300939';
-import { renderFinance, renderAds } from './finance.js?v=2610300939';
+  modal, confirmBox, downloadCSV, dateRange, datePicker, dateBtn, daysToSale, fmtDays, renderTicket } from './util.js?v=2610300943';
+import { importModal } from './import.js?v=2610300943';
+import { renderDashboard } from './dashboard.js?v=2610300943';
+import { renderSettings } from './admin.js?v=2610300943';
+import { renderIntegrations, renderPixel, leadMetaEvents, statusPill } from './integrations.js?v=2610300943';
+import { renderRecovery, loadPartials } from './recovery.js?v=2610300943';
+import { showSignIn, showSignUp, showForgot, showReset, showMfa, showPending, watchIdle, AUTH_ROUTES } from './auth.js?v=2610300943';
+import { SERVICES, PLANS, planMonths, planFactor, VALUE_LABEL, contractFields, bindContract } from './contract.js?v=2610300943';
+import { openProfile, renderProfile } from './profile.js?v=2610300943';
+import { renderBuilder } from './builder.js?v=2610300943';
+import { renderFinance, renderAds } from './finance.js?v=2610300943';
 
 // ============================================================
 // preferências locais (por navegador)
@@ -825,7 +825,7 @@ function renderDrawer() {
         ${!l.plan || l.plan === 'mensal' ? `<div style="margin-top:10px"><label class="lbl">1ª mensalidade (R$) <span class="muted" style="text-transform:none;letter-spacing:0">(opcional, se for diferente)</span></label><input class="inp" data-field="first_amount" inputmode="decimal" value="${l.first_amount != null ? Number(l.first_amount).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : ''}" placeholder="Igual às demais"></div>` : ''}
         ${l.valor && ['semestral', 'anual'].includes(l.plan) ? `<p class="help" style="margin:6px 0 0">Equivale a ${brl2(Number(l.contract_value || l.valor * planFactor(l.plan)) / planFactor(l.plan))} por mês, por ${planMonths(l.plan)} meses.</p>` : ''}
         ${l.won_at ? `<div class="grid2" style="margin-top:10px"><div><label class="lbl">1º pagamento em</label><input class="inp" type="date" data-field="first_due" value="${l.first_due || ''}"></div>
-          ${l.plan === 'unico' || l.service === 'marketplace' ? '<div></div>' : `<div><label class="lbl">Vence todo dia</label><input class="inp" data-field="pay_day" inputmode="numeric" maxlength="2" value="${l.pay_day || ''}" placeholder="Dia do 1º pagamento"></div>`}</div>` : ''}
+          ${l.plan === 'unico' || l.service === 'marketplace' ? '<div></div>' : `<div><label class="lbl">Dia do vencimento</label><input class="inp" data-field="pay_day" inputmode="numeric" maxlength="2" value="${l.pay_day || ''}" placeholder="Dia do 1º pagamento"></div>`}</div>` : ''}
         ${l.won_at ? `<div class="grid2" style="margin-top:10px"><div><label class="lbl">Venda realizada em</label><input class="inp" type="date" data-field="won_at" value="${localDay(l.won_at)}" max="${localDay(new Date().toISOString())}"></div>
           ${l.plan !== 'unico' ? `<div><label class="lbl">Contrato cancelado em</label><input class="inp" type="date" data-field="canceled_at" value="${l.canceled_at || ''}"></div>` : ''}</div>` : ''}
         <p class="ttc-line">${l.won_at ? (daysToSale(l) < 1 ? 'Virou venda <b>no mesmo dia</b> em que chegou como lead' : `Virou venda <b>${fmtDays(daysToSale(l))}</b> depois de chegar como lead`) : ((Date.now() - new Date(l.created_at)) / 86400000 < 1 ? 'Chegou como lead <b>hoje</b>' : `Lead há <b>${fmtDays((Date.now() - new Date(l.created_at)) / 86400000)}</b>`)}</p>

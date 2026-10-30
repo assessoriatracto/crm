@@ -1,14 +1,14 @@
 // Financeiro (estilo UTMify): gasto da Meta Ads × leads e vendas do CRM × receitas e despesas lançadas
 import { DB } from '@shared/db.js';
-import { renderClients } from './clients.js?v=2610300939';
-import { renderExpenses } from './expenses.js?v=2610300939';
-import { renderCashflow } from './cashflow.js?v=2610300939';
-import { contracts, result, fromAds, saleRevenue } from './dashboard.js?v=2610300939';
-import { contractTags } from './contract.js?v=2610300939';
-import { renderBoard, gradBars, gradArea } from './board.js?v=2610300939';
-import { renderPixel } from './integrations.js?v=2610300939';
-import { entryModal } from './entry.js?v=2610300939';
-import { PERIOD, REVENUE, setRevenueMode, revenueToggle, BRAND, popover, dateRange, datePicker, dateBtn, S, $, $$, esc, ICON, brl, num, pct, fullDate, ago, toast, fail, modal, confirmBox, renderTicket } from './util.js?v=2610300939';
+import { renderClients } from './clients.js?v=2610300943';
+import { renderExpenses } from './expenses.js?v=2610300943';
+import { renderCashflow } from './cashflow.js?v=2610300943';
+import { contracts, result, fromAds, saleRevenue } from './dashboard.js?v=2610300943';
+import { contractTags } from './contract.js?v=2610300943';
+import { renderBoard, gradBars, gradArea } from './board.js?v=2610300943';
+import { renderPixel } from './integrations.js?v=2610300943';
+import { entryModal } from './entry.js?v=2610300943';
+import { PERIOD, REVENUE, setRevenueMode, revenueToggle, BRAND, popover, dateRange, datePicker, dateBtn, S, $, $$, esc, ICON, brl, num, pct, fullDate, ago, toast, fail, modal, confirmBox, renderTicket } from './util.js?v=2610300943';
 
 const F = { period: '30', from: '', to: '', level: 'campaign', revenue: 'mensal', sort: 'spend', tab: 'geral' };
 const GRAPH = 'v21.0';
