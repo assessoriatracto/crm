@@ -1,7 +1,8 @@
 // Aba "Recuperação": formulários começados e não concluídos (salvos automaticamente a cada resposta)
 import { DB, LIVE } from '@shared/db.js';
 import { formPath } from '@shared/forms.js';
-import { go, S, $, $$, esc, ICON, initials, fmtPhone, fullDate, ago, num, pct, toast, fail, modal, confirmBox, renderTicket } from './util.js?v=2610300943';
+import { loadSteps, stepsOf, fillMsg } from './followup.js?v=2610301503';
+import { go, S, $, $$, esc, ICON, initials, fmtPhone, fullDate, ago, num, pct, toast, fail, modal, confirmBox, renderTicket } from './util.js?v=2610301503';
 
 const SITE = window.TRACTO_CONFIG?.siteUrl || 'https://assessoriatracto.com.br';
 const STATUS = {
@@ -16,10 +17,11 @@ export const resumeLink = (p) => {
   u.searchParams.set('retomar', p.resume_token);
   return u.toString();
 };
+// mensagem do próximo toque da cadência de recuperação (editável em Follow-up > Cadência)
 const recoveryMsg = (p) => {
-  const first = (p.nome || '').trim().split(/\s+/)[0];
-  return `Oi${first ? ' ' + first : ''}, tudo bem? Aqui é da Tracto. Vi que você começou o diagnóstico pra sua loja e parou no meio. `
-    + `Suas respostas ficaram salvas, é só continuar daqui (leva menos de 1 minuto): ${resumeLink(p)}`;
+  const steps = stepsOf('recuperacao');
+  const step = steps[Math.min(p.fu_step || 0, Math.max(0, steps.length - 1))];
+  return fillMsg(step?.body || 'Oi {nome}, tudo bem? Aqui é {usuario} da Tracto. Vi que você começou nosso diagnóstico e parou no meio. Suas respostas ficaram salvas, é só continuar de onde parou: {link}', { nome: p.nome, link: resumeLink(p) });
 };
 const waUrl = (p) => `https://wa.me/${String(p.whatsapp || '').replace(/\D/g, '')}?text=${encodeURIComponent(recoveryMsg(p))}`;
 const hasContact = (p) => !!(p.whatsapp || p.email);
@@ -33,7 +35,7 @@ export async function loadPartials() {
 export async function renderRecovery(el, { quiet = false } = {}) {
   const stale = renderTicket(el);
   if (!quiet) el.innerHTML = '<div class="loading">Carregando…</div>';
-  try { await loadPartials(); } catch (e) { fail(e); S.partials = []; }
+  try { await Promise.all([loadPartials(), loadSteps()]); } catch (e) { fail(e); S.partials = S.partials || []; }
   if (stale()) return;
   paint(el);
 }
@@ -72,7 +74,7 @@ function paint(el) {
         const [label, cls] = STATUS[p.status] || [p.status, ''];
         const step = S.forms[p.form_id]?.fields.find((f) => f.id === p.step_id);
         return `<tr data-id="${p.id}">
-          <td><div class="td-lead"><span class="av">${esc(initials(p.nome || '?'))}</span><div><b>${esc(p.nome || 'Sem nome ainda')}</b><small><span class="pill ${cls}">${label}</span>${p.contacted_at ? ' <span class="pill">Contatado</span>' : ''}</small></div></div></td>
+          <td><div class="td-lead"><span class="av">${esc(initials(p.nome || '?'))}</span><div><b>${esc(p.nome || 'Sem nome ainda')}</b><small><span class="pill ${cls}">${label}</span>${p.fu_step ? ` <span class="pill">Toque ${p.fu_step} de ${stepsOf('recuperacao').length || p.fu_step}</span>` : p.contacted_at ? ' <span class="pill">Contatado</span>' : ''}</small></div></div></td>
           <td class="nowrap">${p.whatsapp ? esc(fmtPhone(p.whatsapp)) : '<span class="muted">sem WhatsApp</span>'}${p.email ? `<br><small class="muted">${esc(p.email)}</small>` : ''}</td>
           <td style="min-width:170px"><div class="prog"><i style="width:${(done / total) * 100}%"></i></div><small class="muted">${done} de ${total} · parou em ${esc(step ? step.title.replace(/<[^>]+>/g, '').replace(/\{\{[^}]+\}\}/g, '…').slice(0, 42) : p.step_id || '—')}</small></td>
           <td>${esc((p.form_name || p.form_id || '').replace('Assessoria Tracto - ', ''))}</td>
@@ -80,7 +82,7 @@ function paint(el) {
           <td class="nowrap" title="${fullDate(p.updated_at)}">${ago(p.updated_at)}</td>
           <td class="rec-actions">
             ${p.status === 'abandonado' || p.status === 'em_andamento' ? `
-              ${p.whatsapp ? `<a class="b b-sm b-primary" href="${waUrl(p)}" target="_blank" rel="noopener" data-wa>${ICON.wa}Recuperar</a>` : ''}
+              ${p.whatsapp ? `<a class="b b-sm b-primary" href="${waUrl(p)}" target="_blank" rel="noopener" data-wa>${ICON.wa}${(p.fu_step || 0) >= (stepsOf('recuperacao').length || 1) ? 'Chamar de novo' : `Enviar toque ${(p.fu_step || 0) + 1}`}</a>` : ''}
               <button class="b b-sm" data-copy-link title="Copiar link de retomada">Link</button>
               <button class="b b-sm" data-convert title="Colocar no pipeline sem esperar">Virar lead</button>
               <button class="b b-sm b-ghost" data-discard aria-label="Descartar">${ICON.x}</button>` : p.lead_id ? '<button class="b b-sm" data-open-lead>Ver lead</button>' : ''}
@@ -98,7 +100,7 @@ function paint(el) {
   el.querySelectorAll('tr[data-id]').forEach((row) => {
     const p = all.find((x) => x.id === row.dataset.id);
     row.addEventListener('click', (e) => { if (!e.target.closest('button, a')) detail(p, reload); });
-    row.querySelector('[data-wa]')?.addEventListener('click', () => markContacted(p));
+    row.querySelector('[data-wa]')?.addEventListener('click', () => markContacted(p).then(() => paint(el)));
     row.querySelector('[data-copy-link]')?.addEventListener('click', async () => {
       try { await navigator.clipboard.writeText(resumeLink(p)); toast('Link de retomada copiado'); } catch (e) { toast('Não consegui copiar', true); }
     });
@@ -111,10 +113,13 @@ function paint(el) {
   });
 }
 
+// cada envio conta como um toque da cadência (o próximo aparece no Follow-up no dia certo)
 async function markContacted(p) {
-  if (p.contacted_at) return;
-  p.contacted_at = new Date().toISOString();
-  try { await DB.updatePartial(p.id, { contacted_at: p.contacted_at, contacted_by: S.me?.id && LIVE ? S.me.id : null }); } catch (e) { /* não bloqueia o WhatsApp */ }
+  const steps = stepsOf('recuperacao'); const k = p.fu_step || 0; const nx = steps[k + 1];
+  const patch = { fu_step: Math.min(k + 1, Math.max(steps.length, 1)), fu_next_at: nx ? new Date(Date.now() + nx.wait_days * 86400000).toISOString() : null };
+  if (!p.contacted_at) Object.assign(patch, { contacted_at: new Date().toISOString(), contacted_by: S.me?.id && LIVE ? S.me.id : null });
+  Object.assign(p, patch);
+  try { await DB.updatePartial(p.id, patch); } catch (e) { /* não bloqueia o WhatsApp */ }
 }
 
 async function convert(p, done) {

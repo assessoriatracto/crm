@@ -381,7 +381,7 @@ create table if not exists public.lead_activity (
 );
 alter table public.lead_activity drop constraint if exists lead_activity_type_check;
 alter table public.lead_activity add constraint lead_activity_type_check
-  check (type in ('created', 'note', 'stage', 'assign', 'label', 'reminder', 'edit', 'recovered'));
+  check (type in ('created', 'note', 'stage', 'assign', 'label', 'reminder', 'edit', 'recovered', 'followup', 'task'));
 create index if not exists lead_activity_idx on public.lead_activity (lead_id, created_at desc);
 
 
@@ -2144,7 +2144,7 @@ begin
 end $$;
 
 -- versão do banco (diagnóstico: dá pra conferir de fora se a última atualização entrou)
-create or replace function public.schema_version() returns text language sql immutable as $$ select '2026-10-30.1'::text $$;
+create or replace function public.schema_version() returns text language sql immutable as $$ select '2026-10-30.2'::text $$;
 grant execute on function public.schema_version() to anon, authenticated;
 
 -- quantidade de uma ação no "actions" dos insights da Meta (null se não vier)
@@ -2467,10 +2467,163 @@ end $$;
 
 
 -- ============================================================
+-- 16b. FOLLOW-UP (cadência de contato) E TAREFAS DA EQUIPE
+-- ============================================================
+-- follow-up do lead: em que toque da cadência está, quando foi o último e quando é o próximo
+alter table public.leads add column if not exists fu_status text;
+alter table public.leads drop constraint if exists leads_fu_status_check;
+alter table public.leads add constraint leads_fu_status_check check (fu_status is null or fu_status in ('sem_resposta', 'respondeu', 'negociacao', 'encerrado'));
+alter table public.leads add column if not exists fu_step int not null default 0;
+alter table public.leads add column if not exists fu_last_at timestamptz;
+alter table public.leads add column if not exists fu_next_at timestamptz;
+create index if not exists leads_fu_next_idx on public.leads (fu_next_at);
+alter table public.partial_leads add column if not exists fu_step int not null default 0;
+alter table public.partial_leads add column if not exists fu_next_at timestamptz;
+
+-- mensagens da cadência por segmento; wait_days = dias depois do toque anterior
+create table if not exists public.followup_steps (
+  id         uuid primary key default gen_random_uuid(),
+  segment    text not null check (segment in ('marketing', 'marketplace', 'recuperacao')),
+  position   int not null default 0,
+  wait_days  int not null default 1 check (wait_days between 0 and 60),
+  body       text not null check (char_length(body) between 1 and 1500),
+  updated_at timestamptz not null default now()
+);
+create index if not exists followup_steps_idx on public.followup_steps (segment, position);
+insert into public.followup_steps (segment, position, wait_days, body)
+select v.segment, v.position, v.wait_days, v.body from (values
+  ('marketing', 0, 0, $m$Oi {nome}, tudo bem? Aqui é {usuario} da Tracto. Vi que você preencheu nosso formulário sobre o marketing da sua empresa.
+
+Posso te ligar rapidinho pra entender seu momento e te mostrar como podemos ajudar?$m$),
+  ('marketing', 1, 1, $m${nome}, conseguiu ver minha mensagem? Quero entender como estão hoje os anúncios e o comercial da sua empresa pra te mostrar onde dá pra crescer. Qual o melhor horário pra conversarmos?$m$),
+  ('marketing', 2, 2, $m$Oi {nome}! Dei uma olhada no que você respondeu no formulário e já tenho 2 ou 3 ideias que dá pra aplicar logo. Prefere que eu te explique por áudio ou numa ligação de 15 minutos?$m$),
+  ('marketing', 3, 3, $m${nome}, sei que a rotina é corrida. Só pra não deixar passar: ainda faz sentido conversarmos sobre aumentar as vendas da sua empresa este mês?$m$),
+  ('marketing', 4, 7, $m$Oi {nome}, essa é minha última mensagem por aqui pra não te incomodar. Se quiser retomar em outro momento, é só responder esta conversa que eu te atendo. Sucesso!$m$),
+  ('marketplace', 0, 0, $m$Oi {nome}, tudo bem? Aqui é {usuario} da Tracto. Vi que você preencheu nosso formulário sobre vender nos marketplaces.
+
+Posso te ligar rapidinho pra entender como está sua operação hoje?$m$),
+  ('marketplace', 1, 1, $m${nome}, conseguiu ver minha mensagem? Quero entender em quais marketplaces você já vende e onde estão os maiores gargalos. Qual o melhor horário pra conversarmos?$m$),
+  ('marketplace', 2, 2, $m$Oi {nome}! Olhei o que você respondeu e já tenho ideias pra melhorar anúncios, preço e posicionamento da sua loja. Prefere que eu te explique por áudio ou numa ligação de 15 minutos?$m$),
+  ('marketplace', 3, 3, $m${nome}, só pra não deixar passar: ainda faz sentido conversarmos sobre aumentar suas vendas no Mercado Livre, Shopee e Amazon este mês?$m$),
+  ('marketplace', 4, 7, $m$Oi {nome}, essa é minha última mensagem por aqui pra não te incomodar. Se quiser retomar em outro momento, é só responder esta conversa que eu te atendo. Sucesso!$m$),
+  ('recuperacao', 0, 0, $m$Oi {nome}, tudo bem? Aqui é {usuario} da Tracto. Vi que você começou nosso diagnóstico e parou no meio.
+
+Suas respostas ficaram salvas, é só continuar de onde parou (leva menos de 1 minuto): {link}$m$),
+  ('recuperacao', 1, 1, $m${nome}, ficou alguma dúvida no formulário? Se preferir, me conta aqui em 2 linhas como está sua empresa hoje que eu já te passo um direcionamento. O link continua salvo: {link}$m$),
+  ('recuperacao', 2, 3, $m$Oi {nome}, última lembrança por aqui: seu diagnóstico continua salvo e leva menos de 1 minuto pra terminar. Assim que concluir, nosso time te chama com uma análise personalizada: {link}$m$)
+) as v(segment, position, wait_days, body)
+where not exists (select 1 from public.followup_steps f where f.segment = v.segment);
+
+-- tarefas (estilo Todoist): projetos, tarefas com subtarefas, responsável, prazo, prioridade, recorrência e comentários
+create table if not exists public.task_projects (
+  id         uuid primary key default gen_random_uuid(),
+  created_at timestamptz not null default now(),
+  name       text not null check (char_length(name) between 1 and 60),
+  color      text not null default '#FFAD00',
+  position   int not null default 0,
+  archived   boolean not null default false,
+  created_by uuid references public.profiles(id) on delete set null default auth.uid()
+);
+create table if not exists public.tasks (
+  id          uuid primary key default gen_random_uuid(),
+  created_at  timestamptz not null default now(),
+  updated_at  timestamptz not null default now(),
+  title       text not null check (char_length(title) between 1 and 300),
+  notes       text check (notes is null or char_length(notes) <= 5000),
+  project_id  uuid references public.task_projects(id) on delete cascade,
+  parent_id   uuid references public.tasks(id) on delete cascade,
+  assignee_id uuid references public.profiles(id) on delete set null,
+  created_by  uuid references public.profiles(id) on delete set null default auth.uid(),
+  due_date    date,
+  due_time    time,
+  priority    int not null default 4 check (priority between 1 and 4),
+  recur       text check (recur is null or recur in ('diaria', 'dias_uteis', 'semanal', 'mensal')),
+  lead_id     uuid references public.leads(id) on delete set null,
+  position    double precision not null default 0,
+  done_at     timestamptz,
+  done_by     uuid references public.profiles(id) on delete set null
+);
+create index if not exists tasks_open_idx on public.tasks (due_date) where done_at is null;
+create index if not exists tasks_assignee_idx on public.tasks (assignee_id);
+create index if not exists tasks_project_idx on public.tasks (project_id);
+create index if not exists tasks_parent_idx on public.tasks (parent_id);
+create table if not exists public.task_comments (
+  id          uuid primary key default gen_random_uuid(),
+  task_id     uuid not null references public.tasks(id) on delete cascade,
+  created_at  timestamptz not null default now(),
+  author_id   uuid references public.profiles(id) on delete set null default auth.uid(),
+  author_name text,
+  body        text not null check (char_length(body) between 1 and 2000)
+);
+create index if not exists task_comments_idx on public.task_comments (task_id, created_at);
+
+-- próxima data de uma tarefa recorrente (sempre depois de hoje)
+create or replace function public.task_next_due(p_from date, p_recur text) returns date
+language plpgsql immutable as $$
+declare d date := p_from; today date := (now() at time zone 'America/Sao_Paulo')::date; i int := 0;
+begin
+  loop
+    i := i + 1;
+    d := case p_recur when 'diaria' then d + 1 when 'semanal' then d + 7 when 'mensal' then (d + interval '1 month')::date
+      else d + case extract(isodow from d)::int when 5 then 3 when 6 then 2 else 1 end end;
+    exit when d > today or i > 400;
+  end loop;
+  return d;
+end $$;
+
+-- concluir uma tarefa recorrente não fecha: ela pula pra próxima data, reabre as subtarefas e registra no histórico
+create or replace function public.tasks_before() returns trigger language plpgsql security definer set search_path = public as $$
+begin
+  new.updated_at := now();
+  if tg_op = 'UPDATE' and new.done_at is not null and old.done_at is null then
+    new.done_by := coalesce(new.done_by, auth.uid());
+    if new.recur is not null and new.parent_id is null then
+      new.due_date := public.task_next_due(coalesce(old.due_date, (now() at time zone 'America/Sao_Paulo')::date), new.recur);
+      new.done_at := null; new.done_by := null;
+      update public.tasks set done_at = null, done_by = null where parent_id = new.id;
+      insert into public.task_comments (task_id, author_id, author_name, body)
+      values (new.id, auth.uid(), (select nome from public.profiles where id = auth.uid()), 'Concluída. Próxima em ' || to_char(new.due_date, 'DD/MM'));
+    end if;
+  elsif tg_op = 'UPDATE' and new.done_at is null then
+    new.done_by := null;
+  end if;
+  return new;
+end $$;
+drop trigger if exists tasks_before on public.tasks;
+create trigger tasks_before before insert or update on public.tasks for each row execute function public.tasks_before();
+
+do $$
+declare t text;
+begin
+  foreach t in array array['followup_steps', 'task_projects', 'tasks', 'task_comments'] loop
+    execute format('alter table public.%I enable row level security', t);
+    execute format('drop policy if exists "ver" on public.%I', t);
+    execute format('drop policy if exists "criar" on public.%I', t);
+    execute format('drop policy if exists "editar" on public.%I', t);
+    execute format('drop policy if exists "excluir" on public.%I', t);
+    execute format('drop policy if exists "gestor" on public.%I', t);
+    execute format('create policy "ver" on public.%I for select to authenticated using (public.is_team())', t);
+  end loop;
+end $$;
+-- cadência: toda a equipe usa, gestor edita
+create policy "gestor" on public.followup_steps for all to authenticated using (public.is_manager()) with check (public.is_manager());
+-- tarefas e projetos: toda a equipe cria e edita; exclui quem criou ou gestor
+create policy "criar" on public.task_projects for insert to authenticated with check (public.is_team());
+create policy "editar" on public.task_projects for update to authenticated using (public.is_team()) with check (public.is_team());
+create policy "excluir" on public.task_projects for delete to authenticated using (public.is_manager() or created_by = auth.uid());
+create policy "criar" on public.tasks for insert to authenticated with check (public.is_team());
+create policy "editar" on public.tasks for update to authenticated using (public.is_team()) with check (public.is_team());
+create policy "excluir" on public.tasks for delete to authenticated using (public.is_manager() or created_by = auth.uid());
+create policy "criar" on public.task_comments for insert to authenticated with check (public.is_team() and author_id = auth.uid());
+create policy "excluir" on public.task_comments for delete to authenticated using (public.is_manager() or author_id = auth.uid());
+revoke all on function public.tasks_before() from public, anon, authenticated;
+
+-- ============================================================
 -- 17. REALTIME E AGENDAMENTOS
 -- ============================================================
 do $$ begin alter publication supabase_realtime add table public.leads; exception when duplicate_object or undefined_object then null; end $$;
 do $$ begin alter publication supabase_realtime add table public.partial_leads; exception when duplicate_object or undefined_object then null; end $$;
+do $$ begin alter publication supabase_realtime add table public.tasks; exception when duplicate_object or undefined_object then null; end $$;
 
 do $$
 begin
