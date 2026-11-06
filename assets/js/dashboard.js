@@ -1,7 +1,7 @@
 // Dashboard: visão executiva e enxuta da saúde do negócio.
 // O detalhe (campanhas, lançamentos, gráficos por dia) fica no Financeiro e na Central de leads.
 import { DB } from '@shared/db.js';
-import { PERIOD, REVENUE, setRevenueMode, revenueToggle, dateRange, datePicker, dateBtn, S, $, $$, esc, ICON, brl, num, isDue, isInactive, fail, fmtDays, renderTicket } from './util.js?v=2610302026';
+import { PERIOD, REVENUE, setRevenueMode, revenueToggle, dateRange, datePicker, dateBtn, S, $, $$, esc, ICON, brl, num, isDue, isInactive, fail, fmtDays, renderTicket } from './util.js?v=2611060733';
 
 const D = PERIOD;
 const DAY = 86400000;
@@ -67,7 +67,8 @@ export const received = (c, a, b) => payments(c, a, b).reduce((s, p) => s + p.am
 // valor que a venda conta no faturamento: contrato inteiro, ou 1ª mensalidade (marketplace e único: sempre o valor inteiro)
 export const saleRevenue = (c, mode = REVENUE.mode) => (mode === 'contrato' || c.upfront ? c.value : c.first ?? c.monthly);
 const NOT_ADS = ['organico', 'local', 'indicacao'];
-export const isOrganic = (c) => (c.kind === 'entry' ? NOT_ADS.includes(c.entry?.source) : NOT_ADS.includes(c.lead?.source) || c.lead?.source === 'manual');
+// sem origem marcada = veio de anúncio (só sai dos relatórios de anúncio o que foi marcado como indicação, local ou orgânico na venda)
+export const isOrganic = (c) => (c.kind === 'entry' ? NOT_ADS.includes(c.entry?.source) : ['local', 'indicacao'].includes(c.lead?.source));
 export const hasOrigin = (c) => !!(c.origin?.utm_campaign || c.origin?.utm_id);
 export const fromAds = (c) => !isOrganic(c);
 export const activeAt = (c, t) => !c.oneTime && c.start <= t && c.end > t && (!c.canceled || c.canceled > t);

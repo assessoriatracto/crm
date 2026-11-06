@@ -1,10 +1,10 @@
 // Financeiro > Fluxo de caixa: o que entra e sai em cada mês, agenda de recebimentos pelo vencimento de cada cliente
 // e previsão dos próximos 3 meses
 import { DB } from '@shared/db.js';
-import { esc, brl, fail, renderTicket } from './util.js?v=2610302026';
-import { contracts, payments, result } from './dashboard.js?v=2610302026';
-import { gradBars } from './board.js?v=2610302026';
-import { contractTags } from './contract.js?v=2610302026';
+import { esc, brl, fail, renderTicket } from './util.js?v=2611060733';
+import { contracts, payments, result } from './dashboard.js?v=2611060733';
+import { gradBars } from './board.js?v=2611060733';
+import { contractTags } from './contract.js?v=2611060733';
 
 const CF = { months: 6, all: false };
 const DAYMS = 86400000;

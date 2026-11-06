@@ -1,7 +1,7 @@
 // Tarefas da Tracto (estilo Todoist): entrada, hoje, próximos dias, minhas, equipe e projetos.
 // Adição rápida entende linguagem natural: "Enviar relatório amanhã 10h p1 @Isaque #Clientes toda semana".
 import { DB } from '@shared/db.js';
-import { S, esc, ICON, initials, toast, fail, modal, confirmBox, menu, popover, closePop, renderTicket, profileOf, isoDay, ago, go } from './util.js?v=2610302026';
+import { S, esc, ICON, initials, toast, fail, modal, confirmBox, menu, popover, closePop, renderTicket, profileOf, isoDay, ago, go } from './util.js?v=2611060733';
 
 const T = { view: 'hoje', project: null, who: 'eu', showDone: false, q: '' };
 let TASKS = []; let PROJECTS = []; let loaded = false; let unsub = null;

@@ -2,9 +2,9 @@
 // Conversas, mensagens ao vivo, áudio, anexos, respostas rápidas da cadência e o lead ao lado
 // (etiquetas, estágio, follow-up, tarefa). O navegador nunca vê a chave da Evolution.
 import { DB, LIVE } from '@shared/db.js';
-import { go, S, esc, ICON, initials, fmtPhone, toast, fail, modal, confirmBox, menu, multiSelect, renderTicket, stageOf, labelOf, profileOf } from './util.js?v=2610302026';
-import { loadSteps, stepsOf, fillMsg } from './followup.js?v=2610302026';
-import { serviceName } from './contract.js?v=2610302026';
+import { go, S, esc, ICON, initials, fmtPhone, toast, fail, modal, confirmBox, menu, multiSelect, renderTicket, stageOf, labelOf, profileOf } from './util.js?v=2611060733';
+import { loadSteps, stepsOf, fillMsg } from './followup.js?v=2611060733';
+import { serviceName } from './contract.js?v=2611060733';
 
 const GW = (window.TRACTO_CONFIG?.waGateway || '').replace(/\/$/, '');
 const A = { state: 'loading', number: null, chats: [], jid: null, msgs: [], page: 1, pages: 1, q: '', filter: 'todas', panel: true, es: null, qr: null, media: new Map() };
@@ -410,7 +410,7 @@ function drawPanel(el, c, l, target) {
     const next = new Date(Date.now() + (status === 'respondeu' ? 1 : 2) * 86400000); next.setHours(9, 0, 0, 0);
     try { const patch = { fu_status: status, fu_last_at: now, fu_next_at: next.toISOString() }; await DB.updateLeads([l.id], patch); Object.assign(l, patch); DB.addActivity(l.id, 'followup', `Follow-up: ${status === 'respondeu' ? 'lead respondeu' : 'em negociação'}`, S.me).catch(() => {}); toast(status === 'respondeu' ? 'Marcado como respondeu' : 'Em negociação'); redraw(l); window.dispatchEvent(new Event('tracto:fu-changed')); } catch (err) { fail(err); }
   }));
-  host.querySelector('[data-task]').addEventListener('click', async () => { const { taskModal } = await import('./tasks.js?v=2610302026'); taskModal({ title: `Retornar ${l.nome}`, lead_id: l.id, due_date: new Date().toISOString().slice(0, 10), assignee_id: S.me?.id || null }); });
+  host.querySelector('[data-task]').addEventListener('click', async () => { const { taskModal } = await import('./tasks.js?v=2611060733'); taskModal({ title: `Retornar ${l.nome}`, lead_id: l.id, due_date: new Date().toISOString().slice(0, 10), assignee_id: S.me?.id || null }); });
   host.querySelector('[data-note]').addEventListener('click', () => modal(`<h3>Anotação sobre ${esc(firstName(l.nome))}</h3><div class="row"><textarea class="inp" rows="4" data-n placeholder="O que foi conversado, objeções, próximos passos"></textarea></div><div class="modal-foot"><button class="b" data-close>Cancelar</button><button class="b b-primary" data-ok>Salvar no histórico</button></div>`, (m, close) => {
     m.querySelector('[data-ok]').addEventListener('click', async () => { const v = m.querySelector('[data-n]').value.trim(); if (!v) return; try { await DB.addActivity(l.id, 'note', v.slice(0, 1000), S.me); toast('Anotação salva no lead'); close(); } catch (err) { fail(err); } });
   }));

@@ -1037,7 +1037,7 @@ begin
                                    lead_id, source, from_pipeline, meta_sent_at, created_by)
       values ('receita', 'Venda (contrato)', new.nome, (new.won_at at time zone 'America/Sao_Paulo')::date, v_amount, new.valor, new.first_amount, new.first_due, new.pay_day, v_months,
               new.service, new.plan, new.canceled_at, new.cancel_reason, new.id,
-              case when new.source in ('organico', 'manual') then 'organico' when new.source in ('local', 'indicacao') then new.source end, true, now(),
+              case when new.source in ('local', 'indicacao') then new.source else 'pago' end, true, now(), -- sem indicação/local = anúncio
               (select id from profiles where id = auth.uid()));
     else
       update finance_entries set description = new.nome, date = (new.won_at at time zone 'America/Sao_Paulo')::date, amount = v_amount,
@@ -2144,7 +2144,7 @@ begin
 end $$;
 
 -- versão do banco (diagnóstico: dá pra conferir de fora se a última atualização entrou)
-create or replace function public.schema_version() returns text language sql immutable as $$ select '2026-10-30.3'::text $$;
+create or replace function public.schema_version() returns text language sql immutable as $$ select '2026-11-06.1'::text $$;
 grant execute on function public.schema_version() to anon, authenticated;
 
 -- quantidade de uma ação no "actions" dos insights da Meta (null se não vier)
@@ -2655,6 +2655,33 @@ begin
 end $$;
 revoke all on function public.wa_event(text, text, boolean, text, text) from public;
 grant execute on function public.wa_event(text, text, boolean, text, text) to anon, authenticated;
+
+-- ============================================================
+-- 16d. CORREÇÕES DE DADOS QUE RODAM UMA VEZ SÓ
+-- (o schema roda inteiro a cada migração; o registro em schema_fixes impede de refazer e apagar ajustes feitos depois)
+-- ============================================================
+create table if not exists public.schema_fixes (name text primary key, applied_at timestamptz not null default now());
+alter table public.schema_fixes enable row level security;
+do $$
+begin
+  if not exists (select 1 from public.schema_fixes where name = '2026-11-06 origem e marketplace') then
+    -- todas as vendas vieram de anúncio, menos Pequenina Kids e Drogaria Avenida (indicação)
+    update public.finance_entries e set source = 'indicacao'
+     where e.kind = 'receita' and e.category in ('Venda (contrato)', 'Contrato')
+       and (e.description ilike '%pequenina kids%' or e.description ilike '%drogaria avenida%'
+            or e.lead_id in (select id from public.leads where nome ilike '%pequenina kids%' or nome ilike '%drogaria avenida%'));
+    update public.leads set source = 'indicacao' where won_at is not null and (nome ilike '%pequenina kids%' or nome ilike '%drogaria avenida%');
+    update public.finance_entries set source = 'pago'
+     where kind = 'receita' and category in ('Venda (contrato)', 'Contrato') and source is distinct from 'indicacao';
+    -- consultoria de marketplace é sempre pagamento único
+    update public.finance_entries set plan = 'unico', months = 1, monthly_amount = amount, first_amount = null, pay_day = null
+     where kind = 'receita' and category in ('Venda (contrato)', 'Contrato') and service = 'marketplace' and plan is distinct from 'unico';
+    update public.leads set plan = 'unico', contract_months = 1, contract_value = coalesce(contract_value, valor), first_amount = null, pay_day = null
+     where won_at is not null and service = 'marketplace' and plan is distinct from 'unico'
+       and not exists (select 1 from public.finance_entries e where e.lead_id = leads.id and e.category in ('Venda (contrato)', 'Contrato'));
+    insert into public.schema_fixes (name) values ('2026-11-06 origem e marketplace');
+  end if;
+end $$;
 
 -- ============================================================
 -- 17. REALTIME E AGENDAMENTOS

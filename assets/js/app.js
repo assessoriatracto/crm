@@ -2,20 +2,20 @@ import { DB, LIVE, CONFIGURED } from '@shared/db.js';
 import {
   go, routeName, S, $, $$, esc, ICON, FAT, COLORS, initials, isHot, stageOf, profileOf, labelOf, isInactive, isDue, fatShort, brl, pct, num,
   fmtPhone, fullDate, longDate, addedAt, ago, sourceLabel, formName, waLink, toast, fail, popover, closePop, menu, multiSelect,
-  modal, confirmBox, downloadCSV, dateRange, datePicker, dateBtn, daysToSale, fmtDays, renderTicket } from './util.js?v=2610302026';
-import { importModal } from './import.js?v=2610302026';
-import { renderDashboard } from './dashboard.js?v=2610302026';
-import { renderSettings } from './admin.js?v=2610302026';
-import { renderIntegrations, renderPixel, leadMetaEvents, statusPill } from './integrations.js?v=2610302026';
-import { renderRecovery, loadPartials } from './recovery.js?v=2610302026';
-import { renderFollowup, followupDueCount } from './followup.js?v=2610302026';
-import { renderTasks, refreshTasksBadge } from './tasks.js?v=2610302026';
-import { renderAtendimento } from './atendimento.js?v=2610302026';
-import { showSignIn, showSignUp, showForgot, showReset, showMfa, showPending, watchIdle, AUTH_ROUTES } from './auth.js?v=2610302026';
-import { SERVICES, PLANS, planMonths, planFactor, VALUE_LABEL, contractFields, bindContract } from './contract.js?v=2610302026';
-import { openProfile, renderProfile } from './profile.js?v=2610302026';
-import { renderBuilder } from './builder.js?v=2610302026';
-import { renderFinance, renderAds } from './finance.js?v=2610302026';
+  modal, confirmBox, downloadCSV, dateRange, datePicker, dateBtn, daysToSale, fmtDays, renderTicket } from './util.js?v=2611060733';
+import { importModal } from './import.js?v=2611060733';
+import { renderDashboard } from './dashboard.js?v=2611060733';
+import { renderSettings } from './admin.js?v=2611060733';
+import { renderIntegrations, renderPixel, leadMetaEvents, statusPill } from './integrations.js?v=2611060733';
+import { renderRecovery, loadPartials } from './recovery.js?v=2611060733';
+import { renderFollowup, followupDueCount } from './followup.js?v=2611060733';
+import { renderTasks, refreshTasksBadge } from './tasks.js?v=2611060733';
+import { renderAtendimento } from './atendimento.js?v=2611060733';
+import { showSignIn, showSignUp, showForgot, showReset, showMfa, showPending, watchIdle, AUTH_ROUTES } from './auth.js?v=2611060733';
+import { SERVICES, PLANS, planMonths, planFactor, VALUE_LABEL, contractFields, bindContract } from './contract.js?v=2611060733';
+import { openProfile, renderProfile } from './profile.js?v=2611060733';
+import { renderBuilder } from './builder.js?v=2611060733';
+import { renderFinance, renderAds } from './finance.js?v=2611060733';
 
 // ============================================================
 // preferências locais (por navegador)

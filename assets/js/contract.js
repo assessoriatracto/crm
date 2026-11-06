@@ -1,6 +1,6 @@
 // Campos de contrato usados em todo lugar que lança venda: serviço (marketing/marketplace),
 // tipo (mensal, semestral, anual, pagamento único), duração e valores.
-import { esc, brl } from './util.js?v=2610302026';
+import { esc, brl } from './util.js?v=2611060733';
 
 export const SERVICES = [['marketing', 'Marketing'], ['marketplace', 'Marketplace']];
 // meses padrão de cada tipo (mensal renova todo mês até cancelar; usa a previsão só pra estimar o valor do contrato)
@@ -23,7 +23,8 @@ export const VALUE_LABEL = { mensal: 'Mensalidade (R$)', semestral: 'Valor do se
 
 // v = { service, plan, months, monthly, total, first, firstDue, payDay }
 export function contractFields(v = {}, { defaultMonths = 12 } = {}) {
-  const plan = v.plan || 'mensal';
+  // consultoria de marketplace é sempre pagamento único
+  const plan = v.service === 'marketplace' ? 'unico' : v.plan || 'mensal';
   const months = plan === 'mensal' ? v.months || defaultMonths : planMonths(plan, defaultMonths);
   // o campo mostra o valor do formato (semestre, ano, pagamento); por trás guardamos o equivalente mensal
   const val = plan === 'unico' ? v.total || v.monthly : plan === 'mensal' ? v.monthly : (v.total || (v.monthly ? v.monthly * planFactor(plan) : null));
@@ -59,7 +60,7 @@ export function bindContract(root) {
       mensal: 'Renova todo mês até ser cancelado. A previsão em meses só estima o valor do contrato.',
       semestral: 'Contrato de 6 meses, pago por semestre.',
       anual: 'Contrato de 12 meses, pago por ano.',
-      unico: 'Entra no faturamento do dia da venda. Não conta na receita recorrente nem no churn.'
+      unico: service === 'marketplace' ? 'Consultoria de marketplace: sempre pagamento único. Não conta na receita recorrente nem no churn.' : 'Entra no faturamento do dia da venda. Não conta na receita recorrente nem no churn.'
     }[p];
     const f = parse($('[data-first]').value);
     const calc = !(v > 0) ? '' : p === 'unico' ? '' : p === 'mensal' ? ` Contrato estimado: ${brl((f > 0 ? f + v * Math.max(0, (m || 0) - 1) : v * (m || 0)))}${f > 0 ? ` (1ª de ${brl(f)} + ${Math.max(0, (m || 0) - 1)} × ${brl(v)})` : ''}.` : ` Equivale a ${(v / planFactor(p)).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL', minimumFractionDigits: 2, maximumFractionDigits: 2 })} por mês.`;
@@ -86,10 +87,19 @@ export function bindContract(root) {
     }
     help();
   };
+  // marketplace (consultoria) trava em pagamento único; voltando pra marketing, volta o tipo que estava
+  let planBefore = service === 'marketplace' ? 'mensal' : $('[data-plan]').value;
+  const lockPlan = () => {
+    const sel = $('[data-plan]'); const mp = service === 'marketplace';
+    if (mp && sel.value !== 'unico') { planBefore = sel.value; sel.value = 'unico'; sel.dispatchEvent(new Event('change')); }
+    if (!mp && sel.disabled && planBefore && planBefore !== 'unico') { sel.value = planBefore; sel.dispatchEvent(new Event('change')); }
+    sel.disabled = mp;
+    sel.title = mp ? 'Consultoria de marketplace é sempre pagamento único' : '';
+  };
   root.querySelectorAll('[data-svc]').forEach((b) => b.addEventListener('click', () => {
     service = b.dataset.svc;
     root.querySelectorAll('[data-svc]').forEach((x) => { const on = x === b; x.classList.toggle('on', on); x.setAttribute('aria-checked', on); });
-    payLayout(); help();
+    lockPlan(); payLayout(); help();
   }));
   $('[data-plan]').addEventListener('change', () => { layout(true); payLayout(); help(); });
   $('[data-due]').addEventListener('change', help);
@@ -99,7 +109,7 @@ export function bindContract(root) {
   $('[data-first]').addEventListener('input', help);
   $('[data-first]').addEventListener('blur', (e) => { const v = parse(e.target.value); e.target.value = v > 0 ? fmtN(v) : ''; help(); });
   $('[data-val]').addEventListener('blur', (e) => { const v = parse(e.target.value); if (v > 0) e.target.value = fmtN(v); });
-  layout(false); payLayout(); help();
+  layout(false); lockPlan(); payLayout(); help();
   return {
     read() {
       const p = plan(); const v = parse($('[data-val]').value); const months = monthsOf(p);

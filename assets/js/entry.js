@@ -1,8 +1,8 @@
 // Lançamento único do Financeiro: Venda, Outra receita ou Despesa.
 // A venda é a mesma da Central de leads: ligada a um contato, o banco atualiza o lead (valor, contrato, data e estágio) e vice-versa.
 import { DB } from '@shared/db.js';
-import { S, esc, ICON, toast, fail, modal, confirmBox } from './util.js?v=2610302026';
-import { contractFields, bindContract } from './contract.js?v=2610302026';
+import { S, esc, ICON, toast, fail, modal, confirmBox } from './util.js?v=2611060733';
+import { contractFields, bindContract } from './contract.js?v=2611060733';
 
 const SALE_CATS = ['Venda (contrato)', 'Contrato'];
 const CATS = { despesa: ['Ferramentas', 'Equipe', 'Comissões', 'Impostos', 'Tráfego (outras plataformas)', 'Outros'], receita: ['Setup', 'Consultoria', 'Outros'] };
@@ -12,7 +12,8 @@ const fmt = (n) => (Number(n) > 0 ? Number(n).toLocaleString('pt-BR', { minimumF
 const leadLabel = (l) => `${l.nome} · ${l.whatsapp || l.email || ''}`;
 // de onde veio o cliente: só "Anúncio" entra em ROAS, CAC e campanhas (e só ele vai pra Meta)
 const ORIGINS = [['pago', 'Anúncio'], ['indicacao', 'Indicação'], ['local', 'Local'], ['organico', 'Orgânico']];
-const originOf = (entry, lead) => (entry && entry.source ? entry.source : lead && ['indicacao', 'local', 'organico'].includes(lead.source) ? lead.source : 'pago');
+// sem origem marcada, a venda conta como anúncio; só indicação e local vêm do cadastro do lead
+const originOf = (entry, lead) => (entry && entry.source ? entry.source : lead && ['indicacao', 'local'].includes(lead.source) ? lead.source : 'pago');
 
 // opts.kind: 'venda' | 'receita' | 'despesa' (abre direto nesse tipo e esconde a escolha)
 export function entryModal(done, entry = null, opts = {}) {
@@ -83,7 +84,7 @@ export function entryModal(done, entry = null, opts = {}) {
     const toggleNew = (on) => { newContact = on; $('[data-newc]').hidden = !on; $('[data-pick-contact]').hidden = on; $('[data-contact-help]').hidden = on; if (on) { $('[data-lead]').value = ''; setTimeout(() => $('[data-nc-wa]').focus(), 30); } };
     $('[data-new-contact]')?.addEventListener('click', () => toggleNew(true));
     $('[data-cancel-newc]')?.addEventListener('click', () => toggleNew(false));
-    $('[data-lead]')?.addEventListener('change', (e) => { const l = S.leads.find((x) => leadLabel(x) === e.target.value); if (l && !$('[data-name]').value.trim()) $('[data-name]').value = l.nome; if (l && !entry && ['indicacao', 'local', 'organico'].includes(l.source)) setOrigin(l.source); });
+    $('[data-lead]')?.addEventListener('change', (e) => { const l = S.leads.find((x) => leadLabel(x) === e.target.value); if (l && !$('[data-name]').value.trim()) $('[data-name]').value = l.nome; if (l && !entry && ['indicacao', 'local'].includes(l.source)) setOrigin(l.source); });
     $('[data-amount]').addEventListener('blur', (e) => { const v = parse(e.target.value); if (v > 0) e.target.value = fmt(v); });
     layout();
     $('[data-del]')?.addEventListener('click', async () => {

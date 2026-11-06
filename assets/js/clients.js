@@ -1,9 +1,9 @@
 // Financeiro > Clientes: contratos ativos, cancelamentos (churn) e origem de cada venda (campanha › conjunto › anúncio).
 import { DB } from '@shared/db.js';
-import { S, esc, ICON, brl, num, toast, fail, modal, menu, dateRange, renderTicket } from './util.js?v=2610302026';
-import { contracts, activeAt } from './dashboard.js?v=2610302026';
-import { entryModal } from './entry.js?v=2610302026';
-import { contractTags, SERVICES } from './contract.js?v=2610302026';
+import { S, esc, ICON, brl, num, toast, fail, modal, menu, dateRange, renderTicket } from './util.js?v=2611060733';
+import { contracts, activeAt } from './dashboard.js?v=2611060733';
+import { entryModal } from './entry.js?v=2611060733';
+import { contractTags, SERVICES } from './contract.js?v=2611060733';
 
 const C = { status: 'ativos', q: '', svc: '' };
 const REASONS = ['Preço', 'Resultado abaixo do esperado', 'Atendimento', 'Fechou ou vendeu a loja', 'Cortou custos', 'Foi para outra agência', 'Outro'];
@@ -59,7 +59,7 @@ export async function renderClients(host, F, reload) {
     </div>
     <section class="panel cl-card">
       <div class="cl-head">
-        <div class="seg cl-seg">${[['periodo', 'Fechados no período'], ['ativos', 'Ativos'], ['cancelados', 'Cancelados'], ['encerrados', 'Encerrados'], ['sem_origem', 'Sem origem'], ['todos', 'Todos']].map(([k, n]) => `<button class="b b-sm ${C.status === k ? 'on' : ''}" data-cs="${k}">${n}<span class="cl-n">${num(count(k))}</span></button>`).join('')}</div>
+        <div class="seg cl-seg">${[['periodo', 'Fechados no período'], ['ativos', 'Ativos'], ['cancelados', 'Cancelados'], ['encerrados', 'Encerrados'], ['sem_origem', 'Sem campanha'], ['todos', 'Todos']].map(([k, n]) => `<button class="b b-sm ${C.status === k ? 'on' : ''}" data-cs="${k}">${n}<span class="cl-n">${num(count(k))}</span></button>`).join('')}</div>
         <select class="inp cl-svc" data-csvc aria-label="Serviço"><option value="">Todos os serviços</option>${SERVICES.map(([k, n]) => `<option value="${k}" ${C.svc === k ? 'selected' : ''}>${n}</option>`).join('')}</select>
         <label class="adt-search">${ICON.search}<input type="search" data-cq placeholder="Buscar cliente ou campanha" value="${esc(C.q)}"></label>
         <button class="b b-primary" data-new-client>+ Nova venda</button>
@@ -72,7 +72,7 @@ export async function renderClients(host, F, reload) {
           <td class="num">${brl(['semestral', 'anual'].includes(c.plan) || c.oneTime ? c.value : c.monthly)}${c.oneTime ? '' : `<small class="muted">${({ semestral: '/semestre', anual: '/ano' })[c.plan] || '/mês'}</small>`}</td>
           <td class="nowrap">${fmt(c.start)}${c.kind === 'entry' && c.entry.created_at && iso(new Date(c.entry.created_at)) !== iso(c.start) ? `<small class="muted">lançado em ${fmt(new Date(c.entry.created_at))}</small>` : ''}</td>
           <td class="nowrap">${c.oneTime ? '<span class="muted">—</span>' : c.plan === 'mensal' && st !== 'cancelado' ? '<span class="muted">até cancelar</span>' : fmt(st === 'cancelado' ? c.canceled : c.end)}</td>
-          <td>${(() => { const src = c.kind === 'entry' ? c.entry.source : c.lead?.source; return ['organico', 'local', 'indicacao'].includes(src) ? `<span class="pill">${({ organico: 'Orgânico', local: 'Local', indicacao: 'Indicação' })[src]}</span>` : ''; })() || originTxt(c.origin) ? `<span class="cl-origin" title="${esc(originTxt(c.origin))}">${esc(originTxt(c.origin))}</span>${c.lead ? '' : '<small class="muted">sem lead: não vai pra Meta</small>'}` : '<button class="b b-sm" data-origin>Definir origem</button>'}</td>
+          <td>${(() => { const src = c.kind === 'entry' ? c.entry.source : c.lead?.source; return ['organico', 'local', 'indicacao'].includes(src) ? `<span class="pill">${({ organico: 'Orgânico', local: 'Local', indicacao: 'Indicação' })[src]}</span>` : ''; })() || originTxt(c.origin) ? `<span class="cl-origin" title="${esc(originTxt(c.origin))}">${esc(originTxt(c.origin))}</span>${c.lead ? '' : '<small class="muted">sem lead: não vai pra Meta</small>'}` : '<span class="cl-ads"><span class="pill">Anúncio</span><button class="b b-sm b-ghost" data-origin title="Escolher de qual campanha veio">Definir campanha</button></span>'}</td>
           <td class="cl-act"><button class="b b-sm b-ghost" data-more aria-label="Ações">${ICON.dotsH}</button></td></tr>`; }).join('')}
       </tbody></table></div>` : `<p class="muted empty-line">${list.length ? 'Nenhum cliente nesse filtro.' : 'Ainda não há vendas. Elas aparecem aqui quando um lead vai pra "Venda realizada" com mensalidade, ou quando você lança uma venda no Financeiro.'}</p>`}
     </section>`;

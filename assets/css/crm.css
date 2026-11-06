@@ -2150,3 +2150,4 @@ input.inp.dp-native{display:none !important;}
 }
 .wa-search{flex:none;} .wa{min-height:420px;}
 .wa-pmodal .wa-pn{padding:4px 0 0;}
+.cl-ads{display:inline-flex;align-items:center;gap:6px;flex-wrap:wrap;}
