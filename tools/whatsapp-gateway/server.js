@@ -12,6 +12,7 @@ const SB_URL = (process.env.SUPABASE_URL || '').replace(/\/$/, '');
 const SB_ANON = process.env.SUPABASE_ANON_KEY || '';
 const SECRET = process.env.WEBHOOK_SECRET || '';
 const SELF = (process.env.PUBLIC_URL || '').replace(/\/$/, '');
+const PUBLIC_HTTPS = (process.env.GATEWAY_PUBLIC_URL || '').replace(/\/$/, ''); // endereço que o banco usa pra mandar os avisos
 const INSTANCE = process.env.INSTANCE_NAME || 'tracto';
 const ORIGINS = (process.env.ALLOWED_ORIGINS || 'https://crm.assessoriatracto.com.br').split(',').map((s) => s.trim());
 const MAX_BODY = 30 * 1024 * 1024;
@@ -112,6 +113,17 @@ const routes = {
   'POST /api/send/audio': async (b) => evo('POST', `/message/sendWhatsAppAudio/${INSTANCE}`, { number: digits(b.number), audio: b.audio, encoding: true }),
   'POST /api/media': async (b) => evo('POST', `/chat/getBase64FromMediaMessage/${INSTANCE}`, { message: { key: { id: b.id } }, convertToMp4: !!b.mp4 }),
   'POST /api/read': async (b) => evo('POST', `/chat/markMessageAsRead/${INSTANCE}`, { readMessages: (b.ids || []).map((id) => ({ remoteJid: jidOf(b.jid), fromMe: false, id })) }),
+  // grupos (avisos de leads novos)
+  'POST /api/groups': async () => {
+    const list = await evo('GET', `/group/fetchAllGroups/${INSTANCE}?getParticipants=false`).catch(() => []);
+    return (Array.isArray(list) ? list : []).map((g) => ({ id: g.id, name: g.subject, size: g.size || null })).sort((a, b) => String(a.name).localeCompare(String(b.name)));
+  },
+  'POST /api/groups/create': async (b) => {
+    const participants = (b.participants || []).map(digits).filter((d) => d.length >= 10);
+    if (!b.subject || !participants.length) throw Object.assign(new Error('Informe o nome do grupo e pelo menos um número'), { status: 400 });
+    const g = await evo('POST', `/group/create/${INSTANCE}`, { subject: String(b.subject).slice(0, 100), description: 'Avisos automáticos de leads novos do CRM da Tracto', participants });
+    return { id: g.id || g.groupJid || g?.groupMetadata?.id, name: b.subject };
+  },
   'POST /api/picture': async (b) => evo('POST', `/chat/fetchProfilePictureUrl/${INSTANCE}`, { number: digits(b.number) }).catch(() => ({}))
 };
 
@@ -147,6 +159,16 @@ const server = http.createServer(async (req, res) => {
       return;
     }
 
+    // aviso de lead novo vindo do banco (pg_net) com a senha interna
+    if (req.method === 'POST' && url.pathname === '/hooks/notify') {
+      const given = String(req.headers['x-tracto-secret'] || '');
+      if (!SECRET || given.length !== SECRET.length || !crypto.timingSafeEqual(Buffer.from(given), Buffer.from(SECRET))) return json(res, 403, { error: 'forbidden' });
+      const b = await readBody(req);
+      if (!/@g\.us$/.test(b.group || '') || !b.text) return json(res, 400, { error: 'grupo ou texto faltando' });
+      try { await evo('POST', `/message/sendText/${INSTANCE}`, { number: b.group, text: String(b.text).slice(0, 4000) }); log('aviso de lead enviado ao grupo'); return json(res, 200, { ok: true }); }
+      catch (e) { log('aviso no grupo falhou', e.message); return json(res, 502, { error: e.message }); }
+    }
+
     // daqui pra baixo: só a equipe logada no CRM
     if (!okOrigin && origin) return json(res, 403, { error: 'origem não permitida' });
     const token = (req.headers.authorization || '').replace(/^Bearer\s+/i, '') || url.searchParams.get('token');
@@ -161,7 +183,7 @@ const server = http.createServer(async (req, res) => {
     }
     const fn = routes[`${req.method} ${url.pathname}`];
     if (!fn) return json(res, 404, { error: 'não encontrado' }, cors);
-    if (['POST /api/connect', 'POST /api/logout'].includes(`${req.method} ${url.pathname}`) && !['admin', 'gestor'].includes(me.role)) return json(res, 403, { error: 'Só gestores conectam ou desconectam o WhatsApp' }, cors);
+    if (['POST /api/connect', 'POST /api/logout', 'POST /api/groups/create'].includes(`${req.method} ${url.pathname}`) && !['admin', 'gestor'].includes(me.role)) return json(res, 403, { error: 'Só gestores conectam ou desconectam o WhatsApp' }, cors);
     const body = req.method === 'POST' ? await readBody(req) : {};
     const out = await fn(body, me);
     if (url.pathname.startsWith('/api/send/')) log(`envio por ${me.nome}`);
@@ -176,4 +198,11 @@ server.listen(PORT, async () => {
   log(`gateway na porta ${PORT}`);
   if (!EVO || !EVO_KEY || !SECRET || !SB_URL) return log('faltam variáveis de ambiente');
   try { await ensureInstance(); } catch (e) { log('ensureInstance', e.message); }
+  // avisa o banco onde a ponte está (pros avisos de lead novo no grupo)
+  if (PUBLIC_HTTPS) {
+    try {
+      const r = await fetch(`${SB_URL}/rest/v1/rpc/wa_register`, { method: 'POST', headers: { apikey: SB_ANON, Authorization: `Bearer ${SB_ANON}`, 'Content-Type': 'application/json' }, body: JSON.stringify({ p_secret: SECRET, p_url: PUBLIC_HTTPS }) });
+      log(r.ok ? 'ponte registrada no banco' : `registro no banco falhou: ${r.status}`);
+    } catch (e) { log('registro no banco', e.message); }
+  }
 });

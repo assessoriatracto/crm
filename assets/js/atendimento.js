@@ -2,9 +2,9 @@
 // Conversas, mensagens ao vivo, áudio, anexos, respostas rápidas da cadência e o lead ao lado
 // (etiquetas, estágio, follow-up, tarefa). O navegador nunca vê a chave da Evolution.
 import { DB, LIVE } from '@shared/db.js';
-import { go, S, esc, ICON, initials, fmtPhone, toast, fail, modal, confirmBox, menu, multiSelect, renderTicket, stageOf, labelOf, profileOf } from './util.js?v=2611060733';
-import { loadSteps, stepsOf, fillMsg } from './followup.js?v=2611060733';
-import { serviceName } from './contract.js?v=2611060733';
+import { go, S, esc, ICON, initials, fmtPhone, toast, fail, modal, confirmBox, menu, multiSelect, renderTicket, stageOf, labelOf, profileOf } from './util.js?v=2611201427';
+import { loadSteps, stepsOf, fillMsg } from './followup.js?v=2611201427';
+import { serviceName } from './contract.js?v=2611201427';
 
 const GW = (window.TRACTO_CONFIG?.waGateway || '').replace(/\/$/, '');
 const A = { state: 'loading', number: null, chats: [], jid: null, msgs: [], page: 1, pages: 1, q: '', filter: 'todas', panel: true, es: null, qr: null, media: new Map() };
@@ -139,7 +139,7 @@ function paint(el) {
   el.querySelector('[data-new]').addEventListener('click', () => newChat(el));
   el.querySelector('[data-conn]').addEventListener('click', (e) => menu(e.currentTarget, [
     { label: 'Atualizar conversas', action: async () => { await loadChats(); drawChats(el); } },
-    ...(['admin', 'gestor'].includes(S.me?.role) ? [{ sep: true }, { label: 'Desconectar o WhatsApp', danger: true, action: async () => {
+    ...(['admin', 'gestor'].includes(S.me?.role) ? [{ label: 'Avisos de leads no grupo', action: () => notifyModal() }, { sep: true }, { label: 'Desconectar o WhatsApp', danger: true, action: async () => {
       if (!(await confirmBox('Desconectar o WhatsApp do CRM? Para voltar, será preciso ler o QR Code de novo.', 'Desconectar'))) return;
       try { await api('/api/logout'); A.state = 'close'; A.jid = null; paint(el); } catch (e) { fail(e); }
     } }] : [])
@@ -410,7 +410,7 @@ function drawPanel(el, c, l, target) {
     const next = new Date(Date.now() + (status === 'respondeu' ? 1 : 2) * 86400000); next.setHours(9, 0, 0, 0);
     try { const patch = { fu_status: status, fu_last_at: now, fu_next_at: next.toISOString() }; await DB.updateLeads([l.id], patch); Object.assign(l, patch); DB.addActivity(l.id, 'followup', `Follow-up: ${status === 'respondeu' ? 'lead respondeu' : 'em negociação'}`, S.me).catch(() => {}); toast(status === 'respondeu' ? 'Marcado como respondeu' : 'Em negociação'); redraw(l); window.dispatchEvent(new Event('tracto:fu-changed')); } catch (err) { fail(err); }
   }));
-  host.querySelector('[data-task]').addEventListener('click', async () => { const { taskModal } = await import('./tasks.js?v=2611060733'); taskModal({ title: `Retornar ${l.nome}`, lead_id: l.id, due_date: new Date().toISOString().slice(0, 10), assignee_id: S.me?.id || null }); });
+  host.querySelector('[data-task]').addEventListener('click', async () => { const { taskModal } = await import('./tasks.js?v=2611201427'); taskModal({ title: `Retornar ${l.nome}`, lead_id: l.id, due_date: new Date().toISOString().slice(0, 10), assignee_id: S.me?.id || null }); });
   host.querySelector('[data-note]').addEventListener('click', () => modal(`<h3>Anotação sobre ${esc(firstName(l.nome))}</h3><div class="row"><textarea class="inp" rows="4" data-n placeholder="O que foi conversado, objeções, próximos passos"></textarea></div><div class="modal-foot"><button class="b" data-close>Cancelar</button><button class="b b-primary" data-ok>Salvar no histórico</button></div>`, (m, close) => {
     m.querySelector('[data-ok]').addEventListener('click', async () => { const v = m.querySelector('[data-n]').value.trim(); if (!v) return; try { await DB.addActivity(l.id, 'note', v.slice(0, 1000), S.me); toast('Anotação salva no lead'); close(); } catch (err) { fail(err); } });
   }));
@@ -553,6 +553,8 @@ function demoApi(path, body = {}) {
   if (path === '/api/read') return { ok: true };
   if (path === '/api/media') return { base64: '', mimetype: 'image/png' };
   if (path === '/api/connect') return { qr: null, state: 'open' };
+  if (path === '/api/groups') return [{ id: '120363000000000001@g.us', name: 'Equipe Tracto', size: 5 }];
+  if (path === '/api/groups/create') return { id: '120363000000000002@g.us', name: body.subject };
   return {};
 }
 
@@ -570,3 +572,71 @@ function fit(el) {
   wa.style.height = Math.max(420, window.innerHeight - wa.getBoundingClientRect().top - window.scrollY - bottom) + 'px';
 }
 window.addEventListener('resize', () => { const el = document.querySelector('#view'); if (el?.querySelector('.wa')) fit(el); });
+
+// ---------- avisos de lead novo num grupo do WhatsApp ----------
+// cada lead que chega vira uma mensagem no grupo (nome, WhatsApp, faturamento e formulário)
+async function notifyModal() {
+  let cfg; try { cfg = await DB.waNotifyGet(); } catch (e) { return fail(e); }
+  const managers = (S.profiles || []).filter((p) => p.ativo !== false && ['admin', 'gestor'].includes(p.role));
+  let mode = cfg?.group ? 'status' : 'create';
+  modal(`<h3>Avisos de leads no WhatsApp</h3>
+    <p class="help">Cada lead novo que chega no CRM vira uma mensagem num grupo do WhatsApp com nome, WhatsApp, faixa de faturamento e o formulário (Marketing ou Marketplace). Funciona junto com o Pushcut.</p>
+    <div data-body></div>`, (c, close) => {
+    c.closest('.modal-card').classList.add('wa-nmodal');
+    const body = c.querySelector('[data-body]');
+    const draw = async () => {
+      if (mode === 'status') {
+        body.innerHTML = `<div class="wa-nstat">
+            <div class="wa-ng"><span class="wa-av">${IC.wa.replace('width="40" height="40"', 'width="20" height="20"')}</span><div><b>${esc(cfg.group_name || 'Grupo')}</b><small>${cfg.enabled ? 'Avisos ligados' : 'Avisos desligados'}</small></div>
+              <label class="wa-switch"><input type="checkbox" data-on ${cfg.enabled ? 'checked' : ''}><i></i></label></div>
+          </div>
+          <div class="modal-foot"><button class="b" data-change>Trocar grupo</button><div class="grow"></div><button class="b" data-close>Fechar</button><button class="b b-primary" data-test>Enviar teste</button></div>`;
+        body.querySelector('[data-on]').addEventListener('change', async (e) => {
+          try { await DB.waNotifySet(cfg.group, cfg.group_name, e.target.checked); cfg.enabled = e.target.checked; toast(cfg.enabled ? 'Avisos ligados' : 'Avisos desligados'); draw(); } catch (err) { e.target.checked = !e.target.checked; fail(err); }
+        });
+        body.querySelector('[data-change]').addEventListener('click', () => { mode = 'create'; draw(); });
+        body.querySelector('[data-test]').addEventListener('click', async (e) => {
+          e.currentTarget.disabled = true;
+          try { await DB.waNotifyTest(); toast('Teste enviado. Confira o grupo no WhatsApp'); } catch (err) { fail(err); }
+          e.currentTarget.disabled = false;
+        });
+        return;
+      }
+      body.innerHTML = `<div class="seg wa-nseg"><button class="b b-sm ${mode === 'create' ? 'on' : ''}" data-m="create">Criar grupo novo</button><button class="b b-sm ${mode === 'pick' ? 'on' : ''}" data-m="pick">Usar grupo que já existe</button></div><div data-pane></div>`;
+      body.querySelectorAll('[data-m]').forEach((b) => b.addEventListener('click', () => { mode = b.dataset.m; draw(); }));
+      const pane = body.querySelector('[data-pane]');
+      if (mode === 'create') {
+        pane.innerHTML = `<div class="row"><label class="lbl" for="wgName">Nome do grupo</label><input class="inp" id="wgName" data-name maxlength="100" value="Tracto · Novos leads"></div>
+          <div class="row"><span class="lbl">Quem entra no grupo</span>
+            <div class="wa-npeople">${managers.map((p) => `<label class="wa-nperson"><input type="checkbox" data-p="${esc(p.id)}" checked><span>${esc(p.nome)}</span><input class="inp" data-ph="${esc(p.id)}" inputmode="tel" placeholder="WhatsApp com DDD" value="${esc(p.phone ? fmtPhone(p.phone) : '')}"></label>`).join('')}</div>
+            <input class="inp" data-extra placeholder="Outros números (separe por vírgula)" style="margin-top:8px"></div>
+          <p class="help">O grupo é criado pelo WhatsApp conectado no CRM, que fica como administrador e é quem envia os avisos.</p>
+          <div class="modal-foot"><button class="b" data-close>Cancelar</button><button class="b b-primary" data-go>Criar grupo e ligar avisos</button></div>`;
+        pane.querySelector('[data-go]').addEventListener('click', async (e) => {
+          const name = pane.querySelector('[data-name]').value.trim();
+          const nums = [...pane.querySelectorAll('[data-p]')].filter((x) => x.checked).map((x) => pane.querySelector(`[data-ph="${x.dataset.p}"]`).value)
+            .concat(pane.querySelector('[data-extra]').value.split(',')).map((v) => { let d = digits(v); if (d.length === 10 || d.length === 11) d = '55' + d; return d; }).filter((d) => d.length >= 12);
+          if (!name) return toast('Dê um nome ao grupo', true);
+          if (!nums.length) return toast('Informe pelo menos um WhatsApp com DDD', true);
+          const btn = e.currentTarget; btn.disabled = true; btn.textContent = 'Criando…';
+          try {
+            const g = await api('/api/groups/create', { subject: name, participants: [...new Set(nums)] });
+            if (!g.id) throw new Error('O WhatsApp não devolveu o grupo criado');
+            await DB.waNotifySet(g.id, name, true); cfg = { ...cfg, group: g.id, group_name: name, enabled: true };
+            toast('Grupo criado e avisos ligados'); mode = 'status'; draw();
+          } catch (err) { btn.disabled = false; btn.textContent = 'Criar grupo e ligar avisos'; fail(err); }
+        });
+      } else {
+        pane.innerHTML = '<div class="loading">Buscando grupos…</div>';
+        let groups = [];
+        try { groups = await api('/api/groups'); } catch (err) { pane.innerHTML = `<p class="muted">${esc(err.message)}</p>`; return; }
+        pane.innerHTML = groups.length ? `<div class="wa-glist">${groups.map((g) => `<button class="pi" data-g="${esc(g.id)}" data-gn="${esc(g.name || '')}"><span>${esc(g.name || 'Sem nome')}</span>${g.size ? `<small class="muted" style="margin-left:auto">${g.size} pessoas</small>` : ''}</button>`).join('')}</div>`
+          : '<p class="muted">O WhatsApp conectado não está em nenhum grupo. Crie um grupo novo.</p>';
+        pane.querySelectorAll('[data-g]').forEach((b) => b.addEventListener('click', async () => {
+          try { await DB.waNotifySet(b.dataset.g, b.dataset.gn, true); cfg = { ...cfg, group: b.dataset.g, group_name: b.dataset.gn, enabled: true }; toast('Avisos ligados nesse grupo'); mode = 'status'; draw(); } catch (err) { fail(err); }
+        }));
+      }
+    };
+    draw();
+  });
+}

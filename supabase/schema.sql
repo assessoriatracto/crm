@@ -1451,6 +1451,8 @@ language plpgsql security definer set search_path = public as $$
 declare p record; n int := 0;
   v_base text := coalesce(nullif(btrim((select crm_url from app_settings where id = 1)), ''), 'https://crm.assessoriatracto.com.br');
 begin
+  -- lead novo também vai pro grupo de avisos no WhatsApp (se estiver ligado)
+  if p_kind = 'new' then perform public.wa_notify_lead(l); end if;
   for p in select id, pushcut_url from profiles
            where ativo and pushcut_url is not null
              and (id = l.assigned_to or (p_kind = 'new' and coalesce(pushcut_scope, case when role in ('admin', 'gestor') then 'all' else 'mine' end) = 'all'))
@@ -2144,7 +2146,7 @@ begin
 end $$;
 
 -- versão do banco (diagnóstico: dá pra conferir de fora se a última atualização entrou)
-create or replace function public.schema_version() returns text language sql immutable as $$ select '2026-11-06.1'::text $$;
+create or replace function public.schema_version() returns text language sql immutable as $$ select '2026-11-20.1'::text $$;
 grant execute on function public.schema_version() to anon, authenticated;
 
 -- quantidade de uma ação no "actions" dos insights da Meta (null se não vier)
@@ -2682,6 +2684,101 @@ begin
     insert into public.schema_fixes (name) values ('2026-11-06 origem e marketplace');
   end if;
 end $$;
+
+-- ============================================================
+-- 16e. GRUPO DE AVISOS NO WHATSAPP: cada lead novo vira uma mensagem no grupo da equipe
+-- A ponte se registra aqui (endereço + senha interna) ao iniciar; ninguém lê esta tabela, só as funções abaixo.
+-- ============================================================
+create table if not exists public.wa_config (
+  id                int primary key default 1 check (id = 1),
+  gateway_url       text,
+  secret            text,
+  notify_group      text,
+  notify_group_name text,
+  notify_enabled    boolean not null default false,
+  updated_at        timestamptz not null default now()
+);
+alter table public.wa_config enable row level security;
+insert into public.wa_config (id) values (1) on conflict do nothing;
+
+create or replace function public.wa_register(p_secret text, p_url text) returns void
+language plpgsql security definer set search_path = public as $$
+begin
+  if encode(sha256(convert_to(coalesce(p_secret, ''), 'UTF8')), 'hex') <> 'cb5332946fd68f0bde32a8f87980b2581603d0eb49c6e2bd81a5c7019de6f028' then raise exception 'não autorizado'; end if;
+  if p_url !~ '^https://' then raise exception 'endereço inválido'; end if;
+  update wa_config set gateway_url = rtrim(p_url, '/'), secret = p_secret, updated_at = now() where id = 1;
+end $$;
+
+-- configuração vista pelo CRM (sem a senha)
+create or replace function public.wa_notify_get() returns jsonb
+language sql stable security definer set search_path = public as $$
+  select case when public.is_manager() then jsonb_build_object('group', notify_group, 'group_name', notify_group_name, 'enabled', notify_enabled, 'ready', gateway_url is not null)
+  else null end from wa_config where id = 1;
+$$;
+create or replace function public.wa_notify_set(p_group text, p_group_name text, p_enabled boolean) returns void
+language plpgsql security definer set search_path = public as $$
+begin
+  if not public.is_manager() then raise exception 'Só gestores mudam os avisos no WhatsApp'; end if;
+  if p_group is not null and p_group !~ '@g\.us$' then raise exception 'grupo inválido'; end if;
+  update wa_config set notify_group = p_group, notify_group_name = left(p_group_name, 100), notify_enabled = coalesce(p_enabled, false) and p_group is not null, updated_at = now() where id = 1;
+end $$;
+
+-- texto do aviso: nome, WhatsApp, faturamento e formulário (marketing ou marketplace)
+create or replace function public.wa_lead_text(l public.leads, p_test boolean default false) returns text
+language plpgsql stable security definer set search_path = public as $$
+declare d text := regexp_replace(coalesce(l.whatsapp, ''), '\D', '', 'g'); v_phone text; v_seg text;
+  v_base text := rtrim(coalesce(nullif(btrim((select crm_url from app_settings where id = 1)), ''), 'https://crm.assessoriatracto.com.br'), '/');
+begin
+  v_phone := case when length(d) = 13 and d like '55%' then '(' || substr(d, 3, 2) || ') ' || substr(d, 5, 5) || '-' || substr(d, 10)
+                  when length(d) = 12 and d like '55%' then '(' || substr(d, 3, 2) || ') ' || substr(d, 5, 4) || '-' || substr(d, 9)
+                  when d <> '' then '+' || d end;
+  v_seg := case l.service when 'marketplace' then 'Marketplace' when 'marketing' then 'Marketing' end;
+  return concat_ws(E'\n',
+    case when p_test then '*Teste de aviso* (assim chegam os leads novos)' else '*Novo lead' || coalesce(' · ' || v_seg, '') || '*' end,
+    '',
+    '*Nome:* ' || coalesce(nullif(btrim(l.nome), ''), 'sem nome'),
+    '*WhatsApp:* ' || coalesce(v_phone, 'não informado') || case when d <> '' then E'\nhttps://wa.me/' || d end,
+    '*Faturamento:* ' || coalesce(nullif(l.faturamento, ''), 'não informado'),
+    '*Formulário:* ' || coalesce(v_seg || coalesce(' (' || nullif(l.form_name, '') || ')', ''), nullif(l.form_name, ''), l.form_id, 'não informado'),
+    '',
+    'Abrir no CRM: ' || v_base || '/leads');
+end $$;
+
+create or replace function public.wa_notify_lead(l public.leads) returns void
+language plpgsql security definer set search_path = public as $$
+declare c wa_config;
+begin
+  select * into c from wa_config where id = 1;
+  if not coalesce(c.notify_enabled, false) or c.notify_group is null or c.gateway_url is null then return; end if;
+  perform http_post_json(c.gateway_url || '/hooks/notify', jsonb_build_object('group', c.notify_group, 'text', wa_lead_text(l)), jsonb_build_object('X-Tracto-Secret', c.secret));
+exception when others then
+  raise warning 'aviso no grupo do WhatsApp falhou: %', sqlerrm;
+end $$;
+
+-- botão "Enviar teste" no CRM
+create or replace function public.wa_notify_test() returns boolean
+language plpgsql security definer set search_path = public as $$
+declare c wa_config; l leads;
+begin
+  if not public.is_manager() then raise exception 'Só gestores'; end if;
+  select * into c from wa_config where id = 1;
+  if c.notify_group is null or c.gateway_url is null then raise exception 'Escolha o grupo primeiro'; end if;
+  select * into l from leads where junk_reason is null order by created_at desc limit 1;
+  if l.id is null then l.nome := 'Lead de exemplo'; l.whatsapp := '5562999999999'; l.faturamento := 'De R$30.000 a R$50.000'; l.service := 'marketing'; l.form_name := 'Formulário de exemplo'; end if;
+  perform http_post_json(c.gateway_url || '/hooks/notify', jsonb_build_object('group', c.notify_group, 'text', wa_lead_text(l, true)), jsonb_build_object('X-Tracto-Secret', c.secret));
+  return true;
+end $$;
+
+revoke all on function public.wa_register(text, text) from public;
+grant execute on function public.wa_register(text, text) to anon, authenticated;
+revoke all on function public.wa_notify_get() from public, anon;
+grant execute on function public.wa_notify_get() to authenticated;
+revoke all on function public.wa_notify_set(text, text, boolean) from public, anon;
+grant execute on function public.wa_notify_set(text, text, boolean) to authenticated;
+revoke all on function public.wa_notify_test() from public, anon;
+grant execute on function public.wa_notify_test() to authenticated;
+revoke all on function public.wa_notify_lead(public.leads) from public, anon, authenticated;
+revoke all on function public.wa_lead_text(public.leads, boolean) from public, anon, authenticated;
 
 -- ============================================================
 -- 17. REALTIME E AGENDAMENTOS

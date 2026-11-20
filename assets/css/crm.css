@@ -2151,3 +2151,22 @@ input.inp.dp-native{display:none !important;}
 .wa-search{flex:none;} .wa{min-height:420px;}
 .wa-pmodal .wa-pn{padding:4px 0 0;}
 .cl-ads{display:inline-flex;align-items:center;gap:6px;flex-wrap:wrap;}
+/* avisos de lead no grupo do WhatsApp */
+.wa-nmodal{max-width:520px;}
+.wa-nseg{margin:6px 0 14px;flex-wrap:wrap;}
+.wa-npeople{display:flex;flex-direction:column;gap:8px;}
+.wa-nperson{display:grid;grid-template-columns:auto minmax(0,1fr) 170px;gap:10px;align-items:center;font-size:14px;}
+.wa-nperson input[type=checkbox]{accent-color:var(--amber);width:16px;height:16px;}
+.wa-glist{display:flex;flex-direction:column;gap:2px;max-height:300px;overflow:auto;border:1px solid var(--border);border-radius:10px;padding:4px;}
+.wa-glist .pi{display:flex;align-items:center;gap:8px;}
+.wa-ng{display:flex;align-items:center;gap:12px;padding:12px;border:1px solid var(--border);border-radius:12px;margin:10px 0 4px;}
+.wa-ng .wa-av{width:40px;height:40px;color:var(--amber);}
+.wa-ng div{flex:1;min-width:0;display:flex;flex-direction:column;}
+.wa-ng b{font-weight:500;} .wa-ng small{color:var(--gray-3);font-size:12.5px;}
+.wa-switch{position:relative;width:42px;height:24px;flex:none;cursor:pointer;}
+.wa-switch input{position:absolute;opacity:0;inset:0;margin:0;cursor:pointer;}
+.wa-switch i{position:absolute;inset:0;border-radius:12px;background:var(--c-hover);border:1px solid var(--border);transition:background 150ms ease;}
+.wa-switch i::after{content:'';position:absolute;top:3px;left:3px;width:16px;height:16px;border-radius:50%;background:var(--gray-2);transition:transform 150ms ease,background 150ms ease;}
+.wa-switch input:checked + i{background:var(--amber);border-color:var(--amber);}
+.wa-switch input:checked + i::after{transform:translateX(18px);background:#fff;}
+@media (max-width:520px){ .wa-nperson{grid-template-columns:auto minmax(0,1fr);} .wa-nperson .inp{grid-column:1 / -1;} }
